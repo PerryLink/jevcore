@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-jev/core",
+  "name": "jevkit",
   "version": "0.1.0",
   "description": "Framework-agnostic TypeSafe Jev decision core: typed primitives, pluggable providers, an explicit egress contract, redaction, and local decision policy.",
   "keywords": [
@@ -16,12 +16,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dsh-jev/dsh-jev.git"
+    "url": "git+https://github.com/PerryLink/jevkit.git"
   },
   "bugs": {
-    "url": "https://github.com/dsh-jev/dsh-jev/issues"
+    "url": "https://github.com/PerryLink/jevkit/issues"
   },
-  "homepage": "https://github.com/dsh-jev/dsh-jev#readme",
+  "homepage": "https://github.com/PerryLink/jevkit#readme",
   "type": "module",
   "engines": {
     "node": ">=20"

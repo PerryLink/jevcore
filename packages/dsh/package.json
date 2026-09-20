@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-jev/plugin",
+  "name": "jevkit-dsh",
   "version": "0.1.0",
   "description": "TypeSafe Jev as a first-class Cordis service and three model-visible tools for DeepSeek Harness — offline by default, egress disclosed, never default-on.",
   "keywords": [
@@ -15,12 +15,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dsh-jev/dsh-jev.git"
+    "url": "git+https://github.com/PerryLink/jevkit.git"
   },
   "bugs": {
-    "url": "https://github.com/dsh-jev/dsh-jev/issues"
+    "url": "https://github.com/PerryLink/jevkit/issues"
   },
-  "homepage": "https://github.com/dsh-jev/dsh-jev#readme",
+  "homepage": "https://github.com/PerryLink/jevkit#readme",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -55,7 +55,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@dsh-jev/core": "workspace:*"
+    "jevkit": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.0",

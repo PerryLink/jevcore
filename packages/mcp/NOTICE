@@ -1,7 +1,7 @@
 # NOTICE
 
-dsh-jev — TypeSafe Jev for DeepSeek Harness
-Copyright (c) 2026 dsh-jev contributors
+jevkit — TypeSafe Jev for DeepSeek Harness
+Copyright (c) 2026 jevkit contributors
 Licensed under the MIT License. See [LICENSE](./LICENSE).
 
 ## Not affiliated with TypeSafe AI
@@ -22,11 +22,11 @@ remain under their own licences:
 
 | Package | Role | Declared as |
 |---|---|---|
-| `@typesafe-ai/sdk` | Official TypeSafe client, used by the `live` provider | optional dependency of `@dsh-jev/core` |
-| `@openrouter/sdk` | Official OpenRouter client, used by the `openrouter` provider | optional dependency of `@dsh-jev/core` and `@dsh-jev/mcp` |
-| `@modelcontextprotocol/sdk` | MCP server and stdio transport | dependency of `@dsh-jev/mcp` |
-| `zod` | Wire-schema validation for the MCP surface | dependency of `@dsh-jev/mcp` |
-| `@deepseek-ai/dsh-tools` | DeepSeek Harness tool registry | peer dependency of `@dsh-jev/plugin`, supplied by the harness at runtime |
+| `@typesafe-ai/sdk` | Official TypeSafe client, used by the `live` provider | optional dependency of `jevkit` |
+| `@openrouter/sdk` | Official OpenRouter client, used by the `openrouter` provider | optional dependency of `jevkit` and `jevkit-mcp` |
+| `@modelcontextprotocol/sdk` | MCP server and stdio transport | dependency of `jevkit-mcp` |
+| `zod` | Wire-schema validation for the MCP surface | dependency of `jevkit-mcp` |
+| `@deepseek-ai/dsh-tools` | DeepSeek Harness tool registry | peer dependency of `jevkit-dsh`, supplied by the harness at runtime |
 
 The optional dependencies are loaded lazily. An install that omits them still
 runs, on the offline mock provider.

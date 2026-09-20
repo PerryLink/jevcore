@@ -1,4 +1,4 @@
-# @dsh-jev/mcp
+# jevkit-mcp
 
 TypeSafe [Jev](https://typesafe.ai) over the Model Context Protocol.
 
@@ -11,7 +11,7 @@ asking it to is a category error. This server exposes exactly that surface.
 ## Install
 
 ```sh
-npx -y @dsh-jev/mcp
+npx -y jevkit-mcp
 ```
 
 Register it as a stdio MCP server with your host. For DeepSeek Harness, that is a
@@ -25,7 +25,7 @@ configuration-only bundle whose patch inserts the harness's MCP client:
         serverName: jev
         transport: stdio
         command: npx
-        args: ['-y', '@dsh-jev/mcp']
+        args: ['-y', 'jevkit-mcp']
         failOnStartupError: true
 ```
 
@@ -73,8 +73,8 @@ picking for it.
 The server prints its contract to **stderr** on startup:
 
 ```
-[dsh-jev] provider=mock  endpoint=none  egress=OFF  (no network calls will be made; every answer is synthetic)
-[dsh-jev]   armed  tool:jev_ask  (runs against the offline mock; would transmit if the provider became "live" or "openrouter")
+[jevkit] provider=mock  endpoint=none  egress=OFF  (no network calls will be made; every answer is synthetic)
+[jevkit]   armed  tool:jev_ask  (runs against the offline mock; would transmit if the provider became "live" or "openrouter")
 ```
 
 Stderr, never stdout: on a stdio transport stdout is the protocol channel and a
@@ -90,8 +90,8 @@ Tools, provider selection, and egress enforcement are covered by tests, and the
 transport has been driven end to end by a real MCP client over stdio:
 
 ```sh
-pnpm --filter @dsh-jev/mcp run smoke        # offline, mock provider, no credential
-pnpm --filter @dsh-jev/mcp run smoke:live   # real answers, needs OPENROUTER_API_KEY
+pnpm --filter jevkit-mcp run smoke        # offline, mock provider, no credential
+pnpm --filter jevkit-mcp run smoke:live   # real answers, needs OPENROUTER_API_KEY
 ```
 
 The offline run exercises the handshake, tool discovery, three successful calls,

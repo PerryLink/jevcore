@@ -12,11 +12,11 @@
  */
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { EgressFeature } from '@dsh-jev/core'
-import { assertValidBatch, choice, noul, score } from '@dsh-jev/core'
-import type { JevService } from '@dsh-jev/core'
-import type { JevQuestion, JsonValue } from '@dsh-jev/core'
-import { asRendered, renderResult, summarize } from '@dsh-jev/core'
+import type { EgressFeature } from 'jevkit'
+import { assertValidBatch, choice, noul, score } from 'jevkit'
+import type { JevService } from 'jevkit'
+import type { JevQuestion, JsonValue } from 'jevkit'
+import { asRendered, renderResult, summarize } from 'jevkit'
 
 const FEATURE: EgressFeature = 'tool:jev_ask'
 

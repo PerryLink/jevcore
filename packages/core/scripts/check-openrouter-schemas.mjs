@@ -15,7 +15,7 @@ import {
   DecisionsRequest$outboundSchema,
   DecisionsResponse$inboundSchema,
 } from '@openrouter/sdk/models'
-import { OpenRouterProvider, choice, noul, score } from '@dsh-jev/core'
+import { OpenRouterProvider, choice, noul, score } from 'jevkit'
 
 let failures = 0
 const check = (label, result) => {

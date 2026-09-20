@@ -16,7 +16,7 @@ Last updated: 2026-09-20 (round 2). Read this first when resuming.
 | 8. MCP entry | **Done** — `packages/mcp`, 21 tests, stdio binary verified offline |
 | 9. DSH skill | **Done and shipped** — the skill is registered by the plugin (packages/dsh/skills/typesafe-ai-dsh/SKILL.md), so it works today; the upstream proposal in `../typesafe-dsh-skill-proposal.md` is now a courtesy offer rather than a dependency |
 | 10. Repo hygiene for publishing | **Done** — CONTRIBUTING, SECURITY, CHANGELOG, PUBLISHING, CI over all three packages |
-| 11. MCP transport verification | **Done** — real stdio client drives the server end to end (pnpm --filter @dsh-jev/mcp run smoke) |
+| 11. MCP transport verification | **Done** — real stdio client drives the server end to end (pnpm --filter jevkit-mcp run smoke) |
 | 12. Actual publish + M4 | **Blocked** — needs your accounts and an API key |
 
 One unverified claim remains, stated in the README rather than glossed: the live
@@ -37,9 +37,9 @@ dsh-jev/
 │                               then a job that asserts each tarball contains
 │                               what the package needs to load
 └── packages/
-    ├── core/   @dsh-jev/core    the decisions; no framework imports; 191 tests
-    ├── dsh/    @dsh-jev/plugin  the DSH plugin; 4 source files; 60 tests
-    └── mcp/    @dsh-jev/mcp     the same tools over MCP; 21 tests
+    ├── core/   jevkit    the decisions; no framework imports; 191 tests
+    ├── dsh/    jevkit-dsh  the DSH plugin; 4 source files; 60 tests
+    └── mcp/    jevkit-mcp     the same tools over MCP; 21 tests
 ```
 
 `packages/dsh` and `packages/mcp` are both thin: they declare schemas, translate
@@ -53,11 +53,11 @@ The plugin is **active** and the wiring is proven end to end, not inferred:
 
 | Claim | Evidence |
 |---|---|
-| Row activates | `list_plugins` reports `include:jev` / `@dsh-jev/plugin` / `fiberPhase: active` |
+| Row activates | `list_plugins` reports `include:jev` / `jevkit-dsh` / `fiberPhase: active` |
 | Tools work | `jev_ask` returned `urgent=true (0.8307)`, `team=billing (0.5027)`, `provider="mock"`, 1 ms, with the SYNTHETIC warning; `jev_check` returned `verdict="insufficient"` with `{supports:0.0616, contradicts:0.632, sufficient:0.6646}` |
 | No network on the default path | every result carried `provider="mock"` and `usage {inputTokens:0, outputTokens:0, costUsd:0}` |
 | Skill registers | `typesafe-ai-dsh` appeared in the session skill catalog |
-| MCP transport | `pnpm --filter @dsh-jev/mcp run smoke` — handshake, discovery, 3 calls, error path |
+| MCP transport | `pnpm --filter jevkit-mcp run smoke` — handshake, discovery, 3 calls, error path |
 | Packages ship correctly | all three tarballs contain every required file, including `cordis.patch.yml` and `SKILL.md` |
 
 ## One cosmetic defect, already fixed on disk, needs one restart
@@ -147,12 +147,12 @@ from `%DSH_HOME%\profiles\web`.
 
 ```json
 "dependencies": {
-  "@dsh-jev/core": "link:D:/Projects/dsh-jev/packages/core",
-  "@dsh-jev/plugin": "link:D:/Projects/dsh-jev/packages/dsh"
+  "jevkit": "link:D:/Projects/dsh-jev/packages/core",
+  "jevkit-dsh": "link:D:/Projects/dsh-jev/packages/dsh"
 }
 ```
 
-Both are required: `@dsh-jev/plugin` imports `@dsh-jev/core` by name, so the dependency
+Both are required: `jevkit-dsh` imports `jevkit` by name, so the dependency
 must resolve from the profile's own `node_modules`.
 
 ## Next actions in order

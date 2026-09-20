@@ -13,7 +13,7 @@
  */
 
 import { Context } from '@deepseek-ai/cordis'
-import { EGRESS_FEATURES, EgressContract } from '@dsh-jev/core'
+import { EGRESS_FEATURES, EgressContract } from 'jevkit'
 import { describe, expect, it, vi } from 'vitest'
 import * as plugin from '../src/index.js'
 
@@ -83,7 +83,7 @@ const mountPlugin = (config?: unknown, options: { withSkills?: boolean } = {}) =
 
 describe('plugin module shape', () => {
   it('exports a name and its injections', () => {
-    expect(plugin.name).toBe('dsh-jev')
+    expect(plugin.name).toBe('jevkit')
     expect(plugin.inject).toContain('tools')
     expect(plugin.inject).toContain('credentials')
   })

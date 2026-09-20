@@ -58,7 +58,7 @@ export const validateConfig = (value: unknown): StandardResult => {
 export const Config: StandardSchema = {
   '~standard': {
     version: 1,
-    vendor: 'dsh-jev',
+    vendor: 'jevkit',
     validate: validateConfig,
     types: undefined as unknown as { readonly input: unknown; readonly output: JevConfig },
   },

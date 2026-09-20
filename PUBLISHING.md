@@ -7,13 +7,16 @@ Run every step from the repository root.
 
 ## 0. Package names — decided
 
-The three packages publish under the `@dsh-jev` scope:
+The three packages publish as a **family of unscoped names**, rooted at `jevkit`:
 
-| Directory | Package |
-|---|---|
-| `packages/core` | `@dsh-jev/core` |
-| `packages/dsh` | `@dsh-jev/plugin` |
-| `packages/mcp` | `@dsh-jev/mcp` |
+| Directory | Package | Role |
+|---|---|---|
+| `packages/core` | `jevkit` | The framework-agnostic decision core |
+| `packages/dsh` | `jevkit-dsh` | The DeepSeek Harness / Cordis plugin |
+| `packages/mcp` | `jevkit-mcp` | The MCP server |
+
+Both adapters depend on the root name, so a reader can infer the dependency
+direction from the names alone. Nothing but the DSH adapter carries `dsh`.
 
 ### Why not the bare name `dsh-jev`
 
@@ -23,24 +26,38 @@ free up. Two packages with the same name and different behaviour is a support
 burden for both authors, and the collision is worse than usual here because
 theirs targets the same framework and the same model.
 
-Verify the scope is still yours before publishing; an npm scope belongs to
-whoever publishes into it first:
+### Why not a `@dsh-jev` scope
+
+That was the earlier plan and it was wrong, for a reason worth recording: two of
+the three packages are **not** DSH-specific. A Claude Desktop user looking for a
+Jev MCP server would find `@dsh-jev/mcp` and reasonably conclude it was not for
+them, and someone writing a plain script would read the same into
+`@dsh-jev/core`. Scoping everything under the framework's name mis-sold two
+thirds of the project. Only the DSH adapter should say `dsh`, and now only it
+does.
+
+### Why `jevkit`
+
+`jev-kit`, `jev-mcp`, `jev-tools`, `jev-core` and `jev-plugin` are taken or
+risk reading as official TypeSafe packages. `jevkit` is free, avoids a `jev-`
+prefix that implies first-party status, and `kit` says "tools for" rather than
+"attachment to a framework".
+
+### Unscoped names must be claimed individually
+
+npm registers ownership of a **scope** (`@scope/`), not a name prefix. There is
+no such thing as owning `jevkit-*`: `jevkit`, `jevkit-dsh` and `jevkit-mcp` are
+three independent names and each has to be free at publish time. Verify before
+publishing:
 
 ```sh
-npm view @dsh-jev/core version   # 404 means the scope is still unclaimed
+for n in jevkit jevkit-dsh jevkit-mcp; do npm view "$n" version 2>&1 | head -1; done
+# 404 for each means all three are still claimable
 ```
 
-### Why `plugin` rather than `dsh`
-
-`@dsh-jev/dsh` was the first choice and it reads badly: the same three letters
-appear twice with different meanings, so the scope and the package cannot be told
-apart at a glance. `@dsh-jev/plugin` names the thing rather than repeating the
-framework it targets, and it matches what the other two already do — scope for
-the project, leaf for the artifact.
-
-If the scope is ever lost, the fallback is your own npm scope
-(`@<username>/dsh-jev` for the plugin, and matching leaves for core and mcp),
-which is what most of the DSH plugin ecosystem does.
+If a name is lost, the fallback is an npm scope you own
+(`@<username>/jevkit` and matching leaves), which is what most of the DSH plugin
+ecosystem does.
 
 ## 1. Pre-flight
 
@@ -53,10 +70,10 @@ Expected: 360 tests pass (266 core, 65 dsh, 29 mcp), with no credential set.
 
 ```sh
 # Parse what this project builds against the vendors' real schemas. Offline.
-pnpm --filter @dsh-jev/core run check:schemas
+pnpm --filter jevkit run check:schemas
 
 # Drive the MCP server over a real stdio transport, on the mock. Offline.
-pnpm --filter @dsh-jev/mcp run smoke
+pnpm --filter jevkit-mcp run smoke
 ```
 
 Both are credential-free by design and run in CI. The schema check is the one
@@ -75,8 +92,8 @@ changes that. Enable it under **Allowed providers** at
 
 ```sh
 export OPENROUTER_API_KEY=...                       # never commit this
-pnpm --filter @dsh-jev/core run probe:live          # provider level
-pnpm --filter @dsh-jev/mcp run smoke:live           # whole MCP surface
+pnpm --filter jevkit run probe:live          # provider level
+pnpm --filter jevkit-mcp run smoke:live           # whole MCP surface
 ```
 
 A passing run prints the real model (`typesafe/jev-1.13-<date>`), token usage and
@@ -138,9 +155,9 @@ Change the URL in each file, then `pnpm install` so the lockfile records it.
 ## 4. Inspect the tarballs before publishing
 
 ```sh
-pnpm --filter @dsh-jev/core pack --dry-run
-pnpm --filter @dsh-jev/plugin pack --dry-run
-pnpm --filter @dsh-jev/mcp pack --dry-run
+pnpm --filter jevkit pack --dry-run
+pnpm --filter jevkit-dsh pack --dry-run
+pnpm --filter jevkit-mcp pack --dry-run
 ```
 
 Check for each: `lib/` is present, `README.md` and `LICENSE` are included, and
@@ -150,12 +167,12 @@ nothing.
 
 ## 5. Publish
 
-Order matters: the two adapters depend on `@dsh-jev/core`.
+Order matters: the two adapters depend on `jevkit`.
 
 ```sh
-pnpm --filter @dsh-jev/core publish --access public
-pnpm --filter @dsh-jev/plugin publish --access public
-pnpm --filter @dsh-jev/mcp publish --access public
+pnpm --filter jevkit publish --access public
+pnpm --filter jevkit-dsh publish --access public
+pnpm --filter jevkit-mcp publish --access public
 ```
 
 Prefer publishing from CI with provenance over a laptop:
@@ -177,21 +194,21 @@ Do not trust the publish output; install what you actually shipped.
 
 ```sh
 mkdir /tmp/verify && cd /tmp/verify && npm init -y
-npm install @dsh-jev/core @dsh-jev/plugin @dsh-jev/mcp
-node -e "const c = require('@dsh-jev/core'); console.log(Object.keys(c).length, 'core exports')"
+npm install jevkit jevkit-dsh jevkit-mcp
+node -e "const c = require('jevkit'); console.log(Object.keys(c).length, 'core exports')"
 ```
 
 Then, for the DSH plugin, install it into a **throwaway profile** and confirm the
 row reaches `active` and the egress report appears:
 
 ```sh
-dsh plugin --profile verify-jev add @dsh-jev/plugin
+dsh plugin --profile verify-jev add jevkit-dsh
 ```
 
 For the MCP server:
 
 ```sh
-npx -y @dsh-jev/mcp    # should print the egress report to stderr and wait
+npx -y jevkit-mcp    # should print the egress report to stderr and wait
 ```
 
 ## Known-before-you-publish

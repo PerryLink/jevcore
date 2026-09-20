@@ -14,7 +14,7 @@ import {
   type EgressFeature,
   type JevProvider,
   type JevResult,
-} from '@dsh-jev/core'
+} from 'jevkit'
 import { jevAskTool } from '../src/ask.js'
 import { jevCheckTool } from '../src/check.js'
 import { candidateIndex, candidateQuestionId, jevRankTool } from '../src/rank.js'

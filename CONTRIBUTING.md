@@ -9,9 +9,9 @@ Three packages over one decision layer:
 
 | Package | What it is |
 |---|---|
-| `@dsh-jev/core` | The decisions. No framework dependency — it imports nothing from DeepSeek Harness or Cordis. |
-| `@dsh-jev/plugin` | The DeepSeek Harness plugin: three tools, one service, two opt-in gates. |
-| `@dsh-jev/mcp` | The same three tools over MCP, for hosts that are not DSH. |
+| `jevkit` | The decisions. No framework dependency — it imports nothing from DeepSeek Harness or Cordis. |
+| `jevkit-dsh` | The DeepSeek Harness plugin: three tools, one service, two opt-in gates. |
+| `jevkit-mcp` | The same three tools over MCP, for hosts that are not DSH. |
 
 Jev answers typed questions and returns calibrated probabilities. It does not
 generate text. Any change that treats it as a chat model is out of scope.
@@ -71,7 +71,7 @@ Please do not open a public issue. See [SECURITY.md](./SECURITY.md).
 ## Scope
 
 Welcome: better judgments, better prompts for the primitives, additional
-framework adapters over `@dsh-jev/core`, documentation fixes, and bug reports
+framework adapters over `jevkit`, documentation fixes, and bug reports
 with a reproduction.
 
 Out of scope: anything that turns this into a general-purpose LLM client;

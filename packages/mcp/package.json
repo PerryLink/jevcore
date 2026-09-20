@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-jev/mcp",
+  "name": "jevkit-mcp",
   "version": "0.1.0",
   "description": "TypeSafe Jev over the Model Context Protocol: typed judgments (ask, rank, check) that return calibrated probabilities instead of prose.",
   "keywords": [
@@ -14,12 +14,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dsh-jev/dsh-jev.git"
+    "url": "git+https://github.com/PerryLink/jevkit.git"
   },
   "bugs": {
-    "url": "https://github.com/dsh-jev/dsh-jev/issues"
+    "url": "https://github.com/PerryLink/jevkit/issues"
   },
-  "homepage": "https://github.com/dsh-jev/dsh-jev#readme",
+  "homepage": "https://github.com/PerryLink/jevkit#readme",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -27,7 +27,7 @@
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "bin": {
-    "dsh-jev-mcp": "./lib/bin.js"
+    "jevkit-mcp": "./lib/bin.js"
   },
   "exports": {
     ".": {
@@ -53,7 +53,7 @@
     "smoke:live": "node scripts/mcp-smoke-live.mjs"
   },
   "dependencies": {
-    "@dsh-jev/core": "workspace:*",
+    "jevkit": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^3.25.0"
   },

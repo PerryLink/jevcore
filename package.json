@@ -1,5 +1,5 @@
 {
-  "name": "dsh-jev-workspace",
+  "name": "jevkit-workspace",
   "version": "0.1.0",
   "private": true,
   "description": "TypeSafe Jev for DeepSeek Harness: a framework-agnostic decision core and the DSH plugin built on it.",

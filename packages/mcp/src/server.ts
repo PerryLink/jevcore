@@ -14,7 +14,7 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { JevService } from '@dsh-jev/core'
+import type { JevService } from 'jevkit'
 import { runAsk, runCheck, runRank, type QuestionInput } from './tools.js'
 
 /** Wire schema for one typed question. */
@@ -47,7 +47,7 @@ const failure = (error: unknown) => ({
 })
 
 export const createServer = (service: JevService): McpServer => {
-  const server = new McpServer({ name: 'dsh-jev', version: '0.1.0' })
+  const server = new McpServer({ name: 'jevkit', version: '0.1.0' })
 
   server.registerTool(
     'jev_ask',

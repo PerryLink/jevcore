@@ -46,7 +46,7 @@ jobs:
         # handshake, discovery, calls, and the error path.
         env:
           TYPESAFE_API_KEY: ''
-        run: pnpm --filter @dsh-jev/mcp run smoke
+        run: pnpm --filter jevkit-mcp run smoke
 
       - name: Cross-check our payloads against the vendor's own schemas
         # The unit tests stub the SDKs, so they prove our side of the contract
@@ -54,7 +54,7 @@ jobs:
         # schemas and parses what this project actually builds. Offline and
         # credential-free by design. It is what caught `score.criteria` being
         # sent as a keyed map when both vendors require an ordered array.
-        run: pnpm --filter @dsh-jev/core run check:schemas
+        run: pnpm --filter jevkit run check:schemas
 
   package:
     runs-on: ubuntu-latest
@@ -107,12 +107,12 @@ jobs:
         run: |
           mkdir -p /tmp/cleanroom && cd /tmp/cleanroom
           echo '{"name":"cleanroom","private":true,"version":"1.0.0"}' > package.json
-          pnpm --dir "$GITHUB_WORKSPACE" --filter @dsh-jev/core pack --pack-destination .
-          pnpm --dir "$GITHUB_WORKSPACE" --filter @dsh-jev/mcp pack --pack-destination .
-          npm install --no-audit --no-fund ./dsh-jev-core-*.tgz ./dsh-jev-mcp-*.tgz
+          pnpm --dir "$GITHUB_WORKSPACE" --filter jevkit pack --pack-destination .
+          pnpm --dir "$GITHUB_WORKSPACE" --filter jevkit-mcp pack --pack-destination .
+          npm install --no-audit --no-fund ./jevkit-*.tgz ./jevkit-mcp-*.tgz
           node -e "
-            const core = await import('@dsh-jev/core');
-            const mcp = await import('@dsh-jev/mcp');
+            const core = await import('jevkit');
+            const mcp = await import('jevkit-mcp');
             if (typeof core.JevService !== 'function') throw new Error('core did not load');
             if (typeof mcp.createServer !== 'function') throw new Error('mcp did not load');
             const runtime = await mcp.buildRuntime(() => undefined);

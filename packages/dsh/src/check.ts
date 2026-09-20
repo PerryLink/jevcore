@@ -21,7 +21,7 @@ import {
   type CheckThresholds,
   type EgressFeature,
   type JevService,
-} from '@dsh-jev/core'
+} from 'jevkit'
 
 const FEATURE: EgressFeature = 'tool:jev_check'
 

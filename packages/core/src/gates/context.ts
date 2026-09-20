@@ -105,7 +105,7 @@ export const resultText = (content: readonly ResultBlock[] | undefined): string 
 }
 
 const TRUNCATION_NOTE =
-  '\n\n[original result withheld by the dsh-jev context gate; re-run a narrower query if you need it]'
+  '\n\n[original result withheld by the jevkit context gate; re-run a narrower query if you need it]'
 
 export const createContextGate = (options: ContextGateOptions) => {
   const minChars = options.minChars ?? 4_000

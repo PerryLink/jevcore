@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { EGRESS_FEATURES, EgressContract, JevService, MockProvider, type EgressFeature } from '@dsh-jev/core'
+import { EGRESS_FEATURES, EgressContract, JevService, MockProvider, type EgressFeature } from 'jevkit'
 import { buildRuntime, chooseProvider } from '../src/runtime.js'
 import { SYNTHETIC_WARNING, runAsk, runCheck, runRank, toQuestions } from '../src/tools.js'
 

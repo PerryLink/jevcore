@@ -19,7 +19,7 @@ import {
   type JevConfig,
   type JevProvider,
   type ProviderKind,
-} from '@dsh-jev/core'
+} from 'jevkit'
 
 /** Feature switches for the MCP surface. The gates are a DSH concept, not an MCP one. */
 const MCP_EGRESS: Record<EgressFeature, boolean> = {
