@@ -3,9 +3,26 @@ name: Publish
 # Publishing is tag-driven on purpose: a human decides the version, the tag
 # records when, and nothing reaches npm from a working branch.
 #
-# Requires a repository secret named NPM_TOKEN (npm automation token with publish
-# rights for jevcore, jevcore-dsh and jevcore-mcp):
-#   Settings -> Secrets and variables -> Actions -> New repository secret
+# Authentication is OIDC trusted publishing — there is no NPM_TOKEN to store, and
+# therefore none to leak or rotate. Configure it once per package at npmjs.com,
+# under the package's Settings -> Trusted Publisher -> GitHub Actions:
+#
+#   organization or user : PerryLink
+#   repository           : jevcore
+#   workflow filename    : publish.yml
+#   environment          : (leave empty)
+#
+# `id-token: write` below is what lets the runner mint the OIDC token that npm
+# exchanges for publish rights for these three packages.
+#
+# Do NOT reintroduce a registry token. pnpm treats a configured
+# `//registry.npmjs.org/:_authToken` as an instruction to publish with that token
+# and skips the OIDC exchange, so a stale or empty token silently downgrades this
+# workflow from trusted publishing to token publishing and then fails on auth.
+# pnpm's own release workflow carries a comment about deleting that variable
+# before its trusted-publishing step for exactly this reason. `actions/setup-node`
+# writes the key into `.npmrc` whenever it is given `registry-url`, which is why
+# no step below passes it.
 
 on:
   push:
@@ -15,6 +32,8 @@ on:
 
 permissions:
   contents: read
+  # Required for OIDC: without it the publish step cannot mint the token.
+  id-token: write
 
 jobs:
   publish:
@@ -30,11 +49,22 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
+          # No `registry-url` here — see the note at the top of this file. It
+          # would write an `_authToken` line into `.npmrc` and silently downgrade
+          # the publish below.
           node-version: "22"
-          registry-url: "https://registry.npmjs.org"
 
       - name: Enable corepack
         run: corepack enable
+
+      - name: Report the toolchain
+        # Printed because trusted publishing depends on the pnpm and npm versions
+        # actually in use, and a runner image change is easier to read here than
+        # to infer from an auth failure three steps later.
+        run: |
+          node --version
+          pnpm --version
+          npm --version
 
       - name: Install
         run: pnpm install --no-frozen-lockfile
@@ -62,12 +92,27 @@ jobs:
         run: pnpm run check
 
       - name: Publish
-        # Core first: both adapters depend on `jevcore`. `pnpm publish`, never
-        # `npm publish`, so the workspace dependency becomes a real version.
+        # Core first: both adapters depend on `jevcore`.
         if: github.event_name == 'push'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          pnpm --filter jevcore publish --access public --provenance --no-git-checks
-          pnpm --filter jevcore-dsh publish --access public --provenance --no-git-checks
-          pnpm --filter jevcore-mcp publish --access public --provenance --no-git-checks
+          set -euo pipefail
+
+          # A version already on the registry is skipped, not failed: a re-run, or
+          # a release finished by hand after a partial failure, should not turn
+          # green work red. A version that is *staged* on the registry is
+          # invisible to this check -- npm's stage list reports total: 0 for it --
+          # and publishing over it fails with 409.
+          publish() {
+            local pkg="$1" dir="$2" version
+            version="$(node -p "require('./packages/$dir/package.json').version")"
+            if npm view "$pkg@$version" version >/dev/null 2>&1; then
+              echo "$pkg@$version is already published; skipping"
+              return 0
+            fi
+            echo "publishing $pkg@$version"
+            pnpm --filter "$pkg" publish --access public --provenance --no-git-checks
+          }
+
+          publish jevcore core
+          publish jevcore-dsh dsh
+          publish jevcore-mcp mcp
