@@ -14,9 +14,11 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
     "legal": "node scripts/sync-legal-files.mjs --check",
+    "check:mojibake": "node scripts/check-mojibake.mjs",
     "check:readmes": "node scripts/check-readme-sync.mjs",
     "//check": "Build runs BEFORE typecheck on purpose. Each adapter resolves the core through the `jevcore` workspace link, and the core's `types` entry is `lib/index.d.ts` — which does not exist until it is built. Typechecking first works on any machine that already has a `lib/` and fails on a clean checkout, which is exactly how CI caught it.",
-    "check": "pnpm run legal && pnpm run check:readmes && pnpm run build && pnpm run typecheck && pnpm run test",
+    "//check:mojibake": "Runs AFTER build, not before. Before it, every un-rebuilt edit made the chain print the same stale-artifact advisories; noise on the normal path is how a real finding gets skimmed past, and nothing ships on that path anyway — release.yml runs this whole chain, build included, before it publishes. After it, the corruption half scans the artifact the build just produced, and the drift half stays quiet unless a rebuild could not have fixed what it found.",
+    "check": "pnpm run legal && pnpm run check:readmes && pnpm run build && pnpm run check:mojibake && pnpm run typecheck && pnpm run test",
     "prepublishOnly": "pnpm run check",
     "clean": "pnpm -r run clean"
   },

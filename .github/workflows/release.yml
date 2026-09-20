@@ -190,3 +190,145 @@ jobs:
           publish jevcore core
           publish jevcore-dsh dsh
           publish jevcore-mcp mcp
+
+      - name: Check the MCP Registry manifest before publishing
+        # Runs only where the npm publish runs: the registry verifies npm
+        # ownership by reading `mcpName` from the PUBLISHED package, so it has
+        # nothing to say about a version npm does not have.
+        #
+        # This one HARD-FAILS, unlike the publish below, because a server.json
+        # that disagrees with the package it describes is a repository mistake
+        # rather than a registry problem: no retry fixes it, and the registry
+        # only rejects it after the npm release has already gone out. Both halves
+        # that must agree are printed either way.
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          node -e "
+            const { existsSync, readFileSync } = require('node:fs');
+            const manifest = 'packages/mcp/server.json';
+            if (!existsSync(manifest)) {
+              console.error('::error::' + manifest + ' is missing, so there is nothing to publish to the MCP Registry');
+              process.exit(1);
+            }
+            const pkg = JSON.parse(readFileSync('packages/mcp/package.json', 'utf8'));
+            const server = JSON.parse(readFileSync(manifest, 'utf8'));
+            const advertised = server.packages && server.packages[0] ? server.packages[0].version : undefined;
+            console.log('package.json  version=' + pkg.version + ' mcpName=' + pkg.mcpName);
+            console.log('server.json   name=' + server.name + ' version=' + server.version + ' packages[0].version=' + advertised);
+            const problems = [];
+            if (server.name !== pkg.mcpName) {
+              problems.push('server.json name (' + server.name + ') must equal package.json mcpName (' + pkg.mcpName + '); the registry grants the io.github.<owner>/* namespace from the OIDC claim, case sensitively');
+            }
+            if (server.version !== pkg.version) {
+              problems.push('server.json version (' + server.version + ') must equal package.json version (' + pkg.version + ')');
+            }
+            if (advertised !== pkg.version) {
+              problems.push('server.json packages[0].version (' + advertised + ') must equal package.json version (' + pkg.version + ')');
+            }
+            if (problems.length > 0) {
+              for (const problem of problems) console.error('::error::' + problem);
+              process.exit(1);
+            }
+            console.log('the registry manifest describes ' + server.name + '@' + server.version);
+          "
+
+      - name: Publish to the official MCP Registry
+        # ONE STEP, TWO FAILURE MODES: what a retry can fix is not fatal, what it
+        # cannot fix is. The manifest mismatch above fails the run; a registry
+        # failure here does not.
+        #
+        # `continue-on-error` is deliberate, and not because the registry does
+        # not matter. npm is the release contract, and the MCP Registry is a
+        # discovery surface for a service still in preview, where an outage or a
+        # breaking change is outside this repository's control. Turning an
+        # already-successful npm release red for that teaches a releaser to
+        # ignore red runs, which is the expensive failure. Being allowed to fail
+        # is not being allowed to fail QUIETLY, so the step annotates the run with
+        # a ::warning::, stays visibly failed in the UI, and names its own
+        # recovery: re-run the failed jobs. That retry is free -- the npm steps
+        # above skip versions already on the registry, and the preflight below
+        # skips a version already in the registry.
+        #
+        # OIDC here is NOT the OIDC that is blocked. npm's registry cannot match
+        # this repository's immutable OIDC subject claim, tracked as
+        # https://github.com/npm/cli/issues/9969, which is why the publish step
+        # above can end at "Skipped OIDC". The MCP Registry is a different service
+        # performing its own exchange: the CLI asks the runner for a token with
+        # audience `mcp-registry` (the audience npm never sees), and the registry
+        # mints a short-lived publish token scoped to io.github.<owner>/*, so
+        # npm's matching bug is not in that path. NOT CONFIRMED END TO END: the
+        # strongest evidence is that dsh-cert-mcp, by the same owner, is in the
+        # registry with a listing published 2026-09-19, but that repository was
+        # created before this one, so whether the registry tolerates the
+        # immutable subject format is unproven until this runs on a real tag. If
+        # it does not, the :warning: says so rather than the run going green in
+        # silence.
+        #
+        # No token is configured anywhere, and none may be: `login github-oidc`
+        # mints the short-lived one from the runner's own identity. `id-token:
+        # write` at the top of this file is what makes that possible and was
+        # already there for npm.
+        #
+        # The CLI is pinned to a release tag instead of `latest`: a download from
+        # a moving tag is a supply-chain decision nobody made. v1.8.1 is the
+        # current release of the official registry repository; bump it on purpose.
+        if: github.event_name == 'push'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          name="$(node -p "require('./packages/mcp/server.json').name")"
+          version="$(node -p "require('./packages/mcp/package.json').version")"
+          mcpName="$(node -p "require('./packages/mcp/package.json').mcpName")"
+
+          # A version already in the registry is skipped, not failed -- the same
+          # rule the npm publish above follows, so a re-run is green. The API
+          # path and shape were checked against the live registry; if the call
+          # fails for any reason the publish below is attempted anyway, because a
+          # preflight that cannot see the registry must not become the gate.
+          already="$(node -e "
+            const [name, version] = process.argv.slice(1);
+            fetch('https://registry.modelcontextprotocol.io/v0/servers?search=' + encodeURIComponent(name))
+              .then((response) => (response.ok ? response.json() : { servers: [] }))
+              .then((body) => {
+                const listed = (body.servers || []).some((entry) => entry.server && entry.server.name === name && entry.server.version === version);
+                process.stdout.write(listed ? 'yes' : 'no');
+              })
+              .catch(() => process.stdout.write('no'));
+          " "$name" "$version")"
+          if [ "$already" = "yes" ]; then
+            echo "$name@$version is already in the MCP Registry; skipping"
+            exit 0
+          fi
+
+          # npm's read side lags minutes behind a successful publish, and the
+          # registry reads that same metadata to decide whether this repository
+          # owns the package. Wait for it, but bounded: the publish below stays
+          # the authority, and a lagging mirror must not be the reason a release
+          # never reaches the registry.
+          for attempt in $(seq 1 6); do
+            got="$(npm view "jevcore-mcp@${version}" mcpName 2>/dev/null || true)"
+            if [ "$got" = "$mcpName" ]; then
+              echo "npm exposes mcpName=$got for jevcore-mcp@$version"
+              break
+            fi
+            echo "attempt $attempt: npm reports mcpName='$got' for jevcore-mcp@$version, want '$mcpName'; retrying"
+            sleep 15
+          done
+
+          mkdir -p "$RUNNER_TEMP/mcp-publisher"
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz -C "$RUNNER_TEMP/mcp-publisher" mcp-publisher
+          publisher="$RUNNER_TEMP/mcp-publisher/mcp-publisher"
+          "$publisher" --help >/dev/null
+
+          # server.json is the manifest, so the publish runs from its directory:
+          # packages/mcp/README.md is the server's own page and its manifest sits
+          # beside it.
+          cd packages/mcp
+          "$publisher" login github-oidc
+          if "$publisher" publish; then
+            echo "published $name@$version to the MCP Registry" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::the MCP Registry publish of $name@$version failed. npm is published; the registry entry is not. Re-run the failed jobs of this workflow to retry it -- every step here is idempotent, and an already-published version is skipped rather than re-published."
+            exit 1
+          fi

@@ -9,6 +9,7 @@
 
 import {
   DEFAULT_CONFIG,
+  DEFAULT_OPENROUTER_ENDPOINT,
   EgressContract,
   JevProviderError,
   JevService,
@@ -76,6 +77,19 @@ export const buildRuntime = async (
   const model =
     env(isOpenRouter ? 'OPENROUTER_MODEL' : 'TYPESAFE_MODEL')?.trim() || DEFAULT_CONFIG.model
 
+  // The endpoint a live provider posts to. For OpenRouter the fallback is the
+  // core's own default rather than a copy of the string: this used to be
+  // 'https://openrouter.ai', missing the `/api` the SDK's path needs, so the
+  // egress report named a host the provider never posts to while the provider
+  // itself silently used the correct one. The report exists to tell an operator
+  // where content goes; a report that disagrees with the request is the defect
+  // it is supposed to prevent. Writing the constant here also removes the second
+  // copy — a `baseURL` in the config is passed through to the provider now, so
+  // the reported endpoint and the posted endpoint are one value.
+  const endpoint = isOpenRouter
+    ? env('OPENROUTER_BASE_URL')?.trim() || DEFAULT_OPENROUTER_ENDPOINT
+    : env('TYPESAFE_BASE_URL')?.trim() || 'https://api.typesafe.ai'
+
   const config: JevConfig = {
     // Spread the shared defaults rather than restating them: the thresholds and
     // transport settings used to be duplicated here, so tuning one entry point
@@ -85,15 +99,13 @@ export const buildRuntime = async (
     apiKeyRef,
     openRouterApiKeyRef,
     baseURL: undefined,
-    openRouterBaseURL: undefined,
+    openRouterBaseURL: isOpenRouter ? endpoint : undefined,
     model,
   }
 
   const egress = new EgressContract(
     { transmitting: kind !== 'mock', enabled: MCP_EGRESS },
-    isOpenRouter
-      ? env('OPENROUTER_BASE_URL')?.trim() || 'https://openrouter.ai'
-      : env('TYPESAFE_BASE_URL')?.trim() || 'https://api.typesafe.ai',
+    endpoint,
     // No MCP-side config surface for the cap yet, so the per-feature declared
     // caps apply unchanged.
     undefined,
@@ -122,7 +134,14 @@ export const buildRuntime = async (
     // package redacts before sending. OpenRouter's own SDK reads no such
     // variable, so it needs none of this.
     provider = isOpenRouter
-      ? new OpenRouterProvider({ apiKey: resolved.value, model })
+      ? new OpenRouterProvider({
+          apiKey: resolved.value,
+          model,
+          // Spread conditionally: `exactOptionalPropertyTypes` distinguishes an
+          // absent `baseURL` from one set to `undefined`, and absent is what
+          // "use the core's default" means.
+          ...(config.openRouterBaseURL === undefined ? {} : { baseURL: config.openRouterBaseURL }),
+        })
       : new LiveProvider({
           apiKey: resolved.value,
           model,

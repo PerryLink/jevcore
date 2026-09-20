@@ -13,15 +13,91 @@ import {
   noul,
   resolveCheck,
   score,
+  type EntryType,
   type JevQuestion,
   type JevService,
   type JsonValue,
+  type NoulCriteria,
 } from 'jevcore'
 
 export interface QuestionInput {
   readonly type: 'noul' | 'choice' | 'score'
-  readonly instructions: string
+  /**
+   * The question itself.
+   *
+   * `EntryType` rather than `string`, matching the DSH plugin's `ask.ts`: that is
+   * what actually reaches `noul`/`choice`/`score`, since the question map is an
+   * opaque object and nothing here narrows `instructions`. The upstream docs
+   * recommend an object or array of named fields whenever definitions, contrasts
+   * or examples clarify the question, so claiming `string` was a narrower
+   * promise than the code kept.
+   */
+  readonly instructions: EntryType
+  /** choice/score criteria, and (legacy spelling) a noul's two outcomes. */
   readonly criteria?: Readonly<Record<string, string | null>>
+  /**
+   * noul only: what "true" and what "false" mean.
+   *
+   * This is the field the MCP surface was missing. `criteria` was declared with
+   * the choice/score shape and then never passed to `noul`, so the upstream
+   * boundary definition — new in API v1, and the thing that makes a 0.5
+   * interpretable — had a usage rate of zero here while the DSH plugin had
+   * already wired it. `NoulCriteria` is the core's own type, so a boundary that
+   * typechecks at this boundary cannot be rejected by `noul` on the other side.
+   *
+   * Field name and type are the DSH plugin's (`packages/dsh/src/ask.ts:48`),
+   * deliberately: the same capability behind two entry points must not accept
+   * two different spellings.
+   */
+  readonly boundary?: NoulCriteria
+}
+
+/**
+ * The boundary a noul declared, under either spelling this surface accepts.
+ *
+ * Two spellings, because `criteria` came first: a caller could declare
+ * `criteria: { true: ..., false: ... }` — the upstream `NoulCriteria` shape
+ * exactly — and have it silently ignored. `boundary` is the documented spelling
+ * and wins when both are present.
+ *
+ * Deliberately the same logic as `packages/dsh/src/ask.ts:66`; the divergence
+ * this closes is between the two entry points, so re-inventing the rules here
+ * would reopen it. A boundary that names neither outcome is not rejected here:
+ * `assertValidBatch` refuses it below, with the core's own message.
+ */
+const noulBoundary = (id: string, question: QuestionInput): NoulCriteria | undefined =>
+  question.boundary ?? fromOutcomeCriteria(id, question.criteria)
+
+/**
+ * Read the `NoulCriteria` spelling out of a noul's `criteria` map.
+ *
+ * A key that names no outcome is refused rather than dropped: for a noul,
+ * `criteria` can only mean the two outcomes, so a map keyed by anything else is
+ * a caller bug and forwarding it would put a key on the wire that means nothing.
+ * An empty map declares nothing and stays legal.
+ */
+const fromOutcomeCriteria = (
+  id: string,
+  criteria: QuestionInput['criteria'],
+): NoulCriteria | undefined => {
+  if (criteria === undefined) return undefined
+  const keys = Object.keys(criteria)
+  if (keys.length === 0) return undefined
+  const alien = keys.filter((key) => key !== 'true' && key !== 'false')
+  if (alien.length > 0) {
+    throw new Error(
+      `question "${id}" is a noul but its criteria keys (${alien.join(', ')}) name no outcome. A ` +
+        'noul boundary says what "true" and what "false" mean: declare it as ' +
+        '`boundary: { true, false }` (or `criteria: { true, false }`). A keyed `criteria` map is ' +
+        'for choice and score.',
+    )
+  }
+  const boundary: { true?: EntryType; false?: EntryType } = {}
+  const yes = criteria['true']
+  const no = criteria['false']
+  if (yes !== undefined) boundary.true = yes
+  if (no !== undefined) boundary.false = no
+  return boundary
 }
 
 /** Convert the wire question shape into a core question batch. */
@@ -31,8 +107,17 @@ export const toQuestions = (
   const out: Record<string, JevQuestion> = {}
   for (const [id, question] of Object.entries(input)) {
     if (question.type === 'noul') {
-      out[id] = noul(question.instructions)
+      // `undefined` means "no boundary declared", which `noul` omits from the
+      // wire payload rather than writing `criteria: undefined` into it.
+      out[id] = noul(question.instructions, noulBoundary(id, question))
       continue
+    }
+    if (question.boundary !== undefined) {
+      throw new Error(
+        `question "${id}" is a ${question.type} but declares a noul "boundary". A boundary says ` +
+          'what "true" and what "false" mean and exists only for noul; a choice declares its ' +
+          'permitted answers and a score its ordered levels, both in `criteria`.',
+      )
     }
     const criteria = question.criteria ?? {}
     out[id] = question.type === 'choice'

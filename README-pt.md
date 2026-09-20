@@ -23,6 +23,8 @@ Os adaptadores são finos de propósito. `packages/dsh` são quatro arquivos: el
 ferramentas e traduz as cargas úteis dos hooks. Tudo que tem formato de decisão — as primitivas, os
 provedores, o contrato de saída, a política, os portões — vive no core, de modo que um novo adaptador não
 possa divergir das garantias que os outros oferecem.
+Um requisito de runtime difere entre os três: `jevcore-dsh` acompanha o harness e
+precisa de Node `^22.19.0 || >=24.0.0`, enquanto `jevcore` e `jevcore-mcp` precisam de `>=20`.
 
 ---
 
@@ -206,8 +208,10 @@ Duas coisas a saber sobre a rota OpenRouter:
 - **Ela retorna um custo**, o que a rota da própria TypeSafe não faz, então `usage.costUsd`
   é preenchido aqui e ausente lá.
 
-O id do modelo precisa ser de um System One: um id `jev-*` puro, ou um `typesafe/jev-*`.
-Qualquer outro id seria encaminhado a um modelo de chat, que responde com texto livre que este
+O id do modelo precisa ser de um System One. O `jev-latest` puro é o padrão e não
+precisa de prefixo; `typesafe/` é aceito em um id versionado como `typesafe/jev-1.13`,
+mas não na tag móvel — a rota não aceita `typesafe/jev-latest`. Qualquer outro id seria
+encaminhado a um modelo de chat, que responde com texto livre que este
 plugin não consegue interpretar como uma decisão, então ele é recusado antes da chamada em vez de
 mal interpretado depois dela.
 
@@ -231,8 +235,8 @@ escolher.
 | `apiKeyRef` | `TYPESAFE_API_KEY` | Referência de credencial para a rota `live` |
 | `openRouterApiKeyRef` | `OPENROUTER_API_KEY` | Referência de credencial para a rota `openrouter` |
 | `baseURL` | `https://api.typesafe.ai` | Raiz da API para a rota `live`. Não-HTTPS é recusado, exceto em loopback |
-| `openRouterBaseURL` | `https://openrouter.ai` | Raiz da API para a rota `openrouter`. Mesma regra |
-| `model` | `jev-latest` | Enviado com toda requisição. Na rota OpenRouter precisa começar com `typesafe/` |
+| `openRouterBaseURL` | `https://openrouter.ai/api` | Raiz da API para a rota `openrouter`. Mesma regra |
+| `model` | `jev-latest` | Enviado com toda requisição. Na rota OpenRouter o padrão puro basta; `typesafe/` exige um id versionado como `typesafe/jev-1.13`, e `typesafe/jev-latest` não é aceito |
 | `logLevel` | `warn` | `silent` \| `warn` \| `info` \| `debug` |
 | `minConfidence` | `0.7` | Abaixo disto, uma resposta não é acionada |
 | `minProbability` | `0.6` | Abaixo disto, uma decisão não é acionada |

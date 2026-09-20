@@ -15,6 +15,7 @@
  */
 
 import { topCriterion } from './primitives.js'
+import { DEFAULT_NOUL_BAND } from './render.js'
 import type { CategoricalAnswer, JevAnswer, JevResult, ScoreAnswer } from './types.js'
 
 /** The outcome of applying a local policy to one Jev answer. */
@@ -84,9 +85,44 @@ const floorsFor = (
   }
 }
 
+/**
+ * The band edge that acts as the default probability floor.
+ *
+ * Declared before {@link DEFAULT_POLICY} on purpose: a `const` read before its
+ * own initializer throws, and this module is reached from `render.ts`'s importer
+ * graph, so the order here is load-bearing rather than cosmetic.
+ */
+export const DEFAULT_MIN_PROBABILITY: number = DEFAULT_NOUL_BAND.high
+
+/**
+ * The shipped floors.
+ *
+ * `minProbability` is the noul band's upper edge, not a number of its own, and
+ * that is the point. The two used to disagree: the band said a noul in
+ * `[0.60, 0.70]` was `uncertain` while this floor said `decided`, so the same
+ * probability had two readings and which one a caller got depended on whether
+ * they were looking at a rendered answer or at a policy verdict. Nothing was
+ * wrong with either number in isolation — they were two answers to the same
+ * question, maintained in two files.
+ *
+ * Deriving one from the other means the band a caller reads and the floor a gate
+ * enforces are the same boundary, and it keeps the direction honest: acting on a
+ * noul requires the band to say `yes` (or `no`), so a `decided` verdict can
+ * never contradict the `band` reported beside it.
+ *
+ * The band's endpoints keep their documented meaning — `0.30` and `0.70` are
+ * both `uncertain`, which is why the floor is `high` rather than something just
+ * below it. See {@link DEFAULT_NOUL_BAND}.
+ *
+ * `minConfidence` stays a literal `0.7`. It is a different quantity — a floor on
+ * the confidence that choice and score answers carry, whereas the band describes
+ * how to read a noul — so the two happen to agree today rather than being the
+ * same number, and tying them together would suggest a relationship that does
+ * not exist.
+ */
 export const DEFAULT_POLICY: PolicyOptions = {
   minConfidence: 0.7,
-  minProbability: 0.6,
+  minProbability: DEFAULT_MIN_PROBABILITY,
 }
 
 /**
@@ -122,7 +158,19 @@ export const applyPolicy = (
       return { kind: 'invalid', reason: `noul resolved to "${key}", which is not a declared criterion` }
     }
     const floors = floorsFor(key, options)
-    if (strength < floors.minProbability) return { kind: 'undecided', reason: 'below-confidence' }
+    // Strictly greater, not "at least", and the difference is the whole point of
+    // this line. A noul's strength is `max(noul, 1 - noul)`, and the band this
+    // floor comes from calls *both* of its edges uncertain — so `strength ===
+    // minProbability` is precisely the boundary value the band refuses to read as
+    // a side. Accepting it here would leave one probability with two readings
+    // again, at exactly the value where the two definitions meet: `noulBand(0.7)`
+    // says `uncertain` while the policy would say `decided`.
+    //
+    // A choice or score answer keeps the inclusive comparison — it has no band,
+    // so there is no second reading to contradict.
+    if (strength <= floors.minProbability) {
+      return { kind: 'undecided', reason: 'below-confidence' }
+    }
     return { kind: 'decided', answer: key, probability: strength }
   }
 

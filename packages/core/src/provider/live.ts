@@ -26,6 +26,12 @@ import type {
 } from '../types.js'
 import { JevProviderError } from '../types.js'
 import { isRecord, normalizeAnswer } from '../answers.js'
+import {
+  DEFAULT_TOTAL_BUDGET_MS,
+  NO_PER_ATTEMPT_TIMEOUT_MS,
+  armCallBudget,
+  classifyProviderFailure,
+} from './classify.js'
 
 export const DEFAULT_ENDPOINT = 'https://api.typesafe.ai'
 export const DEFAULT_MODEL = 'jev-latest'
@@ -91,15 +97,61 @@ export interface LiveProviderOptions {
   /**
    * Milliseconds per attempt, or the SDK default (10_000) when omitted.
    *
-   * The SDK has no total retry budget in JavaScript, so with its default retry
-   * policy a single call can occupy roughly 30s. That is longer than a tool
-   * gate should ever block, which is why this is worth setting.
+   * **Per attempt, not per call.** The SDK is explicit that this is a "timeout
+   * per attempt in milliseconds, without a total retry budget", so on its own
+   * this number does not bound how long a call occupies: three attempts at 30s
+   * plus backoff is roughly 90s, which is why this setting alone was never the
+   * bound it looked like. {@link LiveProviderOptions.totalBudgetMs} is the bound.
+   *
+   * `0` means what it says — no per-attempt deadline. It cannot be passed
+   * straight through, because the SDK's `assertPositiveMs` throws for any value
+   * `<= 0`; a configured `0` used to make every call fail before a socket opened
+   * and then report that failure as a network problem. See
+   * {@link NO_PER_ATTEMPT_TIMEOUT_MS}.
    */
   readonly timeout?: number
+  /**
+   * Ceiling on one complete call, in milliseconds: every attempt plus every
+   * backoff between them. Defaults to {@link DEFAULT_TOTAL_BUDGET_MS}.
+   *
+   * Deliberately not part of the documented configuration surface — it is the
+   * safety net that makes `timeout` mean "per attempt" honestly, not a second
+   * knob to tune. Pass `0` to remove the ceiling entirely.
+   */
+  readonly totalBudgetMs?: number
   /** Retry overrides, e.g. `{ maxRetries: 0 }` to fail fast inside a gate. */
   readonly retry?: Readonly<Record<string, unknown>>
   /** Injectable for tests, so no test needs a real key or a real socket. */
   readonly loadSdk?: () => Promise<SdkModule>
+}
+
+/**
+ * The per-attempt timeout the SDK is given when a caller configures `0`.
+ *
+ * See the note on the encoding in `classify.ts`: the SDK's `assertPositiveMs`
+ * rejects `0`, so "no per-attempt deadline" has to be expressed as a number it
+ * accepts. Re-exported so a caller of this provider does not have to reach into
+ * the classifier for it.
+ */
+export { NO_PER_ATTEMPT_TIMEOUT_MS }
+
+/** The ceiling applied to one whole call when none is configured. */
+export const DEFAULT_CALL_TOTAL_BUDGET_MS: number = DEFAULT_TOTAL_BUDGET_MS
+
+/**
+ * The `timeout` value to hand the SDK for a caller-configured timeout.
+ *
+ * `undefined` passes nothing, leaving the SDK's own default in place. `0` means
+ * "no per-attempt deadline" and is encoded as {@link NO_PER_ATTEMPT_TIMEOUT_MS},
+ * because the SDK throws on anything `<= 0`. Anything else is passed through.
+ *
+ * Exported so the OpenRouter route — which shares this client — cannot drift
+ * from the TypeSafe route on what `0` means.
+ */
+export const timeoutForSdk = (timeout: number | undefined): number | undefined => {
+  if (timeout === undefined) return undefined
+  if (timeout <= 0) return NO_PER_ATTEMPT_TIMEOUT_MS
+  return timeout
 }
 
 /** Refuse an endpoint that would send prompts in cleartext. */
@@ -186,6 +238,7 @@ export class LiveProvider implements JevProvider {
     if (this.client !== undefined) return this.client
     const load = this.options.loadSdk ?? defaultLoadSdk
     const sdk = await load()
+    const timeout = timeoutForSdk(this.options.timeout)
     this.client = new sdk.TypeSafeClient({
       // Every field the SDK would otherwise take from the environment is
       // supplied explicitly. `apiKey` was always passed; `logLevel` was the gap,
@@ -198,7 +251,7 @@ export class LiveProvider implements JevProvider {
       apiKey: this.options.apiKey,
       baseURL: this.baseURL,
       logLevel: this.options.logLevel ?? DEFAULT_LOG_LEVEL,
-      ...(this.options.timeout === undefined ? {} : { timeout: this.options.timeout }),
+      ...(timeout === undefined ? {} : { timeout }),
       ...(this.options.retry === undefined ? {} : { retry: this.options.retry }),
       // This runs inside a DSH host process, never a browser page.
       dangerouslyAllowBrowser: false,
@@ -210,6 +263,15 @@ export class LiveProvider implements JevProvider {
     const startedAt = Date.now()
     const client = await this.clientForRequest()
 
+    // One deadline for the whole call. `timeout` is per attempt and the SDK has
+    // no total budget, so without this a call could occupy perAttempt x
+    // (maxRetries + 1) plus backoff — the 90s worst case the per-attempt
+    // timeout was mistaken for bounding.
+    const budget = armCallBudget(
+      this.options.totalBudgetMs ?? DEFAULT_CALL_TOTAL_BUDGET_MS,
+      signal,
+    )
+
     let response: unknown
     try {
       response = await client.systemOne(
@@ -220,26 +282,20 @@ export class LiveProvider implements JevProvider {
             ? { model: request.model ?? this.options.model }
             : {}),
         },
-        signal === undefined ? {} : { signal },
+        budget.signal === undefined ? {} : { signal: budget.signal },
       )
     } catch (cause) {
-      // The SDK distinguishes rate limits, auth failures, and transport
-      // errors. Preserve the distinction without leaking response bodies,
-      // which can echo request headers.
-      const status = isRecord(cause) && typeof cause.status === 'number' ? cause.status : undefined
-      const code =
-        status === 401 || status === 403
-          ? 'upstream-rejected'
-          : status === undefined
-            ? 'upstream-unreachable'
-            : 'upstream-rejected'
-      throw new JevProviderError(
-        status === undefined
-          ? 'TypeSafe request failed before a response arrived (network or timeout).'
-          : `TypeSafe rejected the request with HTTP ${status}.`,
-        code,
-        { cause },
-      )
+      // The upstream's own body is never read: it can quote the offending
+      // field, and request headers are exactly what this package keeps out of
+      // logs. Only the status is carried across, plus a code that says whether
+      // retrying could ever help.
+      throw classifyProviderFailure(cause, {
+        providerId: this.id,
+        label: 'TypeSafe',
+        signal,
+      })
+    } finally {
+      budget.dispose()
     }
 
     if (!isRecord(response)) {

@@ -4,6 +4,7 @@
   "description": "TypeSafe Jev over the Model Context Protocol: typed judgments (ask, rank, check) that return calibrated probabilities instead of prose.",
   "keywords": [
     "mcp",
+    "mcp-server",
     "model-context-protocol",
     "jev",
     "typesafe",
@@ -26,6 +27,7 @@
   },
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
+  "mcpName": "io.github.PerryLink/jevcore",
   "bin": {
     "jevcore-mcp": "./lib/bin.js"
   },
@@ -40,6 +42,7 @@
     "lib",
     "src",
     "scripts",
+    "server.json",
     "README.md",
     "README-zh.md",
     "README-es.md",

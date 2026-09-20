@@ -23,6 +23,8 @@ The adapters are thin on purpose. `packages/dsh` is four files: it declares tool
 translates hook payloads. Everything decision-shaped — the primitives, the providers, the egress
 contract, the policy, the gates — lives in core, so a new adapter cannot drift from the guarantees
 the others make.
+One runtime requirement differs across the three: `jevcore-dsh` tracks the harness and needs
+Node `^22.19.0 || >=24.0.0`, while `jevcore` and `jevcore-mcp` need `>=20`.
 
 ---
 
@@ -142,7 +144,7 @@ The provider is chosen from the environment:
 | Variable | Effect |
 |---|---|
 | `TYPESAFE_API_KEY` | Selects the TypeSafe route when present |
-| `OPENROUTER_API_KEY` | Selects the OpenRouter route when present and no TypeSafe key is |
+| `OPENROUTER_API_KEY` | Selects the OpenRouter route when present and no TypeSafe key is set |
 | `JEV_PROVIDER` | `mock`, `live`, or `openrouter` — overrides the heuristic above |
 | `TYPESAFE_MODEL` / `OPENROUTER_MODEL` | Model id for the selected route |
 | `TYPESAFE_BASE_URL` / `OPENROUTER_BASE_URL` | API root for the selected route |
@@ -197,9 +199,12 @@ Two things to know about the OpenRouter route:
 - **It returns a cost**, which TypeSafe's own route does not, so `usage.costUsd` is
   populated here and absent there.
 
-The model id must be a System One one: bare `jev-*`, or `typesafe/jev-*`. Any other id would be routed to a chat
-model, which answers with prose this plugin cannot interpret as a decision, so it
-is refused before the call rather than misread after it.
+The model id must be a System One one. `jev-latest` bare is the default and needs
+no prefix; `typesafe/` is accepted on a versioned id such as `typesafe/jev-1.13`,
+but not on the moving tag — `typesafe/jev-latest` is not accepted by the route.
+Any other id would be routed to a chat model, which answers with prose this plugin
+cannot interpret as a decision, so it is refused before the call rather than
+misread after it.
 
 Either way the credential is resolved through DSH's credential service first,
 then the environment variable of that name. It is read per call, so a key added
@@ -221,8 +226,8 @@ choose.
 | `apiKeyRef` | `TYPESAFE_API_KEY` | Credential reference for the `live` route |
 | `openRouterApiKeyRef` | `OPENROUTER_API_KEY` | Credential reference for the `openrouter` route |
 | `baseURL` | `https://api.typesafe.ai` | API root for the `live` route. Non-HTTPS is refused except on loopback |
-| `openRouterBaseURL` | `https://openrouter.ai` | API root for the `openrouter` route. Same rule |
-| `model` | `jev-latest` | Sent with every request. On the OpenRouter route it must start with `typesafe/` |
+| `openRouterBaseURL` | `https://openrouter.ai/api` | API root for the `openrouter` route. Same rule |
+| `model` | `jev-latest` | Sent with every request. On the OpenRouter route the bare default works; `typesafe/` needs a versioned id such as `typesafe/jev-1.13`, and `typesafe/jev-latest` is not accepted |
 | `logLevel` | `warn` | `silent` \| `warn` \| `info` \| `debug` |
 | `minConfidence` | `0.7` | Below this, an answer is not acted on |
 | `minProbability` | `0.6` | Below this, a decision is not acted on |

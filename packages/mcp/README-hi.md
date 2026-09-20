@@ -39,11 +39,14 @@ npx -y jevcore-mcp
 | `TYPESAFE_MODEL` / `OPENROUTER_MODEL` | चुने गए route के लिए model id |
 | `TYPESAFE_BASE_URL` / `OPENROUTER_BASE_URL` | चुने गए route के लिए API root |
 
-दो routes एक ही models तक पहुँचते हैं। TypeSafe उन्हें सीधे serve करता है; OpenRouter उन्हें
-अपने ही Decisions route के पीछे host करता है, जो तब रास्ता है जब TypeSafe key
+दो routes एक ही models तक पहुँचते हैं। TypeSafe उन्हें सीधे serve करता है; OpenRouter System One
+models को उसी `POST /v1/systemone` पथ पर serve करता है जिस पर TypeSafe करता है, अपनी API root से
+एक स्तर नीचे, जो तब रास्ता है जब TypeSafe key
 अव्यावहारिक हो। इनमें अंतर यह है कि आपका state किसके servers देखते हैं, इसलिए startup report
 endpoint का नाम बताती है, उसे provider के नाम से इंगित छोड़ने के बजाय। OpenRouter
-route पर model id का `typesafe/` से शुरू होना ज़रूरी है; कोई भी अन्य ऐसा prose लौटाता है
+route पर model id एक System One वाला ही होना चाहिए: बिना prefix वाला `jev-latest` ही
+default है, `typesafe/` किसी versioned id जैसे `typesafe/jev-1.13` पर स्वीकार किया जाता है,
+और `typesafe/jev-latest` स्वीकार नहीं किया जाता। कोई भी अन्य ऐसा prose लौटाता है
 जिसे यह server एक निर्णय के रूप में नहीं पढ़ सकता।
 
 प्रति-call adapter के विपरीत, यह server अपना credential **startup पर एक बार** resolve

@@ -1,0 +1,33 @@
+{
+  "why": [
+    "Hits of scripts/check-mojibake.mjs that a human has read and judged deliberate.",
+    "",
+    "All twelve occurrences in this repository are the same thing: the ten README files of the root",
+    "and packages/dsh sets, plus SESSION-STATE.md, quote the dash-then-question-mark sequence",
+    "verbatim, inside backticks, in the section that records the incident. The corrupted form is the",
+    "evidence there -- a README that describes this defect without showing it is a worse README -- so",
+    "the guard would otherwise fail on the documentation that justifies its own existence.",
+    "",
+    "Only Markdown documents may be listed, and each number is the count of hits at review time.",
+    "A file with fewer hits than it was reviewed with is reported as stale, so this list shrinks when",
+    "the prose it excuses is rewritten; a file with more fails the excess. Nothing under src/, lib/,",
+    "scripts/ or .github/ may be listed: in code and build output the sequence is the defect, and",
+    "check-mojibake.mjs refuses an entry that names one.",
+    "",
+    "A deliberate sample in a file that can carry a comment should use the inline marker instead:",
+    "a line containing `mojibake:allow <reason>` excuses its own hits and nothing else."
+  ],
+  "reviewed": {
+    "README.md": 1,
+    "README-zh.md": 1,
+    "README-es.md": 1,
+    "README-pt.md": 1,
+    "README-hi.md": 1,
+    "SESSION-STATE.md": 3,
+    "packages/dsh/README.md": 1,
+    "packages/dsh/README-zh.md": 1,
+    "packages/dsh/README-es.md": 1,
+    "packages/dsh/README-pt.md": 1,
+    "packages/dsh/README-hi.md": 1
+  }
+}

@@ -39,11 +39,14 @@ npx -y jevcore-mcp
 | `TYPESAFE_MODEL` / `OPENROUTER_MODEL` | 所选路由的模型 id |
 | `TYPESAFE_BASE_URL` / `OPENROUTER_BASE_URL` | 所选路由的 API 根地址 |
 
-两条路由到达同样的模型。TypeSafe 直接提供它们；OpenRouter 把它们托管在
-它自己的 Decisions 路由之后，当 TypeSafe key 不现实时，这就是进入的方式。
+两条路由到达同样的模型。TypeSafe 直接提供它们；OpenRouter 在与 TypeSafe 相同的
+`POST /v1/systemone` 路径上提供 System One 模型，就在它自己的 API 根地址下一层；
+当 TypeSafe key 不现实时，这就是进入的方式。
 它们的不同在于谁的服务器会看到你的状态，因此启动报告点名
 endpoint，而不是让它由 provider 的名字来暗示。在 OpenRouter 路由上，
-模型 id 必须以 `typesafe/` 开头；任何其他 id 都会用散文作答，
+模型 id 必须是 System One 的 id：裸的 `jev-latest` 不需要前缀，
+`typesafe/` 可用于带版本号的 id，例如 `typesafe/jev-1.13`，而
+`typesafe/jev-latest` 不被接受。任何其他 id 都会用散文作答，
 而本服务器无法把它解读为决策。
 
 与一个每次调用都解析的适配器不同，本服务器 **在启动时一次性** 解析它的凭据

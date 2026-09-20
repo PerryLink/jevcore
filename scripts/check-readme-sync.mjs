@@ -27,6 +27,16 @@
 //   - the install command, because it is the one line a reader acts on;
 //   - every configuration key in the Configuration table, so a documented option
 //     cannot go missing from four of the five pages;
+//   - every environment-variable-shaped identifier written into running text.
+//     The inline-span rule above already covers the identifier when it is in
+//     backticks, and the fenced blocks are compared byte for byte, so the one
+//     occurrence nothing else can see is the identifier written into a sentence
+//     as plain text -- and a translation is free to rewrite prose, which is
+//     exactly why a dropped or invented `TYPESAFE_API_KEY` reads as a
+//     translation and is not one. The shape is narrow on purpose: uppercase with
+//     at least one underscore, so `README`, `MIT`, `OIDC` and `UTF-8` cannot
+//     match. Sets are compared, not counts, because prose may mention a variable
+//     once where another language mentions it twice;
 //   - the licence, because a licence that says MIT on the npm page while the
 //     repository says Apache-2.0 is worse than either;
 //   - the document's structural shape: the ordered sequence of headings, table
@@ -140,12 +150,39 @@ const inlineSpans = (text) => {
   )
 }
 
-/** Counts of each item, so a comparison can say what is missing rather than just that something is. */
+/**
+ * Counts of each item, so a comparison can say what is missing rather than just that something is.
+ */
 const multiset = (items) => {
   const counts = new Map()
   for (const item of items) counts.set(item, (counts.get(item) ?? 0) + 1)
   return counts
 }
+
+/**
+ * The document with its code removed: fenced blocks first, then inline spans.
+ *
+ * Used only by the prose-identifier check below, which exists precisely because
+ * the other two comparisons already cover code. Removing it here keeps that check
+ * from reporting a key the inline-span rule has already reported, and keeps
+ * "in prose" meaning what it says.
+ *
+ * Neither regex needs the care `inlineSpans` documents: this text is not
+ * compared, only searched, so over-removing an unmatched backtick can at worst
+ * hide an identifier from this one check and never invent a failure.
+ */
+const withoutCode = (text) =>
+  text.replace(/^```[^\n]*\n[\s\S]*?^```/gmu, '').replace(/`[^`]*`/gu, '')
+
+/**
+ * Environment variables and configuration keys named in running text: uppercase
+ * with at least one underscore, the shape of a name a reader exports before
+ * starting the server. Requiring the underscore is what keeps ordinary shouted
+ * prose (`README`, `MIT`, `NOTICE`) and hyphenated standards (`UTF-8`) out.
+ */
+const ENV_VAR = /[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+/gu
+
+const proseIdentifiers = (text) => new Set([...withoutCode(text).matchAll(ENV_VAR)].map((m) => m[0]))
 
 /**
  * What the two multisets disagree about.
@@ -216,6 +253,7 @@ for (const set of SETS) {
   const expectedKeys = configKeys(source)
   const expectedShape = shape(source)
   const expectedSpans = inlineSpans(source)
+  const expectedIdentifiers = proseIdentifiers(source)
 
   if (expectedSections === 0) note(`${set.label} declares no '## ' sections; the gate would be vacuous`)
   if (expectedBlocks.length === 0) {
@@ -296,12 +334,35 @@ for (const set of SETS) {
     for (const key of expectedKeys) {
       if (!text.includes(`\`${key}\``)) note(`${relative}: missing the configuration key \`${key}\``)
     }
+
+    // Prose identifiers, both directions: one the source never names is a
+    // variable a translation invented, and one the source names and the
+    // translation does not is an option missing from four of the five pages.
+    const actualIdentifiers = proseIdentifiers(text)
+    for (const identifier of actualIdentifiers) {
+      if (!expectedIdentifiers.has(identifier)) {
+        note(
+          `${relative}: names \`${identifier}\` in prose, which ${SOURCE} never mentions. A ` +
+            'configuration key or environment variable a translation invents is a reader ' +
+            'exporting a variable nothing reads.',
+        )
+      }
+    }
+    for (const identifier of expectedIdentifiers) {
+      if (!actualIdentifiers.has(identifier)) {
+        note(
+          `${relative}: never names ${identifier} in prose, and ${SOURCE} does. Identifiers in a ` +
+            'sentence are not prose — translate around them, not through them.',
+        )
+      }
+    }
   }
 
   summaries.push(
     `${set.label}: ${expectedSections} sections, ${expectedShape.length} structural blocks, ` +
       `${expectedBlocks.length} code blocks, ${expectedSpans.length} inline spans, ` +
-      `${expectedUrls.size} links, ${expectedKeys.length} config keys`,
+      `${expectedUrls.size} links, ${expectedKeys.length} config keys, ` +
+      `${expectedIdentifiers.size} prose identifiers`,
   )
 }
 

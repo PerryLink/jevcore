@@ -133,11 +133,18 @@ describe('the request is the same shape the TypeSafe route sends', () => {
     expect(calls[0]?.request.model).toBe('typesafe/jev-1.13')
   })
 
-  it('forwards the abort signal', async () => {
+  it('forwards the abort signal, so cancelling cancels the request', async () => {
     const { instance, calls } = provider()
     const controller = new AbortController()
     await instance.answer(request(), controller.signal)
-    expect(calls[0]?.options).toEqual({ signal: controller.signal })
+    // A dependent signal rather than the caller's own object, because the total
+    // budget aborts the same call. Cancelling the caller's signal must still
+    // reach the SDK, which is what this asserts.
+    const forwarded = calls[0]?.options?.signal as AbortSignal | undefined
+    expect(forwarded).toBeInstanceOf(AbortSignal)
+    expect(forwarded?.aborted).toBe(false)
+    controller.abort()
+    expect(forwarded?.aborted).toBe(true)
   })
 })
 

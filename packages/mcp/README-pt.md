@@ -39,11 +39,14 @@ bundle apenas de configuração cujo patch insere o cliente MCP do harness:
 | `TYPESAFE_MODEL` / `OPENROUTER_MODEL` | Id do modelo para a rota selecionada |
 | `TYPESAFE_BASE_URL` / `OPENROUTER_BASE_URL` | Raiz da API para a rota selecionada |
 
-Duas rotas alcançam os mesmos modelos. A TypeSafe os serve diretamente; a OpenRouter os
-hospeda sob sua própria rota Decisions, que é a forma de entrar quando uma chave TypeSafe é
+Duas rotas alcançam os mesmos modelos. A TypeSafe os serve diretamente; a OpenRouter serve
+os modelos System One no mesmo caminho `POST /v1/systemone` que a TypeSafe, um nível
+abaixo da sua própria raiz de API, que é a forma de entrar quando uma chave TypeSafe é
 inviável. Elas diferem em quais servidores veem o seu estado, então o relatório de inicialização
 nomeia o endpoint em vez de deixá-lo implícito no nome do provedor. Na
-rota OpenRouter, o id do modelo precisa começar com `typesafe/`; qualquer outra coisa responde
+rota OpenRouter, o id do modelo precisa ser um de System One: o `jev-latest` puro é o padrão,
+`typesafe/` é aceito em um id versionado como `typesafe/jev-1.13`, e `typesafe/jev-latest`
+não é aceito. Qualquer outra coisa responde
 com prosa que este servidor não consegue interpretar como decisão.
 
 Diferente de um adaptador por chamada, este servidor resolve sua credencial **uma única vez na

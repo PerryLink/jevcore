@@ -13,7 +13,14 @@
  */
 
 import { Context } from '@deepseek-ai/cordis'
-import { EGRESS_FEATURES, EgressContract } from 'jevcore'
+import {
+  EGRESS_FEATURES,
+  EgressContract,
+  JevService,
+  type EgressFeature,
+  type JevCallRecord,
+  type JevProvider,
+} from 'jevcore'
 import { describe, expect, it, vi } from 'vitest'
 import * as plugin from '../src/index.js'
 
@@ -282,5 +289,106 @@ describe('no network call on the default path', () => {
     } finally {
       globalThis.fetch = original
     }
+  })
+})
+
+const allOn = (): Record<EgressFeature, boolean> =>
+  Object.fromEntries(EGRESS_FEATURES.map((feature) => [feature, true])) as Record<
+    EgressFeature,
+    boolean
+  >
+
+describe('the registered tool definitions', () => {
+  it('opt every tool into the host parallel pool', () => {
+    const { tools } = mountPlugin()
+    // The registry reads this field off the registered definition; a definition
+    // that does not declare it is treated as `exclusive` and serialized.
+    for (const tool of tools.registered) {
+      expect(typeof (tool as { isConcurrencySafe?: unknown }).isConcurrencySafe).toBe('function')
+    }
+  })
+})
+
+describe('the recent() window', () => {
+  const record = (at: number, feature: EgressFeature = 'tool:jev_ask'): JevCallRecord => ({
+    feature,
+    at,
+    latencyMs: 0,
+    ok: true,
+    redactionRules: [],
+    redactions: 0,
+    stateChars: 0,
+    truncated: false,
+  })
+
+  it('orders calls by when they were sent, not by when they finished', () => {
+    // The service appends its history in `record()`, which runs when a call
+    // *finishes*. Two concurrent judgments therefore arrive in completion order.
+    const recorded = [record(200, 'tool:jev_check'), record(100)]
+    expect(plugin.orderRecent(recorded).map((entry) => entry.at)).toEqual([100, 200])
+  })
+
+  it("copies, because recent() hands out the service's own array", () => {
+    const recorded = [record(2), record(1)]
+    const ordered = plugin.orderRecent(recorded)
+    expect(ordered).not.toBe(recorded)
+    ordered.reverse()
+    expect(recorded.map((entry) => entry.at)).toEqual([2, 1])
+  })
+
+  it('reports two overlapping calls in send order whichever finishes first', async () => {
+    let releaseFirst: () => void = () => undefined
+    const firstMayFinish = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const provider: JevProvider = {
+      id: 'paced',
+      answer: async (request) => {
+        // The first call blocks until the second has already been recorded.
+        if (JSON.stringify(request.state) === '"first"') await firstMayFinish
+        return { model: 'paced', provider: 'paced', latencyMs: 1, answers: {} }
+      },
+    }
+    const service = new JevService({
+      provider,
+      egress: new EgressContract(
+        { transmitting: true, enabled: allOn() },
+        'https://api.typesafe.ai',
+      ),
+    })
+    const questions = { q: { type: 'noul' as const, instructions: 'ok?' } }
+
+    const first = service.ask({ feature: 'tool:jev_ask', state: 'first', questions })
+    // The sends have to be more than a millisecond apart: `at` carries
+    // millisecond resolution and is the only ordering key the record has.
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const second = service.ask({ feature: 'tool:jev_ask', state: 'second', questions })
+    await second
+    releaseFirst()
+    await first
+
+    // Completion order is second-then-first; the reported order is send order.
+    const recorded = service.recent()
+    expect(recorded[0]?.at).toBeGreaterThan(recorded[1]?.at ?? 0)
+    const ordered = plugin.orderRecent(recorded)
+    expect(ordered[0]?.at).toBeLessThan(ordered[1]?.at ?? 0)
+  })
+
+  it('is wired into the service the plugin publishes', async () => {
+    const { ctx } = mountPlugin()
+    const service = ctx.get('jev') as RegisteredService & { recent(): readonly JevCallRecord[] }
+    await service.ask({
+      feature: 'tool:jev_ask',
+      state: 'a',
+      questions: { q: { type: 'noul', instructions: 'ok?' } },
+    })
+    await service.ask({
+      feature: 'tool:jev_ask',
+      state: 'b',
+      questions: { q: { type: 'noul', instructions: 'ok?' } },
+    })
+    const at = service.recent().map((entry) => entry.at)
+    expect(at).toHaveLength(2)
+    expect(at).toEqual([...at].sort((left, right) => left - right))
   })
 })

@@ -11,9 +11,9 @@
  * what actually happened.
  */
 
-import { EgressContract, type EgressFeature } from './egress.js'
+import { EgressContract, type EgressFeature, type MeasuredPayload } from './egress.js'
 import { redact } from './redact.js'
-import type { JevProvider, JevQuestion, JevResult, JsonValue } from './types.js'
+import type { JevEgressFacts, JevProvider, JevQuestion, JevResult, JsonValue } from './types.js'
 
 /** One recorded call, for the status report. Contains no payload content. */
 export interface JevCallRecord {
@@ -25,6 +25,8 @@ export interface JevCallRecord {
   readonly redactionRules: readonly string[]
   readonly redactions: number
   readonly stateChars: number
+  /** True when the state was capped before it was sent. */
+  readonly truncated: boolean
   /** Failure message, truncated. Never contains the payload. */
   readonly error?: string
 }
@@ -70,6 +72,34 @@ export interface JevAskInput {
   readonly signal?: AbortSignal
 }
 
+/**
+ * Attach what egress did to the payload, without disturbing what the provider
+ * answered.
+ *
+ * Copies rather than mutates: a provider is free to hand back a shared or frozen
+ * object, and a result is a value the caller owns.
+ *
+ * `truncated` is written as an explicit `true` only when it happened, so the
+ * shape of a result from an ordinary call is exactly what it was before these
+ * fields existed.
+ */
+const withEgressFacts = (result: JevResult, measured: MeasuredPayload): JevResult => {
+  const egress: JevEgressFacts = {
+    truncated: measured.truncated,
+    stateChars: measured.stateChars,
+    questionsChars: measured.questionsChars,
+    redactedFields: measured.redactedFields,
+    redactedValues: measured.redactedValues,
+    redactionRules: measured.redactionRules,
+    redactions: measured.redactions,
+  }
+  return {
+    ...result,
+    ...(measured.truncated ? { truncated: true } : {}),
+    egress,
+  }
+}
+
 export class JevService {
   private readonly history: JevCallRecord[] = []
   private readonly historyLimit: number
@@ -105,6 +135,13 @@ export class JevService {
    *
    * Redaction runs before the egress measurement, so the reported sizes are
    * the sizes that actually leave, not the sizes of the raw input.
+   *
+   * What egress did to the payload is stamped onto the result as well as onto
+   * the call record. It used to live on the record alone, which meant a result
+   * produced from a truncated state was indistinguishable from one produced from
+   * the whole state: `MeasuredPayload.truncated` was computed, stored, and never
+   * reached the caller. The answer is about the state Jev saw, so the caller has
+   * to be able to see what that was.
    */
   async ask(input: JevAskInput): Promise<JevResult> {
     // `measure` performs the egress check and throws before anything leaves.
@@ -136,12 +173,13 @@ export class JevService {
         redactionRules: measured.redactionRules,
         redactions: measured.redactions,
         stateChars: measured.stateChars,
+        truncated: measured.truncated,
       })
       this.calls += 1
       this.totalLatencyMs += result.latencyMs
       this.totalInputTokens += result.usage?.inputTokens ?? 0
       this.totalCostUsd += result.usage?.costUsd ?? 0
-      return result
+      return withEgressFacts(result, measured)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       this.record({
@@ -152,6 +190,7 @@ export class JevService {
         redactionRules: measured.redactionRules,
         redactions: measured.redactions,
         stateChars: measured.stateChars,
+        truncated: measured.truncated,
         error: message.slice(0, 300),
       })
       this.failures += 1

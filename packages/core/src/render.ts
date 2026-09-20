@@ -14,7 +14,7 @@
  */
 
 import { topCriterion } from './primitives.js'
-import type { JevAnswer, JevResult, JevUsage } from './types.js'
+import type { JevAnswer, JevEgressFacts, JevResult, JevUsage } from './types.js'
 
 /**
  * Declared as a type alias rather than an interface on purpose: the tool-output
@@ -186,13 +186,37 @@ export type RenderedResult = {
    * model cannot treat a synthetic answer as a real judgment.
    */
   warning?: string
+  /**
+   * True when the state was capped before it was sent.
+   *
+   * Carried through to the rendered output for the same reason `warning` is: it
+   * changes how the answer must be read. Jev judged a smaller state than the
+   * caller wrote, so a confident answer here is confident about *less evidence*,
+   * and a caller that cannot see this has no way to tell the two apart.
+   */
+  truncated?: boolean
+  /**
+   * What egress did to the payload: caps applied, redactions made.
+   *
+   * Present when a service prepared the payload, absent when a provider was
+   * called directly. `redactedFields` names the fields whose values were
+   * replaced — never the values themselves.
+   */
+  egress?: JevEgressFacts
 }
 
 const MOCK_WARNING =
   'These answers are SYNTHETIC. The mock provider derived them from a hash of the input; ' +
   'they carry no judgment. Set provider to "live" or "openrouter" with a credential for real answers.'
 
-/** Build the canonical value every tool returns. */
+/**
+ * Build the canonical value every tool returns.
+ *
+ * `truncated` and `egress` are forwarded from the result, which is where the
+ * service put them. Nothing is inferred here: if the caller's state was capped,
+ * the rendered payload says so, and if it was not, the keys stay absent so the
+ * shape is unchanged for everyone who never hits a cap.
+ */
 export const renderResult = (result: JevResult, questionIds: readonly string[]): RenderedResult => ({
   provider: result.provider,
   model: result.model,
@@ -200,6 +224,8 @@ export const renderResult = (result: JevResult, questionIds: readonly string[]):
   answers: questionIds.map((id) => renderAnswer(id, result.answers[id])),
   ...(result.usage === undefined ? {} : { usage: { ...result.usage } }),
   ...(result.provider === 'mock' ? { warning: MOCK_WARNING } : {}),
+  ...(result.truncated === true ? { truncated: true } : {}),
+  ...(result.egress === undefined ? {} : { egress: result.egress }),
 })
 
 /**

@@ -19,7 +19,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { EgressFeature } from 'jevcore'
 import { noul } from 'jevcore'
 import type { JevService } from 'jevcore'
-import { asRendered, rankingSize, renderResult, summarize } from 'jevcore'
+import { rankingSize, renderResult } from 'jevcore'
 
 const FEATURE: EgressFeature = 'tool:jev_rank'
 
@@ -30,6 +30,78 @@ export const candidateQuestionId = (index: number): string => `candidate_${index
 export const candidateIndex = (questionId: string): number | undefined => {
   const match = /^candidate_(\d+)$/.exec(questionId)
   return match?.[1] === undefined ? undefined : Number(match[1])
+}
+
+/** Longest candidate excerpt shown in the one-line summary. */
+const SUMMARY_CANDIDATE_CHARS = 60
+
+/** The candidate text, shortened to something that fits one card line. */
+const shortCandidate = (candidate: string): string =>
+  candidate.length <= SUMMARY_CANDIDATE_CHARS
+    ? candidate
+    : `${candidate.slice(0, SUMMARY_CANDIDATE_CHARS - 3)}...`
+
+/**
+ * The one-line summary a Native tool card shows for `jev_rank`.
+ *
+ * **This has to be its own function.** The core's `summarize` formats
+ * `RenderedResult.answers`, and a rank payload has no `answers` at all — only
+ * `ranking` (see the `execute` return below). Handing the payload to it through
+ * `asRendered` — a type assertion that adds nothing at runtime — made
+ * `summarize` throw on its very first `value.answers.map(...)`, and the registry
+ * turns a throw from a presentation callback into a **failed call**:
+ *
+ *     tool "jev_rank" returned invalid output: output.presentationMeta failed:
+ *     Cannot read properties of undefined (reading 'map')
+ *
+ * The model got zero candidates, so the tool was simply unusable in a real
+ * host - while all 410 tests passed, because nothing anywhere called
+ * `presentationMeta`. `execute` was covered; the projection the registry runs
+ * on **every top-level call** was not. `test/tools.test.ts` now calls it for
+ * all three tools.
+ *
+ * Total by construction, because of the same failure mode: the registry fails
+ * the whole call when a presentation callback throws, so `undefined`, a missing
+ * `ranking`, and an entry of the wrong shape all have to render rather than
+ * throw. `rankingSize` is defensive in the core for exactly this reason.
+ */
+export const rankSummary = (value: unknown): string => {
+  const record = (typeof value === 'object' && value !== null ? value : {}) as {
+    ranking?: unknown
+    warning?: unknown
+    latencyMs?: unknown
+  }
+  const size = rankingSize(value)
+  const headline = `jev_rank (${size} candidate${size === 1 ? '' : 's'})`
+  // The synthetic marker keys off `warning` rather than the provider name, the
+  // same rule the core's `summarize` documents: a result labelled synthetic is
+  // shown as synthetic whichever provider produced it.
+  const synthetic = typeof record.warning === 'string' ? ' [synthetic]' : ''
+  const ranking = Array.isArray(record.ranking) ? record.ranking : []
+  // The ranking arrives sorted with unanswered candidates last, so the first
+  // entry carrying a number is the top one. `relevance` absent means "Jev
+  // returned nothing for this candidate", which is not a relevance of zero -
+  // hence a search for a number rather than reading `ranking[0]`.
+  const top = ranking.find(
+    (entry): entry is { candidate?: unknown; relevance: number } =>
+      typeof entry === 'object' &&
+      entry !== null &&
+      typeof (entry as { relevance?: unknown }).relevance === 'number',
+  )
+  const unanswered = ranking.filter(
+    (entry) =>
+      typeof entry === 'object' &&
+      entry !== null &&
+      typeof (entry as { relevance?: unknown }).relevance !== 'number',
+  ).length
+  const best =
+    top === undefined
+      ? 'no candidate answered'
+      : `top: ${typeof top.candidate === 'string' ? shortCandidate(top.candidate) : '?'} ` +
+        `(${Math.round(top.relevance * 100)}%)`
+  const latency = typeof record.latencyMs === 'number' ? `${record.latencyMs}ms` : '?ms'
+  const missing = unanswered === 0 ? '' : ` - ${unanswered} unanswered`
+  return `${headline}${synthetic} - ${best} - ${latency}${missing}`
 }
 
 type RankArgs = {
@@ -98,10 +170,17 @@ export const jevRankTool = (service: JevService) =>
     output: {
       schema: OUTPUT_SCHEMA,
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
-      presentationMeta: (_args, value) => ({
-        summary: summarize(asRendered(value), `jev_rank (${rankingSize(value)} candidates)`),
-      }),
+      // `rankSummary`, not the core's `summarize`: this payload carries
+      // `ranking`, not `answers`. See the note on `rankSummary`.
+      presentationMeta: (_args, value) => ({ summary: rankSummary(value) }),
     },
+    // Read-only judgment over arguments the caller already holds: no state is
+    // mutated, the provider call is independent per candidate batch, and two
+    // rankings of different inputs commute. Without this the registry treats
+    // every call as `exclusive` (`ToolRuntime` - "if (!tool?.isConcurrencySafe)
+    // return { kind: 'exclusive' }"), so N independent rankings ran strictly
+    // one after another while the host's parallel pool sat idle.
+    isConcurrencySafe: () => true,
     execute: async (args, exec) => {
       const typed = args as unknown as RankArgs
       const order = typed.candidates.map((candidate, index) => ({ candidate, index }))

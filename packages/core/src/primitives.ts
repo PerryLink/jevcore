@@ -87,9 +87,15 @@ export const score = (
  */
 const INDEX_LIKE_KEY = /^(?:0|[1-9][0-9]*)$/
 
-/** Documented ceilings, confirmed against the live API. */
-export const MAX_SCORE_LEVELS = 10
-export const MAX_CHOICE_OPTIONS = 255
+/**
+ * Documented ceilings, confirmed against the live API.
+ *
+ * Annotated rather than inferred so the published declaration stays `number`
+ * instead of the literal type — a named limit is something callers compare
+ * against, not a constant they are expected to narrow on.
+ */
+export const MAX_SCORE_LEVELS: number = 10
+export const MAX_CHOICE_OPTIONS: number = 255
 
 /**
  * Convert a level map to the ordered array the API expects.

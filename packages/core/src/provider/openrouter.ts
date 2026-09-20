@@ -33,8 +33,14 @@ import type { JevProvider, JevRequest, JevResult, JevUsage } from '../types.js'
 import { JevProviderError } from '../types.js'
 import { isRecord, normalizeAnswer } from '../answers.js'
 import {
+  DEFAULT_TOTAL_BUDGET_MS,
+  armCallBudget,
+  classifyProviderFailure,
+} from './classify.js'
+import {
   DEFAULT_MODEL,
   loadOfficialSdk,
+  timeoutForSdk,
   type ProviderLogLevel,
   type SdkModule,
   type SystemOneClient,
@@ -76,8 +82,20 @@ export interface OpenRouterProviderOptions {
   readonly model?: string
   /** SDK log level, passed explicitly so the environment cannot raise it. */
   readonly logLevel?: ProviderLogLevel
-  /** Milliseconds per attempt. */
+  /**
+   * Milliseconds per attempt, **not per call**.
+   *
+   * Shared with the TypeSafe route, including the meaning of `0`: no per-attempt
+   * deadline, encoded as a finite number the SDK accepts because its own
+   * `assertPositiveMs` rejects `0` outright.
+   */
   readonly timeout?: number
+  /**
+   * Ceiling on one complete call, in milliseconds: every attempt plus every
+   * backoff between them. Defaults to `DEFAULT_TOTAL_BUDGET_MS` (40_000), the
+   * same shared default as the TypeSafe route.
+   */
+  readonly totalBudgetMs?: number
   /** Retry overrides, e.g. `{ maxRetries: 0 }` to fail fast inside a gate. */
   readonly retry?: Readonly<Record<string, unknown>>
   /** Injectable for tests, so no test needs a real key or a socket. */
@@ -173,16 +191,6 @@ const readUsage = (value: unknown): JevUsage | undefined => {
   return Object.keys(usage).length > 0 ? usage : undefined
 }
 
-/** Read an HTTP-ish status off an SDK error without assuming its class. */
-const statusOf = (error: unknown): number | undefined => {
-  if (!isRecord(error)) return undefined
-  for (const key of ['statusCode', 'status'] as const) {
-    const value = error[key]
-    if (typeof value === 'number' && Number.isFinite(value)) return value
-  }
-  return undefined
-}
-
 /**
  * A provider backed by OpenRouter, over the official TypeSafe client.
  *
@@ -215,6 +223,7 @@ export class OpenRouterProvider implements JevProvider {
     if (this.client !== undefined) return this.client
     const load = this.options.loadSdk ?? loadOfficialSdk
     const sdk = await load()
+    const timeout = timeoutForSdk(this.options.timeout)
     this.client = new sdk.TypeSafeClient({
       // Explicit, for the same reasons as the TypeSafe route: the key is never
       // left to the environment, and `logLevel` is, because the SDK's `debug`
@@ -223,7 +232,7 @@ export class OpenRouterProvider implements JevProvider {
       apiKey: this.options.apiKey,
       baseURL: this.baseURL,
       logLevel: this.options.logLevel ?? 'warn',
-      ...(this.options.timeout === undefined ? {} : { timeout: this.options.timeout }),
+      ...(timeout === undefined ? {} : { timeout }),
       ...(this.options.retry === undefined ? {} : { retry: this.options.retry }),
       dangerouslyAllowBrowser: false,
     })
@@ -235,6 +244,13 @@ export class OpenRouterProvider implements JevProvider {
     const client = await this.clientForRequest()
     const model = assertSystemOneModel(request.model ?? this.model)
 
+    // The same shared ceiling as the TypeSafe route: `timeout` is per attempt
+    // and the SDK has no total budget, so this is what actually bounds the call.
+    const budget = armCallBudget(
+      this.options.totalBudgetMs ?? DEFAULT_TOTAL_BUDGET_MS,
+      signal,
+    )
+
     let response: unknown
     try {
       response = await client.systemOne(
@@ -243,21 +259,21 @@ export class OpenRouterProvider implements JevProvider {
           questions: request.questions,
           model,
         },
-        signal === undefined ? {} : { signal },
+        budget.signal === undefined ? {} : { signal: budget.signal },
       )
     } catch (cause) {
       // Classify from the status alone; never echo the upstream body, which can
-      // quote request headers.
-      const status = statusOf(cause)
-      throw new JevProviderError(
-        status === undefined
-          ? 'OpenRouter request failed before a response arrived (network or timeout).'
-          : `OpenRouter rejected the request with HTTP ${status}.`,
-        status === 401 || status === 403 || status !== undefined
-          ? 'upstream-rejected'
-          : 'upstream-unreachable',
-        { cause },
-      )
+      // quote request headers. The classification is shared with the TypeSafe
+      // route, so the two cannot disagree about what a 429 means — and this
+      // condition used to be `status === 401 || status === 403 || status !==
+      // undefined`, which is true whenever a status exists at all.
+      throw classifyProviderFailure(cause, {
+        providerId: this.id,
+        label: 'OpenRouter',
+        signal,
+      })
+    } finally {
+      budget.dispose()
     }
 
     if (!isRecord(response)) {

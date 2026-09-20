@@ -5,19 +5,23 @@ import {
   EgressContract,
   JevService,
   MockProvider,
+  VERDICT_QUESTION,
   asRendered,
   rankingSize,
   renderAnswer,
   renderResult,
   resolveCheck,
   summarize,
+  type CheckResolution,
   type EgressFeature,
   type JevProvider,
+  type JevRequest,
   type JevResult,
+  type JsonValue,
 } from 'jevcore'
-import { jevAskTool } from '../src/ask.js'
-import { jevCheckTool } from '../src/check.js'
-import { candidateIndex, candidateQuestionId, jevRankTool } from '../src/rank.js'
+import { jevAskTool, toQuestions } from '../src/ask.js'
+import { TOOL_VERDICTS, jevCheckTool, reconcileVerdict } from '../src/check.js'
+import { candidateIndex, candidateQuestionId, jevRankTool, rankSummary } from '../src/rank.js'
 const allOn = (): Record<EgressFeature, boolean> =>
   Object.fromEntries(EGRESS_FEATURES.map((feature) => [feature, true])) as Record<EgressFeature, boolean>
 
@@ -41,6 +45,43 @@ const fixedProvider = (result: Partial<JevResult>): JevProvider => ({
     ...result,
   }),
 })
+
+/** A provider that records every request, so a test can see what actually left. */
+const recordingProvider = (): { requests: JevRequest[]; provider: JevProvider } => {
+  const requests: JevRequest[] = []
+  return {
+    requests,
+    provider: {
+      id: 'recording',
+      answer: async (request) => {
+        requests.push(request)
+        return { model: 'recording', provider: 'recording', latencyMs: 1, answers: {} }
+      },
+    },
+  }
+}
+
+/**
+ * What the registry does with one result: run the call, then project the
+ * output's `presentationMeta` over the canonical value.
+ *
+ * Nothing called this projection before, and that is exactly how `jev_rank`
+ * shipped unusable: its `presentationMeta` threw on every call, the registry
+ * turned the throw into `returned invalid output`, and the model received zero
+ * candidates - while all 410 tests passed, because they only ever called
+ * `execute`.
+ */
+const present = async (
+  definition: {
+    execute(args: unknown, exec: never): Promise<unknown>
+    output: { presentationMeta?(args: unknown, value: JsonValue): JsonValue }
+  },
+  args: unknown,
+): Promise<{ value: JsonValue; summary: string }> => {
+  const value = (await run(definition, args)) as JsonValue
+  const meta = definition.output.presentationMeta?.(args, value)
+  return { value, summary: String((meta as { summary?: unknown } | undefined)?.summary ?? '') }
+}
 
 describe('render helpers', () => {
   it('flattens a noul answer into a boolean with its strength', () => {
@@ -291,9 +332,17 @@ describe('jev_check verdict precedence', () => {
     ).toBe('insufficient')
   })
 
-  it('reports insufficient when nothing is strong', () => {
+  it('reports undecided when the evidence is sufficient but neither side is strong', () => {
+    // `undecided` exists so this finding is not reported as `insufficient`: the
+    // sufficiency answer says the evidence settles the question (0.9), and only
+    // the support/contradiction measurements are weak.
     expect(
       resolve({ supports_claim: 0.4, contradicts_claim: 0.3, evidence_is_sufficient: 0.9 }).verdict,
+    ).toBe('undecided')
+    // The other reading of "nothing is strong": weak support *and* evidence
+    // judged unable to settle it stays `insufficient`.
+    expect(
+      resolve({ supports_claim: 0.4, contradicts_claim: 0.3, evidence_is_sufficient: 0.1 }).verdict,
     ).toBe('insufficient')
   })
 
@@ -303,8 +352,14 @@ describe('jev_check verdict precedence', () => {
     )
   })
 
-  it('treats missing sufficiency as sufficient rather than blocking on it', () => {
-    expect(resolve({ supports_claim: 0.9, contradicts_claim: 0.05 }).verdict).toBe('supported')
+  it('fails closed when the sufficiency question was never answered', () => {
+    // This assertion is inverted from what it used to be, deliberately. The core
+    // returned `supported` from exactly this payload - its guard read
+    // `sufficient !== undefined && sufficient < thresholds.sufficiency`, so an
+    // unanswered question skipped the test entirely. An unanswered question is
+    // not a favourable answer: the analysis report reproduced it, and both the
+    // core and the DSH adapter's `reconcileVerdict` now fail closed.
+    expect(resolve({ supports_claim: 0.9, contradicts_claim: 0.05 }).verdict).toBe('insufficient')
   })
 
   it('honours custom thresholds', () => {
@@ -312,12 +367,35 @@ describe('jev_check verdict precedence', () => {
       model: 'm',
       provider: 'fixed',
       latencyMs: 1,
-      answers: { supports_claim: { type: 'noul' as const, noul: 0.6 } },
+      answers: {
+        supports_claim: { type: 'noul' as const, noul: 0.6 },
+        evidence_is_sufficient: { type: 'noul' as const, noul: 0.9 },
+      },
     }
-    expect(resolveCheck(result).verdict).toBe('insufficient')
+    // Support below the threshold with the evidence judged sufficient is
+    // `undecided` - the claim is not established, and the payload already says
+    // why (0.6 against a 0.7 boundary). Lowering the boundary is what turns it
+    // into `supported`, which is the point of the threshold being configurable.
+    expect(resolveCheck(result).verdict).toBe('undecided')
     expect(
       resolveCheck(result, { ...DEFAULT_CHECK_THRESHOLDS, support: 0.5 }).verdict,
     ).toBe('supported')
+
+    // The sufficiency boundary is configurable on its own, and moving it is what
+    // separates `supported` from the evidence-does-not-settle-it finding.
+    const borderline = {
+      model: 'm',
+      provider: 'fixed',
+      latencyMs: 1,
+      answers: {
+        supports_claim: { type: 'noul' as const, noul: 0.9 },
+        evidence_is_sufficient: { type: 'noul' as const, noul: 0.6 },
+      },
+    }
+    expect(resolveCheck(borderline).verdict).toBe('supported')
+    expect(
+      resolveCheck(borderline, { ...DEFAULT_CHECK_THRESHOLDS, sufficiency: 0.8 }).verdict,
+    ).toBe('insufficient')
   })
 })
 
@@ -347,5 +425,431 @@ describe('jev_check tool', () => {
     if (value.verdict !== 'unknown') {
       expect(Object.keys(value.probabilities).length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('presentationMeta (the projection the registry runs)', () => {
+  it('summarizes a rank payload, which carries no `answers` at all', async () => {
+    const { value, summary } = await present(jevRankTool(service()), {
+      query: 'find the billing doc',
+      candidates: ['technical guide', 'billing policy', 'unrelated note'],
+    })
+
+    // The root cause: `summarize` maps over `RenderedResult.answers`, and this
+    // payload has only `ranking`. Passing it through `asRendered` (a type
+    // assertion, not a conversion) threw on `value.answers.map`.
+    expect(Object.keys(value as Record<string, unknown>)).not.toContain('answers')
+    expect(summary).toContain('jev_rank (3 candidates)')
+    expect(summary).toContain('top: ')
+    expect(summary).toContain('%')
+    expect(summary).toContain('[synthetic]')
+  })
+
+  it('would throw if a rank payload went through the core summarize', () => {
+    // The exact call that used to stand behind `presentationMeta`. Kept as a
+    // test so nobody "simplifies" `rankSummary` back into it: `summarize` maps
+    // over `answers`, and a ranking has none - `asRendered` is an assertion, not
+    // a conversion. The registry turns the throw into
+    // `tool "jev_rank" returned invalid output: output.presentationMeta failed:
+    // Cannot read properties of undefined (reading 'map')`.
+    expect(() =>
+      summarize(
+        asRendered({ provider: 'mock', model: 'm', latencyMs: 1, ranking: [] }),
+        'jev_rank (0 candidates)',
+      ),
+    ).toThrow(/map/)
+  })
+
+  it('names the top candidate and its probability', async () => {
+    const tool = jevRankTool(
+      service(
+        fixedProvider({
+          answers: {
+            candidate_0: { type: 'noul', noul: 0.2 },
+            candidate_1: { type: 'noul', noul: 0.9 },
+          },
+        }),
+      ),
+    )
+    const { summary } = await present(tool, { query: 'q', candidates: ['weak', 'strong'] })
+    expect(summary).toBe('jev_rank (2 candidates) - top: strong (90%) - 7ms')
+  })
+
+  it('says how many candidates Jev did not answer, instead of scoring them zero', async () => {
+    const tool = jevRankTool(
+      service(fixedProvider({ answers: { candidate_0: { type: 'noul', noul: 0.9 } } })),
+    )
+    const { summary } = await present(tool, { query: 'q', candidates: ['answered', 'silent'] })
+    expect(summary).toBe('jev_rank (2 candidates) - top: answered (90%) - 7ms - 1 unanswered')
+  })
+
+  it('summarizes the empty-candidate payload, which never reaches a provider', async () => {
+    const { summary } = await present(jevRankTool(service()), { query: 'q', candidates: [] })
+    expect(summary).toBe('jev_rank (0 candidates) - no candidate answered - 0ms')
+  })
+
+  it('renders a malformed payload rather than throwing, because a throw fails the call', () => {
+    // The registry wraps this projection in try/catch and reports a throw as
+    // `returned invalid output` - which is how the defect reached a real host
+    // as "the model got zero candidates". Total by construction, at every level.
+    expect(rankSummary(undefined)).toBe('jev_rank (0 candidates) - no candidate answered - ?ms')
+    expect(rankSummary({})).toBe('jev_rank (0 candidates) - no candidate answered - ?ms')
+    expect(rankSummary({ ranking: 'not an array', latencyMs: 3 })).toBe(
+      'jev_rank (0 candidates) - no candidate answered - 3ms',
+    )
+    expect(rankSummary({ ranking: [{}], warning: 'synthetic', latencyMs: 1 })).toBe(
+      'jev_rank (1 candidate) [synthetic] - no candidate answered - 1ms - 1 unanswered',
+    )
+  })
+
+  it('shortens a long candidate so the summary stays one line', () => {
+    const summary = rankSummary({
+      ranking: [{ candidate: 'x'.repeat(400), relevance: 0.5 }],
+      latencyMs: 1,
+    })
+    expect(summary).toContain('...')
+    expect(summary.length).toBeLessThan(120)
+  })
+
+  it('projects jev_ask, whose payload really is a rendered result', async () => {
+    const { summary } = await present(jevAskTool(service()), {
+      state: 'x',
+      questions: { q: { type: 'noul', instructions: 'ok?' } },
+    })
+    expect(summary).toContain('jev_ask')
+    expect(summary).toContain('[synthetic]')
+    expect(summary).toContain('q=')
+  })
+
+  it('projects jev_check', async () => {
+    const { summary } = await present(jevCheckTool(service()), { claim: 'c', evidence: 'e' })
+    expect(summary).toMatch(/^[a-z]+ - jev_check$/)
+  })
+})
+
+describe('concurrency declaration', () => {
+  it('opts all three tools into the host parallel pool', () => {
+    // The registry classifies a tool with no classifier as `exclusive`
+    // (`ToolRuntime`: `if (!tool?.isConcurrencySafe) return { kind: 'exclusive' }`),
+    // so an undeclared field serializes every independent judgment. `defineTool`
+    // validates the arguments first and answers false for a malformed call, so
+    // each call below is a well-formed one.
+    expect(
+      jevAskTool(service()).isConcurrencySafe?.({
+        state: 'x',
+        questions: { q: { type: 'noul', instructions: 'ok?' } },
+      }),
+    ).toBe(true)
+    expect(jevRankTool(service()).isConcurrencySafe?.({ query: 'q', candidates: ['a'] })).toBe(true)
+    expect(jevCheckTool(service()).isConcurrencySafe?.({ claim: 'c', evidence: 'e' })).toBe(true)
+  })
+
+  it('does not claim a malformed call is safe', () => {
+    expect(jevRankTool(service()).isConcurrencySafe?.({ query: 42 })).toBe(false)
+  })
+})
+
+describe('noul boundaries', () => {
+  it('forwards a declared boundary to the provider as the question criteria', async () => {
+    const recorded = recordingProvider()
+    await run(jevAskTool(service(recorded.provider)), {
+      state: { migration: 'rehearsed on staging' },
+      questions: {
+        rollback: {
+          type: 'noul',
+          instructions: 'Can the migration be rolled back safely?',
+          boundary: {
+            true: 'It can be reversed without data loss.',
+            false: 'It cannot be reversed, or reversing it loses data.',
+          },
+        },
+      },
+    })
+
+    expect(recorded.requests[0]?.questions['rollback']).toEqual({
+      type: 'noul',
+      instructions: 'Can the migration be rolled back safely?',
+      criteria: {
+        true: 'It can be reversed without data loss.',
+        false: 'It cannot be reversed, or reversing it loses data.',
+      },
+    })
+  })
+
+  it('reads the upstream `criteria: {true, false}` spelling as the same boundary', () => {
+    // This shape was accepted at the tool boundary and then dropped for nouls,
+    // so a caller could declare a boundary and have it silently ignored.
+    expect(
+      toQuestions({
+        q: {
+          type: 'noul',
+          instructions: 'ok?',
+          criteria: { true: 'It holds', false: 'It does not' },
+        },
+      }),
+    ).toEqual({
+      q: {
+        type: 'noul',
+        instructions: 'ok?',
+        criteria: { true: 'It holds', false: 'It does not' },
+      },
+    })
+  })
+
+  it('sends no criteria for a noul that declared no boundary', () => {
+    expect(toQuestions({ q: { type: 'noul', instructions: 'ok?' } })).toEqual({
+      q: { type: 'noul', instructions: 'ok?' },
+    })
+  })
+
+  it('refuses a noul criteria map whose keys name no outcome', () => {
+    expect(() =>
+      toQuestions({ q: { type: 'noul', instructions: 'ok?', criteria: { yes: 'y', no: 'n' } } }),
+    ).toThrow(/name no outcome/)
+  })
+
+  it('refuses a boundary that describes neither outcome', () => {
+    expect(() => toQuestions({ q: { type: 'noul', instructions: 'ok?', boundary: {} } })).toThrow(
+      /describes neither outcome/,
+    )
+  })
+
+  it('refuses a boundary on a choice instead of dropping it', () => {
+    expect(() =>
+      toQuestions({
+        pick: {
+          type: 'choice',
+          instructions: 'pick one',
+          criteria: { a: 'A', b: 'B' },
+          boundary: { true: 'y' },
+        },
+      }),
+    ).toThrow(/exists only for noul/)
+  })
+})
+
+describe('jev_check boundaries', () => {
+  it('asks all three questions with an explicit true/false boundary', async () => {
+    const recorded = recordingProvider()
+    await run(jevCheckTool(service(recorded.provider)), { claim: 'c', evidence: 'e' })
+    const questions = recorded.requests[0]?.questions ?? {}
+    expect(Object.keys(questions).sort()).toEqual(
+      [
+        VERDICT_QUESTION.supports,
+        VERDICT_QUESTION.contradicts,
+        VERDICT_QUESTION.sufficient,
+      ].sort(),
+    )
+    for (const id of Object.values(VERDICT_QUESTION)) {
+      const question = questions[id] as
+        | { type?: string; criteria?: { true?: unknown; false?: unknown } }
+        | undefined
+      expect(question?.type).toBe('noul')
+      // `noul.criteria` was wired up nowhere in this repo before this change.
+      expect(typeof question?.criteria?.true).toBe('string')
+      expect(typeof question?.criteria?.false).toBe('string')
+    }
+  })
+
+  it('tells the supports question that silence is not support', async () => {
+    const recorded = recordingProvider()
+    await run(jevCheckTool(service(recorded.provider)), { claim: 'c', evidence: 'e' })
+    const question = recorded.requests[0]?.questions[VERDICT_QUESTION.supports] as
+      | { criteria?: { true?: string; false?: string } }
+      | undefined
+    // The failure this tool exists to catch: evidence that reads as supportive
+    // while being silent on what the claim asserts.
+    expect(question?.criteria?.false).toMatch(/silent/)
+    expect(question?.criteria?.true).toMatch(/states the claim/)
+  })
+})
+
+describe('jev_check reconcileVerdict', () => {
+  const resolution = (
+    verdict: CheckResolution['verdict'],
+    probabilities: Partial<Pick<CheckResolution, 'supports' | 'contradicts' | 'sufficient'>>,
+  ): CheckResolution => ({
+    verdict,
+    supports: undefined,
+    contradicts: undefined,
+    sufficient: undefined,
+    ...probabilities,
+  })
+
+  it('fails closed when the sufficiency question went unanswered', () => {
+    // The core returns `supported` from this input: its guard is
+    // `sufficient !== undefined && sufficient < thresholds.sufficiency`, so an
+    // unanswered question skips it entirely. An unanswered question is not a
+    // favourable answer.
+    expect(
+      reconcileVerdict(resolution('supported', { supports: 0.95, contradicts: 0.05 })),
+    ).toBe('insufficient')
+  })
+
+  it('keeps `supported` when sufficiency is behind it', () => {
+    expect(
+      reconcileVerdict(
+        resolution('supported', { supports: 0.9, contradicts: 0.05, sufficient: 0.9 }),
+      ),
+    ).toBe('supported')
+  })
+
+  it('does not report `insufficient` beside a sufficiency probability that says otherwise', () => {
+    // The analysis report's experiment C, exactly as it was observed.
+    expect(
+      reconcileVerdict(
+        resolution('insufficient', { supports: 0.0524, contradicts: 0.5173, sufficient: 0.9895 }),
+      ),
+    ).toBe('undecided')
+  })
+
+  it('keeps `insufficient` when the evidence really was judged insufficient', () => {
+    expect(
+      reconcileVerdict(
+        resolution('insufficient', { supports: 0.9, contradicts: 0.05, sufficient: 0.1 }),
+      ),
+    ).toBe('insufficient')
+  })
+
+  it('keeps `insufficient` when sufficiency is unanswered and neither side is strong', () => {
+    expect(reconcileVerdict(resolution('insufficient', { supports: 0.4, contradicts: 0.2 }))).toBe(
+      'insufficient',
+    )
+  })
+
+  it('leaves contradicted, conflicted and unknown alone', () => {
+    expect(
+      reconcileVerdict(
+        resolution('conflicted', { supports: 0.9, contradicts: 0.9, sufficient: 0.9 }),
+      ),
+    ).toBe('conflicted')
+    expect(
+      reconcileVerdict(
+        resolution('contradicted', { supports: 0.1, contradicts: 0.95, sufficient: 0.1 }),
+      ),
+    ).toBe('contradicted')
+    expect(reconcileVerdict(resolution('unknown', {}))).toBe('unknown')
+  })
+
+  it('tracks the configured thresholds rather than a hardcoded boundary', () => {
+    const lenient = { ...DEFAULT_CHECK_THRESHOLDS, sufficiency: 0.5 }
+    const strict = { ...DEFAULT_CHECK_THRESHOLDS, sufficiency: 0.8 }
+    const resolved = resolution('insufficient', {
+      supports: 0.4,
+      contradicts: 0.2,
+      sufficient: 0.6,
+    })
+    expect(reconcileVerdict(resolved, lenient)).toBe('undecided')
+    expect(reconcileVerdict(resolved, strict)).toBe('insufficient')
+  })
+
+  it('never returns a verdict that contradicts its own probabilities, across a grid', () => {
+    // The invariant the two guards exist to establish, and it has to hold
+    // whatever `resolveCheck` does - so it is asserted over the whole grid of
+    // answers a provider could return, missing sufficiency included.
+    const values = [0, 0.2, 0.4, 0.49, 0.5, 0.6, 0.7, 0.9, 1]
+    for (const supports of values) {
+      for (const contradicts of values) {
+        for (const sufficient of [...values, undefined]) {
+          const answers = {
+            [VERDICT_QUESTION.supports]: { type: 'noul' as const, noul: supports },
+            [VERDICT_QUESTION.contradicts]: { type: 'noul' as const, noul: contradicts },
+            ...(sufficient === undefined
+              ? {}
+              : { [VERDICT_QUESTION.sufficient]: { type: 'noul' as const, noul: sufficient } }),
+          }
+          const resolved = resolveCheck({ model: 'm', provider: 'fixed', latencyMs: 1, answers })
+          const verdict = reconcileVerdict(resolved)
+          expect(TOOL_VERDICTS).toContain(verdict)
+          // An unanswered sufficiency question never buys `supported`.
+          if (verdict === 'supported') expect(resolved.sufficient).toBeDefined()
+          // `insufficient` is never reported while the evidence was judged able
+          // to settle the question: an absent answer counts as not sufficient.
+          if (verdict === 'insufficient') {
+            expect(resolved.sufficient ?? 0).toBeLessThan(DEFAULT_CHECK_THRESHOLDS.sufficiency)
+          }
+        }
+      }
+    }
+  })
+
+  it('is idempotent, so a core-side fix cannot be rewritten twice', () => {
+    // Both guards key on a state their own output cannot be in - an absent
+    // sufficiency answer, or a *core* `insufficient` - so feeding a result back
+    // in has to reproduce it. That is what makes the shim safe to keep after the
+    // core fails closed and returns `undecided` on its own: it becomes a no-op
+    // rather than a second rewrite.
+    const resolutions: CheckResolution[] = [
+      resolution('supported', { supports: 0.95, contradicts: 0.05 }),
+      resolution('insufficient', { supports: 0.0524, contradicts: 0.5173, sufficient: 0.9895 }),
+      resolution('supported', { supports: 0.9, contradicts: 0.05, sufficient: 0.9 }),
+      resolution('insufficient', { supports: 0.9, contradicts: 0.05, sufficient: 0.1 }),
+      resolution('insufficient', { supports: 0.4, contradicts: 0.2 }),
+      resolution('contradicted', { supports: 0.1, contradicts: 0.95, sufficient: 0.1 }),
+      resolution('conflicted', { supports: 0.9, contradicts: 0.9, sufficient: 0.9 }),
+      resolution('unknown', {}),
+    ]
+    for (const resolved of resolutions) {
+      const once = reconcileVerdict(resolved)
+      // The shim's own output, re-entering it exactly as a core that already
+      // fails closed (or already returns `undecided`) would present it.
+      const twice = reconcileVerdict({ ...resolved, verdict: once })
+      expect(twice).toBe(once)
+    }
+  })
+})
+
+describe('jev_check through the tool', () => {
+  it('fails closed when the provider omits the sufficiency answer', async () => {
+    const tool = jevCheckTool(
+      service(
+        fixedProvider({ answers: { [VERDICT_QUESTION.supports]: { type: 'noul', noul: 0.95 } } }),
+      ),
+    )
+    const value = (await run(tool, { claim: 'c', evidence: 'e' })) as {
+      verdict: string
+      probabilities: Record<string, number>
+    }
+    expect(value.probabilities.supports).toBe(0.95)
+    expect(value.probabilities.sufficient).toBeUndefined()
+    // This payload used to come back as `supported`.
+    expect(value.verdict).toBe('insufficient')
+  })
+
+  it('never reports `insufficient` while its own sufficiency probability says otherwise', async () => {
+    const tool = jevCheckTool(
+      service(
+        fixedProvider({
+          answers: {
+            [VERDICT_QUESTION.supports]: { type: 'noul', noul: 0.0524 },
+            [VERDICT_QUESTION.contradicts]: { type: 'noul', noul: 0.5173 },
+            [VERDICT_QUESTION.sufficient]: { type: 'noul', noul: 0.9895 },
+          },
+        }),
+      ),
+    )
+    const value = (await run(tool, {
+      claim: 'The migration completed without data loss.',
+      evidence: 'Migration log: Status: SUCCESS. Rows copied: 1,204,388.',
+    })) as { verdict: string; probabilities: Record<string, number> }
+    expect(value.probabilities.sufficient).toBeCloseTo(0.9895)
+    expect(value.verdict).toBe('undecided')
+  })
+})
+
+describe('jev_check verdict vocabulary', () => {
+  const tool = jevCheckTool(service())
+
+  it('advertises exactly the verdicts it can return', () => {
+    for (const verdict of TOOL_VERDICTS) {
+      expect(tool.description).toContain(`"${verdict}"`)
+    }
+  })
+
+  it('no longer offers a "not supported" verdict no code path returns', () => {
+    // The description sold the distinction between "not supported" and
+    // "contradicted" while the vocabulary contained no such value; the resolver
+    // spells that outcome `insufficient`.
+    expect(tool.description).not.toContain('"not supported"')
   })
 })

@@ -26,7 +26,7 @@ const transmitting = () =>
 /** Redaction that does nothing, so the test measures the cap and nothing else. */
 const identityRedact = (value: unknown) => ({
   value: value as never,
-  summary: { redactions: 0, rules: [] },
+  summary: { redactions: 0, rules: [], fields: [], values: 0 },
 })
 
 const ask = (questions: Record<string, JevQuestion>, feature: EgressFeature = 'tool:jev_ask') =>
@@ -78,6 +78,10 @@ describe('the questions cap is enforced', () => {
       redact: identityRedact,
     })
     expect(measured.truncated).toBe(true)
+    // The declared limit is a limit. It used to allow itself 200 characters of
+    // slack for the truncation envelope, which meant `state<=16000c` in the
+    // startup report was not true of what left the machine.
     expect(measured.stateChars).toBeLessThanOrEqual(16_000)
+    expect(measured.stateCharsDropped).toBeGreaterThan(0)
   })
 })

@@ -20,7 +20,8 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '../src/config.js'
 import { createContextGate } from '../src/gates/context.js'
 import { createSafetyGate } from '../src/gates/safety.js'
-import { DEFAULT_POLICY, applyPolicy } from '../src/policy.js'
+import { DEFAULT_MIN_PROBABILITY, DEFAULT_POLICY, applyPolicy } from '../src/policy.js'
+import { DEFAULT_NOUL_BAND, noulBand } from '../src/render.js'
 import { JevService } from '../src/service.js'
 import { EgressContract } from '../src/egress.js'
 import { MockProvider } from '../src/provider/mock.js'
@@ -76,5 +77,63 @@ describe('thresholds come from one place', () => {
       expect(value).toBeGreaterThan(0)
       expect(value).toBeLessThanOrEqual(1)
     }
+  })
+})
+
+/**
+ * The band and the policy floor are the same boundary.
+ *
+ * They used to be two numbers in two files that disagreed: `noulBand` called
+ * `[0.60, 0.70]` uncertain while `DEFAULT_POLICY.minProbability` was `0.6`, so a
+ * noul at 0.65 was `uncertain` when it was rendered and `decided` when a gate
+ * judged it. Neither number was wrong alone — they were two answers to one
+ * question.
+ *
+ * These assertions are relationships, not literals, so retuning the band moves
+ * the floor with it instead of leaving the two to drift apart again.
+ */
+describe('the band and the policy floor agree at the boundary', () => {
+  const answerAt = (value: number): NoulAnswer => ({ type: 'noul', noul: value })
+
+  it('takes the floor from the band rather than restating it', () => {
+    expect(DEFAULT_POLICY.minProbability).toBe(DEFAULT_NOUL_BAND.high)
+    expect(DEFAULT_MIN_PROBABILITY).toBe(DEFAULT_NOUL_BAND.high)
+    expect(DEFAULT_CONFIG.minProbability).toBe(DEFAULT_NOUL_BAND.high)
+  })
+
+  it('never decides a noul the band calls uncertain', () => {
+    // The reported contradiction, checked on both edges and just inside them:
+    // below `low`, exactly `low`, the middle, exactly `high`, and just above.
+    const low = DEFAULT_NOUL_BAND.low
+    const high = DEFAULT_NOUL_BAND.high
+    const inside = [low, low + 0.01, 0.5, high - 0.01, high]
+    for (const value of inside) {
+      expect(noulBand(value), `band at ${value}`).toBe('uncertain')
+      // A noul's strength is `max(noul, 1 - noul)`, which is what the floor is
+      // compared against — so the mirrored value is checked too.
+      for (const noul of [value, 1 - value]) {
+        expect(applyPolicy(answerAt(noul), ['true', 'false']).kind, `policy at ${noul}`).toBe(
+          'undecided',
+        )
+      }
+    }
+    // And outside the band the two agree that a side has been picked.
+    for (const value of [0, low - 0.01, high + 0.01, 0.99]) {
+      expect(noulBand(value), `band at ${value}`).toBe(value < 0.5 ? 'no' : 'yes')
+      expect(applyPolicy(answerAt(value), ['true', 'false']).kind, `policy at ${value}`).toBe(
+        'decided',
+      )
+    }
+  })
+
+  it('keeps the band endpoints inclusive, as upstream documents them', () => {
+    // "from 0.30 through 0.70, including both boundaries". An off-by-one here
+    // would put one edge in `no`/`yes` and reinstate the knife edge the band
+    // exists to remove.
+    expect(noulBand(DEFAULT_NOUL_BAND.low)).toBe('uncertain')
+    expect(noulBand(DEFAULT_NOUL_BAND.high)).toBe('uncertain')
+    // The floor is the upper edge, not the lower one: acting on an answer needs
+    // the band to name a side, which at the lower edge it does not.
+    expect(DEFAULT_POLICY.minProbability).not.toBe(DEFAULT_NOUL_BAND.low)
   })
 })

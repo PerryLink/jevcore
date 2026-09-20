@@ -5,35 +5,192 @@
  * handshake, tool discovery, and a schema-validated call. It runs entirely
  * offline against the mock provider, so it needs no credential.
  *
+ * It also exercises the part the protocol tests used to miss: **how the host
+ * starts the process**. This script used to spawn `node lib/bin.js`, which
+ * cannot fail for the reason `npx -y jevcore-mcp` fails. The shebang on line 1
+ * is what decides both launch paths:
+ *
+ *  - POSIX executes the bin file itself, so the kernel reads it.
+ *  - npm's `cmd-shim` reads it to pick the interpreter. Without a match it emits
+ *    `"%dp0%\..\..\lib\bin.js" %*` — the file called directly, which Windows
+ *    sends to a script host that never speaks stdio, so the host waits forever
+ *    instead of failing.
+ *
+ * The shebang was missing, `npx -y jevcore-mcp` produced a process that never
+ * wrote a byte, and this script passed throughout. So the shebang is asserted
+ * before anything is spawned — a build that drops it fails here by name instead
+ * of hanging on a user's machine — and the entry point is then launched through
+ * the generated shim when the workspace has one.
+ *
  * Usage: node scripts/mcp-smoke.mjs
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const serverEntry = join(here, '..', 'lib', 'bin.js')
+const packageRoot = join(here, '..')
+const serverEntry = join(packageRoot, 'lib', 'bin.js')
 
-const transport = new StdioClientTransport({
-  command: process.execPath,
-  args: [serverEntry],
-  // No credential: the server must fall back to the offline mock on its own.
-  env: { ...process.env, TYPESAFE_API_KEY: '', JEV_PROVIDER: 'mock' },
-  stderr: 'pipe',
-})
-
-const client = new Client({ name: 'jevcore-smoke', version: '0.1.0' })
+/** The manifest, so the client can assert the version the server reports. */
+const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
 
 const fail = (message) => {
   console.error(`FAIL: ${message}`)
   process.exitCode = 1
 }
 
+/**
+ * How to start the server, closest to what a host does.
+ *
+ * 1. the local `node_modules/.bin` shim, when the workspace has one — this is
+ *    literally the file npm and pnpm generate for a `bin` entry;
+ * 2. on POSIX, the `bin` file itself with its executable bit, which is what
+ *    that shim points at and what the kernel resolves through the shebang;
+ * 3. `node lib/bin.js`, which proves the protocol but not the launch path.
+ *
+ * A bare `spawn` of a `.js` file on Windows is deliberately not attempted: the
+ * `.js` association sends it to a script host that never speaks stdio, so the
+ * check would hang the smoke test rather than report the problem.
+ */
+const chooseLaunch = () => {
+  const binName = 'jevcore-mcp'
+  // npm and pnpm write a bare name plus a suffix per platform: a symlink on
+  // POSIX, a `.cmd` (and `.ps1`) shim on Windows. `existsSync` does not consult
+  // PATHEXT, so the suffix has to be spelled out.
+  const shimDir = join(packageRoot, 'node_modules', '.bin')
+  const shimName = ['', '.cmd', '.ps1', '.exe'].find((suffix) =>
+    existsSync(join(shimDir, `${binName}${suffix}`)),
+  )
+  if (shimName !== undefined) {
+    return { kind: 'shim', command: join(shimDir, binName), args: [], label: `node_modules/.bin/${binName}${shimName}` }
+  }
+  if (process.platform !== 'win32' && existsSync(serverEntry) && statSync(serverEntry).mode & 0o111) {
+    return { kind: 'exec', command: serverEntry, args: [], label: 'lib/bin.js (executable, via shebang)' }
+  }
+  return { kind: 'node', command: process.execPath, args: [serverEntry], label: 'node lib/bin.js' }
+}
+
+const launch = chooseLaunch()
+
+const launchEnv = { ...process.env, TYPESAFE_API_KEY: '', JEV_PROVIDER: 'mock' }
+
+// A Windows `.cmd` shim is executed by cmd.exe, so the first call goes through
+// the shell. That is enough to prove the shim starts the server and that it
+// writes to stdout; the stdio transport below then attaches without a shell.
+const shimProbe = (shim) => {
+  const result = spawnSync(shim.command, ['--version-probe'], {
+    shell: true,
+    env: launchEnv,
+    encoding: 'utf8',
+    timeout: 15_000,
+  })
+  const out = `${result.stdout ?? ''}${result.stderr ?? ''}`
+  if (result.error) return `could not run ${shim.label}: ${result.error.message}`
+  if (!out.includes('ready')) {
+    return (
+      `${shim.label} produced no startup output (stdout+stderr was ${out.length} characters, ` +
+      `signal=${String(result.signal)}). A host launching this gets a process that never speaks.`
+    )
+  }
+  return undefined
+}
+
+/**
+ * The shebang check.
+ *
+ * Read as bytes rather than as text through an editor or a build step: `#!` at
+ * offset 0 is the whole contract. `src/bin.ts` is checked too, because that is
+ * the file the fix lives in and the file a future edit would remove it from.
+ */
+const assertShebang = (file, label) => {
+  if (!existsSync(file)) {
+    fail(`${label} does not exist; run the build before the smoke test`)
+    return
+  }
+  const head = readFileSync(file).subarray(0, 2).toString('latin1')
+  if (head !== '#!') {
+    fail(
+      `${label} does not start with "#!" (first two bytes: ${JSON.stringify(head)}). A POSIX host ` +
+        `executes the bin file directly, so this is the difference between running and producing ` +
+        `a process that writes nothing and never exits.`,
+    )
+    return
+  }
+  console.log(`PASS shebang: ${label} starts with "#!"`)
+}
+
+assertShebang(join(packageRoot, 'src', 'bin.ts'), 'src/bin.ts')
+assertShebang(serverEntry, 'lib/bin.js')
+
+if (launch.kind === 'node' && process.platform === 'win32') {
+  console.error(
+    'NOTE: no node_modules/.bin/jevcore-mcp shim is present, so this run starts the entry point ' +
+      'through node. The shebang is asserted statically above; the shim path itself is exercised ' +
+      'by CI on Linux, where the executable bit is honoured.',
+  )
+}
+
+console.log(`PASS launch: starting via ${launch.label}`)
+
+if (launch.kind === 'shim' && launch.label.endsWith('.cmd')) {
+  const problem = shimProbe(launch)
+  if (problem === undefined) {
+    console.log('PASS shim: the Windows .cmd shim starts the server and it writes to stdout')
+  } else {
+    fail(problem)
+  }
+}
+
+// The shell is needed only to reach a `.cmd` on Windows; the transport itself
+// talks over pipes either way.
+const shell = launch.kind === 'shim' && launch.label.endsWith('.cmd')
+
+const transport = new StdioClientTransport({
+  command: launch.command,
+  args: launch.args,
+  // No credential: the server must fall back to the offline mock on its own.
+  env: { ...process.env, TYPESAFE_API_KEY: '', JEV_PROVIDER: 'mock' },
+  stderr: 'pipe',
+  ...(shell ? { shell: true } : {}),
+})
+
+const client = new Client({ name: 'jevcore-smoke', version: manifest.version })
+
+/**
+ * Bound the handshake.
+ *
+ * A server launched without a usable shebang does not fail — it produces a
+ * process that never writes a byte and never exits, and a host waits forever.
+ * This script must report that, not reproduce it.
+ */
+const HANDSHAKE_TIMEOUT_MS = 15_000
+let handshakeTimer
+const timeout = new Promise((_, reject) => {
+  handshakeTimer = setTimeout(
+    () => reject(new Error(`no MCP handshake within ${HANDSHAKE_TIMEOUT_MS}ms`)),
+    HANDSHAKE_TIMEOUT_MS,
+  )
+})
+
 try {
-  await client.connect(transport)
+  await Promise.race([client.connect(transport), timeout])
+  clearTimeout(handshakeTimer)
   console.log('PASS handshake: connected over stdio')
+
+  const implementation = client.getServerVersion()
+  if (implementation?.version !== manifest.version) {
+    fail(
+      `the server reports version ${String(implementation?.version)}, package.json says ` +
+        `${manifest.version}. A client logs that string; it must be the published one.`,
+    )
+  } else {
+    console.log(`PASS version: the server reports ${manifest.version}, matching package.json`)
+  }
 
   const { tools } = await client.listTools()
   const names = tools.map((tool) => tool.name).sort()
@@ -115,5 +272,6 @@ try {
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error))
 } finally {
+  clearTimeout(handshakeTimer)
   await client.close().catch(() => undefined)
 }

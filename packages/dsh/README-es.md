@@ -23,6 +23,8 @@ Los adaptadores son finos a propósito. `packages/dsh` son cuatro archivos: decl
 herramientas y traduce payloads de hooks. Todo lo que tiene forma de decisión — las primitivas, los
 proveedores, el contrato de egreso, la política, los gates — vive en core, así que un adaptador nuevo no
 puede desviarse de las garantías que ofrecen los demás.
+Un requisito de ejecución difiere entre los tres: `jevcore-dsh` sigue al harness y
+necesita Node `^22.19.0 || >=24.0.0`, mientras que `jevcore` y `jevcore-mcp` necesitan `>=20`.
 
 ---
 
@@ -197,8 +199,10 @@ Dos cosas que conviene saber sobre la ruta de OpenRouter:
 - **Devuelve un coste**, cosa que la propia ruta de TypeSafe no hace, así que `usage.costUsd` se rellena
   aquí y está ausente allí.
 
-El id de modelo debe ser uno de System One: `jev-*` sin prefijo, o `typesafe/jev-*`. Cualquier otro id se
-enrutaría a un modelo de chat, que responde con prosa que este plugin no puede interpretar como una
+El id de modelo debe ser uno de System One. El `jev-latest` sin prefijo es el valor
+por defecto; `typesafe/` se acepta en un id con versión como `typesafe/jev-1.13`,
+pero no en la etiqueta móvil — la ruta no acepta `typesafe/jev-latest`. Cualquier
+otro id se enrutaría a un modelo de chat, que responde con prosa que este plugin no puede interpretar como una
 decisión, así que se rechaza antes de la llamada en lugar de malinterpretarse después.
 
 En cualquier caso, la credencial se resuelve primero a través del servicio de credenciales de DSH y
@@ -221,8 +225,8 @@ solo necesita la que corresponde a la ruta que elijas.
 | `apiKeyRef` | `TYPESAFE_API_KEY` | Referencia de credencial para la ruta `live` |
 | `openRouterApiKeyRef` | `OPENROUTER_API_KEY` | Referencia de credencial para la ruta `openrouter` |
 | `baseURL` | `https://api.typesafe.ai` | Raíz de la API para la ruta `live`. Se rechaza lo que no sea HTTPS salvo en loopback |
-| `openRouterBaseURL` | `https://openrouter.ai` | Raíz de la API para la ruta `openrouter`. La misma regla |
-| `model` | `jev-latest` | Se envía con cada petición. En la ruta de OpenRouter debe empezar por `typesafe/` |
+| `openRouterBaseURL` | `https://openrouter.ai/api` | Raíz de la API para la ruta `openrouter`. La misma regla |
+| `model` | `jev-latest` | Se envía con cada petición. En la ruta de OpenRouter basta el valor por defecto sin prefijo; `typesafe/` requiere un id con versión como `typesafe/jev-1.13`, y `typesafe/jev-latest` no se acepta |
 | `logLevel` | `warn` | `silent` \| `warn` \| `info` \| `debug` |
 | `minConfidence` | `0.7` | Por debajo de este valor, no se actúa sobre una respuesta |
 | `minProbability` | `0.6` | Por debajo de este valor, no se actúa sobre una decisión |

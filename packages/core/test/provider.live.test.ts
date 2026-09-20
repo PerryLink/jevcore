@@ -181,12 +181,47 @@ describe('request shape', () => {
     expect(sdk.calls[0]?.request.model).toBe('jev-preview')
   })
 
-  it('forwards the abort signal', async () => {
+  it('forwards the abort signal, so cancelling cancels the request', async () => {
     const sdk = stubSdk(() => goodResponse)
     const provider = new LiveProvider({ apiKey: 'k', loadSdk: async () => sdk.module as never })
     const controller = new AbortController()
     await provider.answer(request(), controller.signal)
-    expect(sdk.calls[0]?.options?.signal).toBe(controller.signal)
+    // Not the caller's own object: the call is wrapped so the total budget can
+    // abort it too, and `AbortSignal.any` produces a dependent signal. What
+    // matters is that cancelling the caller's signal still reaches the SDK, and
+    // that is what this asserts rather than object identity.
+    const forwarded = sdk.calls[0]?.options?.signal as AbortSignal | undefined
+    expect(forwarded).toBeInstanceOf(AbortSignal)
+    expect(forwarded?.aborted).toBe(false)
+    controller.abort()
+    expect(forwarded?.aborted).toBe(true)
+  })
+
+  it('passes a signal even with no caller signal, so the total budget can cancel', async () => {
+    const sdk = stubSdk(() => goodResponse)
+    const provider = new LiveProvider({ apiKey: 'k', loadSdk: async () => sdk.module as never })
+    await provider.answer(request())
+    // The SDK is always handed a signal, even when the caller supplied none: the
+    // call's total budget needs one to abort through, and a transport that can
+    // be cancelled is the point. What the budget does with it is asserted in
+    // `provider-failure.test.ts`; here it is only the wiring.
+    expect(sdk.calls[0]?.options?.signal).toBeInstanceOf(AbortSignal)
+    const wired = sdk.calls[0]?.options?.signal as AbortSignal | undefined
+    expect(wired?.aborted).toBe(false)
+  })
+
+  it('passes nothing through when the budget is disabled explicitly', async () => {
+    const sdk = stubSdk(() => goodResponse)
+    const provider = new LiveProvider({
+      apiKey: 'k',
+      totalBudgetMs: 0,
+      loadSdk: async () => sdk.module as never,
+    })
+    await provider.answer(request())
+    // `totalBudgetMs: 0` removes the ceiling, and with no ceiling and no caller
+    // signal there is nothing to forward — so the SDK's `options` stays empty,
+    // exactly as it did before budgets existed.
+    expect(sdk.calls[0]?.options).toEqual({})
   })
 })
 

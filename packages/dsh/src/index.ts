@@ -33,6 +33,7 @@ import {
   type JevConfigInput,
   type JevProvider,
 } from 'jevcore'
+import type { JevCallRecord } from 'jevcore'
 import { jevAskTool } from './ask.js'
 import { jevCheckTool } from './check.js'
 import { jevRankTool } from './rank.js'
@@ -138,6 +139,34 @@ const readCredentials = (ctx: Context): CredentialsLike | undefined => {
   const service = (ctx as unknown as { credentials?: CredentialsLike }).credentials
   return typeof service?.resolve === 'function' ? service : undefined
 }
+
+/**
+ * Order recorded calls by the time each one was sent.
+ *
+ * `JevService.history` is appended in `record()`, which runs when a call
+ * *finishes*, not when it starts. Two concurrent judgments therefore land in
+ * completion order, and `recent()` handed that order straight to callers: a call
+ * that started first is reported after one that started later. With the three
+ * tools now opted into the host's parallel pool (each declares
+ * `isConcurrencySafe`), that ordering is reachable in ordinary use rather than
+ * theoretical.
+ *
+ * Where the fix belongs: a monotonic `seq` stamped in `record()` and sorted
+ * before the history is truncated. `JevCallRecord` has no such field and
+ * `JevService.record` lives in the core, which this package does not own, so
+ * `at` - the send time, stamped before the provider call - is the only ordering
+ * key available at this call site. Sorting by it restores send order; calls that
+ * share a millisecond keep the order they were recorded in, because
+ * `Array.prototype.sort` is stable. Truncation still happens inside the core,
+ * *before* anything here can reorder it, so with more concurrent calls than
+ * `historyLimit` **which** records survive remains scheduling-dependent. That is
+ * the part this package cannot fix, and it is recorded as an upstream item.
+ *
+ * The copy is not a nicety: `recent()` returns the service's own array, so
+ * sorting it in place would rewrite the service's history.
+ */
+export const orderRecent = (records: readonly JevCallRecord[]): JevCallRecord[] =>
+  [...records].sort((left, right) => left.at - right.at)
 
 /**
  * Build the runtime without registering it.
@@ -256,7 +285,8 @@ export function apply(ctx: Context, input?: JevConfigInput): void {
     ctx.provide('jev', {
       ask: runtime.service.ask.bind(runtime.service),
       stats: () => runtime.service.stats(),
-      recent: () => runtime.service.recent(),
+      // Ordered, and a fresh array: see `orderRecent` for why both matter.
+      recent: () => orderRecent(runtime.service.recent()),
       providerId: runtime.service.providerId,
       transmitting: runtime.service.transmitting,
       egress: runtime.egress,

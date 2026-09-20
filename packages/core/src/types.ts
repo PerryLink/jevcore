@@ -206,6 +206,53 @@ export interface JevResult {
    * never mistake a mock answer for a live one.
    */
   readonly provider: string
+  /**
+   * True when the state this answer was produced from was capped before it left
+   * the machine.
+   *
+   * Stated in the result itself, and not only in the egress log, because it
+   * changes what the answer means: Jev judged a smaller state than the caller
+   * passed. A caller that ignores this is reading a decision about evidence it
+   * did not send.
+   *
+   * Omitted (not `false`) when nothing was capped, so the shape stays as it was
+   * for everyone who never hits a cap.
+   */
+  readonly truncated?: boolean
+  /**
+   * What happened to the payload on the way out: capping and redaction.
+   *
+   * A durable record rather than a log line, because the log may be turned off
+   * or never read, and the numbers describe the answer that came back. Present
+   * only when a service prepared the payload; a provider called directly has no
+   * egress layer to report on.
+   */
+  readonly egress?: JevEgressFacts
+}
+
+/**
+ * What egress did to one request, as reported back with the answer.
+ *
+ * Field names are the stable part of this shape. A consumer should read
+ * `truncated` for the yes/no question and `egress.redactedFields` for which
+ * named fields were replaced; `redactedValues` counts replacements that were not
+ * tied to a field name (a credential shape found in free text).
+ */
+export interface JevEgressFacts {
+  /** The state was capped before sending. Mirrors {@link JevResult.truncated}. */
+  readonly truncated: boolean
+  /** Characters of `state` actually sent, after redaction and capping. */
+  readonly stateChars: number
+  /** Serialized characters of `questions` sent. */
+  readonly questionsChars: number
+  /** Field names whose values were replaced before sending. */
+  readonly redactedFields: readonly string[]
+  /** Values replaced inside free text, where no field name applies. */
+  readonly redactedValues: number
+  /** Rule names that fired, deduplicated. */
+  readonly redactionRules: readonly string[]
+  /** Total values replaced, field names and free text together. */
+  readonly redactions: number
 }
 
 /**
@@ -218,12 +265,63 @@ export class JevProviderError extends Error {
   constructor(
     message: string,
     readonly code: JevErrorCode,
-    options?: ErrorOptions,
+    options?: JevProviderErrorOptions,
   ) {
     super(message, options)
+    if (options?.status !== undefined) this.status = options.status
+    if (options?.retryAfterMs !== undefined) this.retryAfterMs = options.retryAfterMs
+    if (options?.providerId !== undefined) this.providerId = options.providerId
   }
+
+  /**
+   * The HTTP status the upstream returned, when there was one.
+   *
+   * Carried separately from `code` because `code` is a decision and this is the
+   * evidence for it: two different statuses can share a code, and a caller
+   * logging or alerting on the exact status ("how often is this 529 and not
+   * 429?") needs the number rather than the bucket.
+   */
+  readonly status?: number
+
+  /**
+   * The delay the upstream asked for, in milliseconds, when it named one.
+   *
+   * From `Retry-After` / `retry-after-ms`. Present only when the upstream sent
+   * a usable value; `undefined` means "use your own backoff".
+   */
+  readonly retryAfterMs?: number
+
+  /** Which provider produced the failure, when it was known at throw time. */
+  readonly providerId?: string
 }
 
+/** Extra evidence a provider can attach to a failure. All of it is optional. */
+export interface JevProviderErrorOptions extends ErrorOptions {
+  /** HTTP status from the upstream response, when there was one. */
+  readonly status?: number
+  /** The delay the upstream asked for, in milliseconds. */
+  readonly retryAfterMs?: number
+  /** Provider identity, e.g. `"live"` or `"openrouter"`. */
+  readonly providerId?: string
+}
+
+/**
+ * Why a provider call failed, as a closed set a caller can branch on.
+ *
+ * The five original codes keep their meaning exactly. They used to be the whole
+ * universe, which collapsed every HTTP status into one of two buckets: the live
+ * provider's condition was `status === 401 || status === 403 ? rejected :
+ * status === undefined ? unreachable : rejected`, and the OpenRouter provider's
+ * was the same shape with a guarantee attached —
+ * `status === 401 || status === 403 || status !== undefined` — which is true
+ * whenever `status !== undefined`, so the first two tests were dead code and
+ * every status, including 429 and 529, arrived as `upstream-rejected`.
+ *
+ * A caller could therefore not tell "back off and retry" from "your key is
+ * wrong" from "your quota is gone" from "your request is malformed". Those need
+ * opposite reactions, and the distinction is the difference between a retry loop
+ * that converges and one that hammers an endpoint that will never say yes.
+ */
 export type JevErrorCode =
   /** No credential could be resolved. */
   | 'no-credential'
@@ -235,6 +333,40 @@ export type JevErrorCode =
   | 'upstream-unreachable'
   /** The response was not shaped like a System One response. */
   | 'malformed-response'
+  /**
+   * A 429. Rate limited, not broken: the documented response is to back off and
+   * retry, and `JevProviderError.retryAfterMs` carries the server's own delay
+   * when it sent one.
+   */
+  | 'rate-limited'
+  /**
+   * A 402. The account is out of credit or over quota, so retrying changes
+   * nothing until someone pays; treat it as a configuration failure.
+   */
+  | 'quota-exceeded'
+  /**
+   * A 529, or a 5xx that means "busy". TypeSafe's error table says of 529:
+   * "temporarily overloaded. Retry after a short delay." Not an unreachable
+   * host and not a rejected request — a `upstream-unreachable` here would send
+   * an operator looking for a network fault that does not exist.
+   */
+  | 'overloaded'
+  /**
+   * A 4xx that says the request itself is wrong — 422 above all, where the body
+   * names the offending field. Retrying an identical request is pointless.
+   */
+  | 'invalid-request'
+  /**
+   * The caller's own signal aborted the call. Distinct from `timeout`: nothing
+   * is wrong with the upstream, and the caller already knows it cancelled.
+   */
+  | 'aborted'
+  /**
+   * The call ran out of time — either one attempt exceeded the per-attempt
+   * timeout, or the whole call exceeded its total budget. Worth a bounded retry;
+   * unlike `aborted`, the caller did not ask for this.
+   */
+  | 'timeout'
 
 /** Redaction rule kinds, mirroring the shipped default ruleset. */
 export interface RedactionSummary {
@@ -242,6 +374,21 @@ export interface RedactionSummary {
   readonly redactions: number
   /** Rule names that fired, deduplicated. */
   readonly rules: readonly string[]
+  /**
+   * The field names whose values were replaced, sorted and deduplicated.
+   *
+   * The value is never recorded, only the name — so an operator reading a log
+   * can answer "did a credential assignment reach the wire?" without the log
+   * itself carrying the credential. `'[value]'` stands for a replacement made
+   * inside free text, where no field name applies.
+   *
+   * Added because `rules` alone was not enough to tell those two cases apart:
+   * `assigned-secret` firing inside a question body says a credential shape was
+   * present, but says nothing about which named field it sat under.
+   */
+  readonly fields: readonly string[]
+  /** Replacements made inside free text rather than under a named field. */
+  readonly values: number
 }
 
 /**

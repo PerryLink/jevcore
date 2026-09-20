@@ -23,6 +23,8 @@ Adapters जानबूझकर पतले हैं। `packages/dsh` म�
 hook payloads का अनुवाद करता है। निर्णय जैसा हर कुछ — primitives, providers, egress
 contract, policy, gates — core में रहता है, इसलिए कोई नया adapter उन गारंटियों से
 भटक नहीं सकता जो बाकी देते हैं।
+इन तीनों में एक runtime आवश्यकता अलग है: `jevcore-dsh` harness का अनुसरण करता है और उसे
+Node `^22.19.0 || >=24.0.0` चाहिए, जबकि `jevcore` और `jevcore-mcp` को `>=20` चाहिए।
 
 ---
 
@@ -196,7 +198,9 @@ OpenRouter route के बारे में दो बातें जान�
 - **यह एक cost लौटाता है**, जो TypeSafe का अपना route नहीं लौटाता, इसलिए `usage.costUsd` यहाँ
   भरा होता है और वहाँ अनुपस्थित रहता है।
 
-Model id एक System One वाला ही होना चाहिए: सादा `jev-*`, या `typesafe/jev-*`। कोई भी अन्य id chat
+Model id एक System One वाला ही होना चाहिए। बिना prefix वाला `jev-latest` ही default है;
+`typesafe/` किसी versioned id जैसे `typesafe/jev-1.13` पर स्वीकार किया जाता है, पर moving tag
+पर नहीं — route `typesafe/jev-latest` स्वीकार नहीं करता। कोई भी अन्य id chat
 model को route हो जाता, जो ऐसा prose लौटाता है जिसे यह plugin एक निर्णय के रूप में नहीं पढ़ सकता, इसलिए इसे
 call से पहले अस्वीकार कर दिया जाता है, बाद में गलत पढ़े जाने के बजाय।
 
@@ -204,7 +208,7 @@ call से पहले अस्वीकार कर दिया जात�
 फिर उस नाम के environment variable से। यह प्रति call पढ़ा जाता है, इसलिए process चलते समय जोड़ी गई key
 भी उठा ली जाती है। यह कभी log नहीं होता, किसी tool से कभी वापस नहीं लौटाया जाता, और कभी configuration में
 नहीं लिखा जाता। हर route का अपना reference है
-(`apiKeyRef` and `openRouterApiKeyRef`) ताकि दोनों गलती से एक ही key साझा न कर सकें।
+(`apiKeyRef` और `openRouterApiKeyRef`) ताकि दोनों गलती से एक ही key साझा न कर सकें।
 
 `@typesafe-ai/sdk` एकमात्र optional dependency है; plugin इसके बिना भी load होकर ऑफ़लाइन चलता है, और
 इसकी ज़रूरत केवल उस route के लिए होती है जो आप चुनते हैं।
@@ -219,8 +223,8 @@ call से पहले अस्वीकार कर दिया जात�
 | `apiKeyRef` | `TYPESAFE_API_KEY` | `live` route के लिए credential reference |
 | `openRouterApiKeyRef` | `OPENROUTER_API_KEY` | `openrouter` route के लिए credential reference |
 | `baseURL` | `https://api.typesafe.ai` | `live` route के लिए API root। Non-HTTPS अस्वीकार किया जाता है, सिवाय loopback पर |
-| `openRouterBaseURL` | `https://openrouter.ai` | `openrouter` route के लिए API root। वही नियम |
-| `model` | `jev-latest` | हर request के साथ भेजा जाता है। OpenRouter route पर इसका `typesafe/` से शुरू होना ज़रूरी है |
+| `openRouterBaseURL` | `https://openrouter.ai/api` | `openrouter` route के लिए API root। वही नियम |
+| `model` | `jev-latest` | हर request के साथ भेजा जाता है। OpenRouter route पर बिना prefix वाला default ही चलता है; `typesafe/` को किसी versioned id जैसे `typesafe/jev-1.13` की ज़रूरत होती है, और `typesafe/jev-latest` स्वीकार नहीं किया जाता |
 | `logLevel` | `warn` | `silent` \| `warn` \| `info` \| `debug` |
 | `minConfidence` | `0.7` | इससे नीचे किसी उत्तर पर कार्रवाई नहीं की जाती |
 | `minProbability` | `0.6` | इससे नीचे किसी निर्णय पर कार्रवाई नहीं की जाती |

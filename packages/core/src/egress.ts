@@ -112,10 +112,27 @@ export interface MeasuredPayload {
   readonly questionsChars: number
   /** True when a cap actually removed content. */
   readonly truncated: boolean
+  /**
+   * Characters of `state` discarded by the cap, when it fired.
+   *
+   * Reported so a caller can say how much Jev did not see, rather than only
+   * that something was missing.
+   */
+  readonly stateCharsDropped?: number
   /** Redaction rules that fired while preparing this payload. */
   readonly redactionRules: readonly string[]
   /** Count of values replaced while preparing this payload. */
   readonly redactions: number
+  /**
+   * Field names whose values were replaced, deduplicated and sorted.
+   *
+   * `'[value]'` stands for a replacement made inside free text. Carried here
+   * because `redactionRules` answers "which rule fired" and an operator usually
+   * needs "what was removed" — those are different questions.
+   */
+  readonly redactedFields: readonly string[]
+  /** Replacements made inside free text, where no field name applies. */
+  readonly redactedValues: number
 }
 
 /** Everything the contract needs to decide what may leave. */
@@ -152,7 +169,13 @@ export class EgressDeniedError extends Error {
  * A payload field exceeded its declared cap and could not be reduced safely.
  *
  * `state` is truncated rather than refused, because a shorter state is still a
- * valid state. `questions` is refused, because the question map is what answers
+ * valid state — but only when the truncation leaves something behind. A cap so
+ * small that even the truncation envelope cannot fit inside it is refused, since
+ * the alternative is sending a document whose only content is the word
+ * "truncated": a payload with no state in it, presented to the model as if it
+ * were one.
+ *
+ * `questions` is refused at any size, because the question map is what answers
  * are keyed by — a truncated map would yield answers that cannot be mapped back
  * to the questions that produced them.
  */
@@ -164,12 +187,18 @@ export class EgressTooLargeError extends Error {
     readonly field: string,
     readonly maxChars: number,
     readonly actualChars: number,
+    /**
+     * Why this exceeded the cap. Defaults to the questions explanation, which is
+     * what every existing throw site meant; the state cap passes its own.
+     */
+    reason?: string,
   ) {
     super(
-      `"${field}" for "${feature}" is ${actualChars} characters, over the declared limit of ` +
-        `${maxChars}. Send fewer or smaller questions. This is refused rather than truncated ` +
-        `because answers are keyed by question, so a shortened question map would return ` +
-        `answers that cannot be matched to what was asked.`,
+      reason ??
+        `"${field}" for "${feature}" is ${actualChars} characters, over the declared limit of ` +
+          `${maxChars}. Send fewer or smaller questions. This is refused rather than truncated ` +
+          `because answers are keyed by question, so a shortened question map would return ` +
+          `answers that cannot be matched to what was asked.`,
     )
   }
 }
@@ -240,7 +269,12 @@ export class EgressContract {
     readonly questions: Readonly<Record<string, JevQuestion>>
     readonly redact: (value: JsonValue) => {
       readonly value: JsonValue
-      readonly summary: { readonly redactions: number; readonly rules: readonly string[] }
+      readonly summary: {
+        readonly redactions: number
+        readonly rules: readonly string[]
+        readonly fields: readonly string[]
+        readonly values: number
+      }
     }
   }): MeasuredPayload {
     this.assert(input.feature)
@@ -277,7 +311,7 @@ export class EgressContract {
       throw new EgressTooLargeError(input.feature, 'questions', questionsLimit, questionsText.length)
     }
 
-    const cappedState = capJsonText(stateText, stateLimit)
+    const cappedState = capJsonText(stateText, stateLimit, input.feature)
 
     return {
       feature: input.feature,
@@ -286,10 +320,15 @@ export class EgressContract {
       stateChars: cappedState.text.length,
       questionsChars: questionsText.length,
       truncated: cappedState.truncated,
+      ...(cappedState.dropped === undefined ? {} : { stateCharsDropped: cappedState.dropped }),
       // Both fields contribute, so the report reflects everything removed rather
       // than only what was removed from the state.
       redactionRules: [...new Set([...summary.rules, ...questionSummary.rules])],
       redactions: summary.redactions + questionSummary.redactions,
+      redactedFields: [...new Set([...summary.fields, ...questionSummary.fields])].sort(),
+      // Counted rather than derived from `fields`: `'[value]'` appears once in
+      // that set however many free-text replacements happened.
+      redactedValues: summary.values + questionSummary.values,
     }
   }
 
@@ -342,19 +381,96 @@ export class EgressContract {
  * A hard character slice would produce invalid JSON, so an over-long value is
  * replaced by a syntactically valid truncation envelope carrying the original
  * size. Jev then judges a smaller state rather than receiving a parse error.
+ *
+ * Three properties, each of which the previous implementation only appeared to
+ * have:
+ *
+ *  1. **The envelope fits inside the cap.** It used to reserve 20 characters for
+ *     its own markers, which can be longer than that, so `state<=16000c` in the
+ *     startup report was not true of what left the machine.
+ *  2. **The envelope still holds content.** When the cap was smaller than the
+ *     envelope, the head was sliced to zero characters and the payload that left
+ *     was `{"[truncated]":true,…,"[head]":""}` — a document whose entire "state"
+ *     is the word *truncated*. Jev would answer a question about that and the
+ *     answer would be reported as though it were about the caller's state. That
+ *     is refused instead.
+ *  3. **The cap holds for escape-heavy content too.** This is the subtle one. The
+ *     head is a slice of the *serialized* text, so a head full of backslashes —
+ *     Windows paths, a code snippet, JSON-in-JSON — has every backslash escaped
+ *     *again* when the envelope is serialized. Slicing the head to
+ *     `maxChars - overhead` characters therefore produced envelopes well over the
+ *     cap: measured at 692 characters for a cap of 500, and 23_344 for a cap of
+ *     16_000. The head length is found by bisection on the *serialized* envelope
+ *     instead, so the number that leaves is the number the cap promised.
  */
 const capJsonText = (
   text: string,
   maxChars: number,
-): { text: string; value: JsonValue; truncated: boolean } => {
+  feature: EgressFeature,
+): { text: string; value: JsonValue; truncated: boolean; dropped?: number } => {
   if (text.length <= maxChars) {
     return { text, value: JSON.parse(text) as JsonValue, truncated: false }
   }
-  const value: JsonValue = {
+
+  const envelopeFor = (head: string): JsonValue => ({
     '[truncated]': true,
     '[originalChars]': text.length,
     '[maxChars]': maxChars,
-    '[head]': text.slice(0, Math.max(0, maxChars - 200)),
+    '[head]': head,
+  })
+  const sizeOfHead = (headChars: number): number =>
+    JSON.stringify(envelopeFor(text.slice(0, headChars))).length
+
+  // How small a cap this payload can be truncated into at all, given that the
+  // head carries whatever the content's own escaping costs.
+  const minimumViableCap = sizeOfHead(MIN_TRUNCATED_HEAD_CHARS)
+  if (minimumViableCap > maxChars) {
+    throw new EgressTooLargeError(
+      feature,
+      'state',
+      maxChars,
+      text.length,
+      `"state" for "${feature}" is ${text.length} characters, and the limit of ${maxChars} is ` +
+        `too small to hold even a truncated state: an envelope carrying one character of content ` +
+        `needs ${minimumViableCap} characters for this payload, leaving nothing to judge. Raise ` +
+        `maxStateChars to at least ${minimumViableCap}, or send a smaller state. This is refused ` +
+        `rather than truncated because a payload whose only content is the word "truncated" is ` +
+        `not a shorter state — it is no state at all, and Jev would answer about it as though it ` +
+        `were the real one.`,
+    )
   }
-  return { text: JSON.stringify(value), value, truncated: true }
+
+  // The largest head that still fits. Serialized size grows with head length, so
+  // bisection finds it exactly; a head longer than the cap can never fit, which
+  // bounds the search.
+  let low = MIN_TRUNCATED_HEAD_CHARS
+  let high = Math.min(text.length, maxChars)
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2)
+    if (sizeOfHead(mid) <= maxChars) low = mid
+    else high = mid - 1
+  }
+
+  const headChars = low
+  const value = envelopeFor(text.slice(0, headChars))
+  const serialized = JSON.stringify(value)
+  return {
+    text: serialized,
+    value,
+    truncated: true,
+    // What did not fit, which is not quite `text.length - maxChars`: the
+    // envelope's own markers are part of what was sent, and the cap is a
+    // character count rather than a content count.
+    dropped: text.length - headChars,
+  }
 }
+
+/**
+ * The fewest characters of original content a truncation envelope must carry to
+ * be worth sending.
+ *
+ * One. The envelope's whole purpose is to hand Jev *some* of the state while
+ * saying that it is not all of it; a head of zero characters hands it nothing,
+ * and the payload stops being a state. See {@link capJsonText}.
+ */
+export const MIN_TRUNCATED_HEAD_CHARS: number = 1

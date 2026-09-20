@@ -23,6 +23,8 @@ Jev 不是聊天模型。它回答带类型的问题 —— `noul`（是/否）�
 转换 hook 载荷。所有与决策有关的形状 —— 原语、provider、外发
 契约、策略、闸门 —— 都住在 core 里，因此一个新的适配器无法偏离
 其他适配器所给出的保证。
+三者的运行时要求并不相同：`jevcore-dsh` 跟随 harness，需要
+Node `^22.19.0 || >=24.0.0`，而 `jevcore` 与 `jevcore-mcp` 需要 `>=20`。
 
 ---
 
@@ -202,10 +204,11 @@ API 根的下一层，因此这是通往 Jev 的有文档记载的路由，而�
 - **它会返回成本**，而 TypeSafe 自己的路由不会，所以 `usage.costUsd`
   在这条路由上有值，在那条上没有。
 
-模型 id 必须是 System One 的 id：一个裸的 `jev-*` id，或者一个 `typesafe/jev-*`
-的 id。任何其他 id 都会被路由到聊天模型，它给出的散文式回答这个
-插件无法解读为决策，因此它会在调用之前被拒绝，而不是在调用之后
-被误读。
+模型 id 必须是 System One 的 id。裸的 `jev-latest` 就是默认值，不需要任何
+前缀；`typesafe/` 可用于带版本号的 id，例如 `typesafe/jev-1.13`，但不能用于
+移动标签 —— `typesafe/jev-latest` 不被路由接受。任何其他 id 都会被路由到聊天
+模型，它给出的散文式回答这个插件无法解读为决策，因此它会在调用之前被
+拒绝，而不是在调用之后被误读。
 
 无论哪条路由，凭据都会先通过 DSH 的凭据服务解析，
 然后才是该名字的环境变量。它按调用读取，所以进程运行期间新增的
@@ -227,8 +230,8 @@ key 会被取到。它从不被写入日志，从不从工具返回，
 | `apiKeyRef` | `TYPESAFE_API_KEY` | `live` 路由的凭据引用 |
 | `openRouterApiKeyRef` | `OPENROUTER_API_KEY` | `openrouter` 路由的凭据引用 |
 | `baseURL` | `https://api.typesafe.ai` | `live` 路由的 API 根地址。除 loopback 外，非 HTTPS 会被拒绝 |
-| `openRouterBaseURL` | `https://openrouter.ai` | `openrouter` 路由的 API 根地址。同样的规则 |
-| `model` | `jev-latest` | 随每个请求发送。在 OpenRouter 路由上它必须以 `typesafe/` 开头 |
+| `openRouterBaseURL` | `https://openrouter.ai/api` | `openrouter` 路由的 API 根地址。同样的规则 |
+| `model` | `jev-latest` | 随每个请求发送。在 OpenRouter 路由上使用裸的默认值即可；`typesafe/` 需要带版本号的 id，例如 `typesafe/jev-1.13`，而 `typesafe/jev-latest` 不被接受 |
 | `logLevel` | `warn` | `silent` \| `warn` \| `info` \| `debug` |
 | `minConfidence` | `0.7` | 低于此值，答案不会被采纳 |
 | `minProbability` | `0.6` | 低于此值，决策不会被采纳 |

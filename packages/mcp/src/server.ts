@@ -13,14 +13,75 @@
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { readFileSync } from 'node:fs'
 import { z } from 'zod'
 import type { JevService } from 'jevcore'
 import { runAsk, runCheck, runRank, type QuestionInput } from './tools.js'
 
+/**
+ * The version reported to clients, read from this package's own manifest.
+ *
+ * It used to be the literal string '0.1.0' while the package moved on to 0.2.2,
+ * so every client that logged the server version logged one that had never been
+ * published. A version that is not read from the manifest is a version that
+ * drifts, and this one had already drifted twice.
+ *
+ * `lib/server.js` and `src/server.ts` both sit exactly one directory below the
+ * package root, so the same relative path resolves in a checkout and in an
+ * installed tarball. `package.json` is not in `files[]` — it is not supposed to
+ * be — but npm always ships it regardless of that list, so it is present in both.
+ *
+ * The read is lazy and cached: a package that cannot find its own manifest has a
+ * broken install, but it should still answer `tools/list` and report the failure
+ * on the call to `initialize` rather than failing at import time.
+ */
+let cachedVersion: string | undefined
+
+/** The version this server reports, read from the package manifest once. */
+export const packageVersion = (): string => {
+  if (cachedVersion !== undefined) return cachedVersion
+  try {
+    const manifest: unknown = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    )
+    const version =
+      typeof manifest === 'object' && manifest !== null
+        ? (manifest as { version?: unknown }).version
+        : undefined
+    if (typeof version !== 'string' || version.length === 0) {
+      throw new Error('the manifest has no "version" field')
+    }
+    cachedVersion = version
+    return version
+  } catch (error) {
+    throw new Error(
+      `[jevcore-mcp] cannot read its own version from package.json: ` +
+        `${error instanceof Error ? error.message : String(error)}. Reporting a version that was ` +
+        `never published is worse than refusing to handshake.`,
+    )
+  }
+}
+
+/**
+ * A one-entry description: a string, or a structured value whose keys name what
+ * each part is for. Mirrors the core's `EntryType` and the DSH plugin's schema,
+ * so both entry points accept the same questions.
+ */
+const entryType = z.union([z.string(), z.array(z.unknown()), z.record(z.string(), z.unknown())])
+
+/** One of the two outcomes a noul's boundary may describe. */
+const noulCriteria = z.object({
+  true: entryType.optional().describe('What "true" means for this question.'),
+  false: entryType.optional().describe('What "false" means for this question.'),
+})
+
 /** Wire schema for one typed question. */
 const questionSchema = z.object({
   type: z.enum(['noul', 'choice', 'score']).describe('noul = yes/no, choice = pick one, score = place on a scale'),
-  instructions: z.string().describe('The question, phrased so a yes/no or a single selection answers it.'),
+  instructions: entryType.describe(
+    'The question, phrased so a yes/no or a single selection answers it. A string, or an ' +
+      'object/array of named fields when definitions, contrasts or examples clarify the question.',
+  ),
   criteria: z
     .record(z.string(), z.string().nullable())
     .optional()
@@ -28,7 +89,16 @@ const questionSchema = z.object({
       'Required for choice and score. For choice: each permitted answer key mapped to an optional ' +
         'description. For score: each scale level mapped to its description, written in ascending ' +
         'order with at least two levels, because the order written is the scale. A level described ' +
-        'as null sends no description.',
+        'as null sends no description. For a noul it is the legacy spelling of `boundary` and is ' +
+        'read as one.',
+    ),
+  boundary: noulCriteria
+    .optional()
+    .describe(
+      'noul only: what "true" and what "false" mean. Declare one whenever the line between yes ' +
+        'and no is not self-evident — including what silence in the evidence does NOT count as — ' +
+        'because a noul whose boundary is unstated is one whose 0.5 cannot be interpreted. A ' +
+        'boundary on a choice or a score is refused rather than ignored.',
     ),
 })
 
@@ -46,8 +116,16 @@ const failure = (error: unknown) => ({
   ],
 })
 
-export const createServer = (service: JevService): McpServer => {
-  const server = new McpServer({ name: 'jevcore', version: '0.1.0' })
+/**
+ * Build the server.
+ *
+ * @param service - the decision layer every tool call goes through.
+ * @param version - implementation version to report. Defaults to the version in
+ *   this package's manifest, which is what a client should see; the parameter
+ *   exists so a test can prove the default is the manifest and not a literal.
+ */
+export const createServer = (service: JevService, version: string = packageVersion()): McpServer => {
+  const server = new McpServer({ name: 'jevcore', version })
 
   server.registerTool(
     'jev_ask',
@@ -58,6 +136,11 @@ export const createServer = (service: JevService): McpServer => {
         'generate text: it returns a selected option and calibrated probabilities. Use it for ' +
         'judgments the rest of the work branches on — routing, classifying, scoring, triaging. ' +
         'Do NOT use it to write prose, explain, summarize, or generate code.\n\n' +
+        'Question types: "noul" is yes/no and returns the probability of true; "choice" picks one ' +
+        'of the criteria keys you declare; "score" places the state on an ordered scale whose ' +
+        'levels you declare in ascending order. A noul may also declare "boundary" — what true ' +
+        'means and what false means — which is worth supplying whenever the line between them is ' +
+        'not obvious.\n\n' +
         'Batch related questions into one call: they are answered against the same state in one ' +
         'round-trip. A score question answers with a numeric "score" that may fall between ' +
         'levels, a "legend" mapping each level index to its description, and probabilities per ' +

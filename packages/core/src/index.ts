@@ -20,15 +20,19 @@
 // Types
 export type {
   CategoricalAnswer,
+  EntryType,
   JevAnswer,
   JevErrorCode,
   JevProvider,
+  JevProviderErrorOptions,
   JevQuestion,
   JevRequest,
   JevResult,
+  JevEgressFacts,
   JevUsage,
   JsonValue,
   NoulAnswer,
+  NoulCriteria,
   NoulQuestion,
   ChoiceQuestion,
   ScoreAnswer,
@@ -40,9 +44,12 @@ export { JevProviderError } from './types.js'
 
 // Primitives
 export {
+  MAX_CHOICE_OPTIONS,
+  MAX_SCORE_LEVELS,
   assertValidBatch,
   assertValidQuestion,
   choice,
+  isEmptyEntry,
   noul,
   score,
   scoreCriteriaArray,
@@ -69,6 +76,7 @@ export {
   EgressContract,
   EgressDeniedError,
   EgressTooLargeError,
+  MIN_TRUNCATED_HEAD_CHARS,
   type EgressFeature,
   type EgressField,
   type EgressLine,
@@ -80,6 +88,8 @@ export {
 export {
   ConfigError,
   DEFAULT_CONFIG,
+  DEFAULT_REQUEST_MAX_RETRIES,
+  DEFAULT_REQUEST_TIMEOUT_MS,
   resolveConfig,
   type GateInput,
   type GateSettings,
@@ -102,12 +112,26 @@ export {
 // Providers
 export { MOCK_CONFIDENCE, MOCK_MODEL, MockProvider, fnv1a } from './provider/mock.js'
 export {
+  armCallBudget,
+  classifyProviderFailure,
+  classifyStatus,
+  isAbortFailure,
+  isTimeoutFailure,
+  retryAfterOf,
+  statusOf,
+  type CallBudget,
+  type ProviderCallContext,
+} from './provider/classify.js'
+export {
+  DEFAULT_CALL_TOTAL_BUDGET_MS,
   DEFAULT_ENDPOINT,
   DEFAULT_LOG_LEVEL,
   DEFAULT_MODEL,
   LiveProvider,
+  NO_PER_ATTEMPT_TIMEOUT_MS,
   assertUsableEndpoint,
   loadOfficialSdk,
+  timeoutForSdk,
   type LiveProviderOptions,
   type ProviderLogLevel,
 } from './provider/live.js'
@@ -126,6 +150,7 @@ export { JevService, type JevAskInput, type JevCallRecord, type JevServiceOption
 
 // Policy
 export {
+  DEFAULT_MIN_PROBABILITY,
   DEFAULT_POLICY,
   answerOf,
   applyPolicy,

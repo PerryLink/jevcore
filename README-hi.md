@@ -22,6 +22,8 @@ calibrated probabilities लौटाता है। यह prose नहीं 
 Adapters जान-बूझकर पतले हैं। `packages/dsh` में चार files हैं: यह tool schemas declare करता है और
 hook payloads का अनुवाद करता है। निर्णय जैसा कुछ भी — primitives, providers, egress contract,
 policy, gates — core में रहता है, ताकि कोई नया adapter उन guarantees से हट न सके जो बाकी देते हैं।
+इन तीनों में एक runtime आवश्यकता अलग है: `jevcore-dsh` harness का अनुसरण करता है और उसे
+Node `^22.19.0 || >=24.0.0` चाहिए, जबकि `jevcore` और `jevcore-mcp` को `>=20` चाहिए।
 
 ---
 
@@ -199,7 +201,9 @@ OpenRouter route के बारे में दो बातें जान�
 - **यह एक cost लौटाता है**, जो TypeSafe का अपना route नहीं करता, इसलिए `usage.costUsd`
   यहाँ भरा होता है और वहाँ अनुपस्थित रहता है।
 
-Model id System One का होना चाहिए: एक bare `jev-*` id, या एक `typesafe/jev-*` id। कोई भी अन्य
+Model id System One का होना चाहिए। बिना prefix वाला `jev-latest` ही default है;
+`typesafe/` किसी versioned id जैसे `typesafe/jev-1.13` पर स्वीकार किया जाता है, पर moving tag
+पर नहीं — route `typesafe/jev-latest` स्वीकार नहीं करता। कोई भी अन्य
 id किसी chat model को route हो जाता, जो ऐसा prose लौटाता जिसे यह plugin किसी decision के रूप में
 interpret नहीं कर सकता, इसलिए इसे call से पहले अस्वीकार किया जाता है, call के बाद गलत पढ़े जाने के बजाय।
 
@@ -221,8 +225,8 @@ offline load और run होता है, और केवल आपके �
 | `apiKeyRef` | `TYPESAFE_API_KEY` | `live` route के लिए credential reference |
 | `openRouterApiKeyRef` | `OPENROUTER_API_KEY` | `openrouter` route के लिए credential reference |
 | `baseURL` | `https://api.typesafe.ai` | `live` route के लिए API root। Loopback के अलावा non-HTTPS अस्वीकार किया जाता है |
-| `openRouterBaseURL` | `https://openrouter.ai` | `openrouter` route के लिए API root। वही नियम |
-| `model` | `jev-latest` | हर request के साथ भेजा जाता है। OpenRouter route पर इसे `typesafe/` से शुरू होना चाहिए |
+| `openRouterBaseURL` | `https://openrouter.ai/api` | `openrouter` route के लिए API root। वही नियम |
+| `model` | `jev-latest` | हर request के साथ भेजा जाता है। OpenRouter route पर बिना prefix वाला default ही चलता है; `typesafe/` को किसी versioned id जैसे `typesafe/jev-1.13` की ज़रूरत होती है, और `typesafe/jev-latest` स्वीकार नहीं किया जाता |
 | `logLevel` | `warn` | `silent` \| `warn` \| `info` \| `debug` |
 | `minConfidence` | `0.7` | इससे नीचे किसी उत्तर पर कार्रवाई नहीं होती |
 | `minProbability` | `0.6` | इससे नीचे किसी निर्णय पर कार्रवाई नहीं होती |

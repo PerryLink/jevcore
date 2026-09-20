@@ -41,8 +41,41 @@ scale, and give each level a description. The score that comes back may fall
 between levels — `1.4` on a three-level rubric is a real answer, not a bug — so
 read `legend` to name the level rather than assuming an integer.
 
+**Reference the part of the state you are asking about by path, in backticks.**
+When `state` is an object, a question about one field should name that field:
+"Does \`ticket.messages[0].text\` request a refund?", not "does this request a
+refund?". Dot-and-index paths with the backticks are what upstream prescribes,
+and the model then knows which part of the state to judge
+([Primitives](https://docs.typesafe.ai/primitives.md), "Reference specific
+fields"). `jev_rank` builds its per-candidate questions this way already.
+
+**Make `choice` options contrastive: give every option the same sub-keys.** An
+option description may be structured, and describing each option with the *same*
+labels — what it covers, what it does not, an example — sharpens the boundary
+between options instead of leaving the model to infer it. Upstream's worked
+example uses `what` / `not_for` / `examples` on every option for exactly that
+reason ([Advanced: structure](https://docs.typesafe.ai/primitives/advanced.md),
+"JSON rubric for boundary clarification"). Through these tools each option's
+description is a single string, so spell the same labels out inside each one.
+
+**A `noul` with an unstated boundary is one whose 0.5 cannot be interpreted.**
+Say what yes means and what no means whenever the line between them is not
+obvious — including what silence in the evidence does *not* count as (the
+`jev_ask` schema names the field the boundary belongs in). Upstream defines every
+hazard in its guardrail recipe this way, and the same page shows structured
+`true`/`false` descriptions for a subtle boundary
+([Advanced: structure](https://docs.typesafe.ai/primitives/advanced.md),
+"Structured Noul criteria").
+
 Batch related questions into one call: they are answered against the same state in
-a single round-trip, which is where most of the cost saving comes from.
+a single round-trip, which is where most of the cost saving comes from. Ask
+questions you might not need, too — an extra question costs tokens, not time, and
+code can ignore the answers it does not use. Upstream measures 13 questions in one
+call at `11.5x` cheaper and `9.6x` faster than 13 calls, with no change in the
+answers ([Primitives](https://docs.typesafe.ai/primitives.md), "Ask multiple
+questions together"). Two requests are the exception: ask again only when the
+first answer is needed to fetch evidence, build new state, or choose the next
+question's options.
 
 ## Two rules that prevent the common mistakes
 
@@ -58,8 +91,16 @@ prefer a threshold that skips small inputs entirely.
 
 ## Working with the answer
 
-- `confidence` is Jev's own calibration. Treat it as a floor on trust, not as a
-  substitute for a threshold.
+- `confidence` is a concentration statistic over the answer's own probability
+  distribution — how peaked it is, from 0 to 1 — not a measure of whether the
+  answer is true, and not this project's own calibration. Upstream says you are
+  never locked into its definition and hands you the full `probabilities` for
+  that reason. **A `noul` answer has no `confidence` at all**: a two-outcome
+  answer has no distribution for a concentration statistic to summarise, so read
+  the probability itself.
+- A `score` answer's number may fall *between* levels. Read `legend` to name the
+  level instead of rounding, and read `probabilities` when the shape of the
+  distribution is what you are acting on.
 - An answer naming a value outside the criteria you declared means something
   upstream is wrong. Treat it as a failure, not as a decision.
 - Independent per-candidate judgments (ranking) do not sum to 1. Do not normalize
@@ -80,5 +121,27 @@ order candidates against one criterion, and `jev_check` to test a claim against
 evidence. The same judgments are reachable from code through `ctx.jev` with no
 model turn at all — prefer that when the decision is already being made in code.
 
+Choose by the shape of the answer you need:
+
+- **`jev_ask`** — you can state the question and the possible answers. Routing,
+  classifying, scoring, verifying a field. Start here: it is the general tool, and
+  the other two are conveniences for shapes that come up often.
+- **`jev_rank`** — the answer is an ordering over a list longer than a handful:
+  search hits, a triage backlog, which file to read first. One question per
+  candidate, all in one round-trip. The per-candidate probabilities are
+  independent judgments, not a distribution: `0.5` is not "half the total
+  relevance", and a flat set of scores means nothing stands out rather than
+  forming a fine-grained order.
+- **`jev_check`** — you have a specific claim and the evidence for it, and "not
+  supported" and "contradicted" would send you to different actions. It judges
+  only the evidence you hand it: it cannot search for more, and it cannot tell
+  that you omitted the decisive passage.
+
+Do not reach for any of them to summarize, explain, draft, or translate — or for
+an open-ended "look at this and tell me what to do". That last one is a slow
+judgment in a decision's clothing; either split it into questions whose answers
+your code combines, or keep it in the model.
+
 Every result names its provider. If it says `mock`, the answers are synthetic and
-carry no judgment; do not act on them.
+carry no judgment; do not act on them. Check `provider`, not `model`: the model
+name can read like a real one while the answers are still synthetic.

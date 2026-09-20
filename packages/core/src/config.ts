@@ -73,12 +73,22 @@ export interface JevConfigInput {
   /** Log level for this plugin's own diagnostics. */
   readonly logLevel?: 'silent' | 'warn' | 'info' | 'debug'
   /**
-   * Milliseconds allowed per provider attempt. `0` disables the timeout.
+   * Milliseconds allowed per provider attempt. `0` disables the per-attempt
+   * deadline; it does not disable the call.
    *
-   * The TypeSafe SDK's own default is 10_000ms **per attempt with no total
-   * budget**, so with its default retry policy one call can occupy ~30s. A tool
-   * gate that blocks a tool call for 30 seconds is usually worse than failing;
-   * this bounds it.
+   * **Per attempt, not per call.** The TypeSafe SDK documents its own default as
+   * "timeout per attempt in milliseconds, without a total retry budget", so a
+   * per-attempt number cannot bound how long one call occupies. The bound is the
+   * total budget the providers arm around the whole call
+   * (`DEFAULT_TOTAL_BUDGET_MS`, 40_000ms, which covers 3 attempts at the default
+   * timeout plus backoff).
+   *
+   * `0` used to be documented as "disables the timeout" and was then passed
+   * straight to the SDK, whose `assertPositiveMs` throws for any value `<= 0`:
+   * every call failed before a socket opened, and the failure was reported as
+   * "network or timeout". `0` now means what it says — the per-attempt deadline
+   * is encoded as a finite number no real attempt reaches — and the total budget
+   * still applies, so "no timeout" cannot become "blocks forever".
    */
   readonly requestTimeoutMs?: number
   /**
@@ -121,16 +131,36 @@ export interface JevConfig {
 }
 
 /**
- * Per-attempt timeout handed to the provider.
+ * Per-attempt timeout handed to the provider. **Per attempt, not per call.**
  *
- * 30s, chosen to bound the SDK's worst case rather than to match its default:
- * 10s per attempt across 3 attempts is ~30s of blocking, which is the number
- * this setting exists to stop being unbounded in practice.
+ * 10_000, which is what the upstream SDK documents and defaults to: *"Timeout
+ * per attempt in milliseconds, without a total retry budget. Default: 10000."*
+ * Matching it is the honest choice, because this package does not get to
+ * redefine what the number means by picking a different one.
+ *
+ * What the number cannot do on its own is bound the call. Three attempts at this
+ * timeout plus the backoff between them is roughly 30–40s, and the SDK has no
+ * total budget in JavaScript, so a per-attempt setting is not a ceiling on how
+ * long a tool call blocks. That ceiling exists — it is the total budget the
+ * providers arm around the whole call (`DEFAULT_TOTAL_BUDGET_MS`, 40_000) — and
+ * this value is deliberately sized so the two agree: 10s x 3 attempts + ~10s of
+ * backoff ≈ 40s.
+ *
+ * The previous value was 30_000, with a comment claiming it was "chosen to bound
+ * the SDK's worst case rather than to match its default". It bounded nothing: the
+ * worst case under it was 30s x 3 attempts + backoff ≈ 90s, which is an order of
+ * magnitude more blocking than the comment described.
  */
-export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
+export const DEFAULT_REQUEST_TIMEOUT_MS: number = 10_000
 
-/** Retries after the first attempt. The SDK's own default, restated explicitly. */
-export const DEFAULT_REQUEST_MAX_RETRIES = 2
+/**
+ * Retries after the first attempt. The SDK's own default, restated explicitly.
+ *
+ * Kept in step with the total budget above: the budget is sized for
+ * `DEFAULT_REQUEST_MAX_RETRIES + 1` attempts, so raising this without raising the
+ * budget would silently cut the last attempts short.
+ */
+export const DEFAULT_REQUEST_MAX_RETRIES: number = 2
 
 export const DEFAULT_CONFIG: JevConfig = {
   provider: 'mock',
@@ -232,8 +262,9 @@ const readPositiveInt = (name: string, value: unknown, fallback: number): number
 }
 
 const readRequestTimeoutMs = (value: unknown): number => {
-  // 0 is a deliberate "no timeout", which is distinct from "unset": the SDK
-  // treats 0 as no timeout too, so passing it through is the honest mapping.
+  // 0 is a deliberate "no per-attempt deadline", distinct from "unset". The
+  // provider encodes it as a finite number, because the SDK rejects 0 — passing
+  // it through was the defect this comment used to assert did not exist.
   return readPositiveInt('requestTimeoutMs', value, DEFAULT_CONFIG.requestTimeoutMs)
 }
 
