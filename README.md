@@ -1,13 +1,28 @@
 # dsh-jev
 
-TypeSafe [Jev](https://typesafe.ai) as a first-class Cordis service and three model-visible tools for
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
+TypeSafe [Jev](https://typesafe.ai) for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+and any other MCP host.
 
 Jev is not a chat model. It answers typed questions — `noul` (yes/no), `choice`, `score` — and returns
-calibrated probabilities. It does not write prose, and asking it to is a category error. This plugin
+calibrated probabilities. It does not write prose, and asking it to is a category error. This project
 gives an agent exactly that surface, and nothing more.
 
 **Offline by default. Egress disclosed. Nothing default-on.**
+
+---
+
+## Three packages, one decision layer
+
+| Package | What it is | Use it when |
+|---|---|---|
+| [`@dsh-jev/core`](packages/core) | The decisions. Imports nothing from DeepSeek Harness or Cordis. | You want Jev in a plain script, a service, or your own harness |
+| [`dsh-jev`](packages/dsh) | The DSH plugin: one service, three tools, two opt-in gates | You are running DeepSeek Harness |
+| [`@dsh-jev/mcp`](packages/mcp) | The same three tools over MCP, with a stdio binary | Your host speaks MCP but is not DSH |
+
+The adapters are thin on purpose. `packages/dsh` is four files: it declares tool schemas and
+translates hook payloads. Everything decision-shaped — the primitives, the providers, the egress
+contract, the policy, the gates — lives in core, so a new adapter cannot drift from the guarantees
+the others make.
 
 ---
 
@@ -18,7 +33,7 @@ found a consistent pattern: the module labelled *guard*, *gate*, or *warden* was
 shipping prompts, tool arguments, and file contents to a third party, and the README generally did not
 say so. Several were enabled by default. One gate could be reconfigured by the model it was guarding.
 
-This plugin is the same idea with those failure modes designed out:
+This project is the same idea with those failure modes designed out:
 
 | Property | How it is guaranteed here |
 |---|---|
@@ -81,6 +96,8 @@ not enable the live provider.
 
 ## Install
 
+### As a DeepSeek Harness plugin
+
 ```sh
 dsh plugin --profile <profile> add dsh-jev
 ```
@@ -88,11 +105,46 @@ dsh plugin --profile <profile> add dsh-jev
 Or from a checkout:
 
 ```sh
-dsh plugin --profile <profile> add /absolute/path/to/dsh-jev
+dsh plugin --profile <profile> add /absolute/path/to/dsh-jev/packages/dsh
 ```
 
-Then confirm the row activated (`plugin_manager` / the plugin list should show `jev` as `active`, not
-`failed`) and check the startup report in the log.
+`packages/dsh` imports `@dsh-jev/core` by name, so a checkout also needs core
+resolvable from the profile (`add /absolute/path/to/dsh-jev/packages/core`).
+
+Then confirm the row activated — the plugin list should show `jev` as `active`,
+not `failed` — and check the startup report in the log.
+
+### As an MCP server
+
+For a host that speaks MCP, the same three tools are available over stdio:
+
+```sh
+npx -y @dsh-jev/mcp
+```
+
+To wire it into DeepSeek Harness specifically, install a configuration-only bundle
+whose patch inserts the harness's own MCP client:
+
+```yml
+- insert:
+    - id: jev-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: jev
+        transport: stdio
+        command: npx
+        args: ['-y', '@dsh-jev/mcp']
+        failOnStartupError: true
+```
+
+The provider is chosen from the environment: `TYPESAFE_API_KEY` present means
+live, absent means the offline mock. `JEV_PROVIDER=mock|live` overrides that.
+Unlike the plugin, the MCP server resolves its credential once at startup, so a
+missing key with `JEV_PROVIDER=live` is a startup error rather than a per-call
+surprise.
+
+Its egress report goes to **stderr**, never stdout — on a stdio transport stdout
+is the protocol channel, and a stray line there would corrupt the stream.
 
 ### Going live
 
@@ -188,12 +240,13 @@ that could be mistaken for a real judgment would be worse than no mock at all.
 Honest accounting of what has and has not been verified.
 
 **Verified**
-- 232 tests pass with no network access and no `TYPESAFE_API_KEY`.
+- 255 tests pass across three packages (191 core, 43 DSH, 21 MCP), with no network access and no
+  `TYPESAFE_API_KEY`. CI clears the variable and expects the suite to pass anyway.
 - The default path makes no network call: asserted by spying on `globalThis.fetch` while mounting the
-  plugin and answering through the service.
+  plugin and answering through the service, and again while assembling the MCP runtime.
 - A disabled gate registers **no** event listener, and a denied egress never reaches the provider.
 - The plugin activates on a real Cordis `Context`, publishes `ctx.jev`, and registers exactly three
-  tools.
+  tools. `Config` satisfies the Standard Schema protocol Cordis requires before a plugin starts.
 - Every DSH API used here (`ctx.provide`, `ctx.effect`, `tools.register`, `defineTool`,
   `tools/pre-execute`, `tools/post-execute`, `credentials.resolve`) was checked against the installed
   runtime before use, and the payload types come from the installed declaration files.
@@ -202,6 +255,12 @@ Honest accounting of what has and has not been verified.
 - **The live path has never been exercised against the real API.** No credential existed during
   development, so `LiveProvider` is covered only against an injected stub SDK. Expect to validate it
   on first live use.
+- **The DSH plugin has never reached `active` in a running harness.** Its activation was verified
+  in-process on a fresh `Context`, and the module loads cleanly from the profile's own resolution
+  path, but the long-running server that has it configured is still holding an earlier module
+  instance in a registry cache and must be restarted to pick up the current build.
+- The MCP server has never been driven by a real MCP host. Its tools, runtime selection, and egress
+  enforcement are tested directly; the transport handshake is not.
 - Gate behaviour on live traffic. The gates are tested against synthetic answers and real hook
   payload shapes, but no real tool call has been gated end to end.
 - The context gate cannot recover context already spent. It withholds a result from reaching the

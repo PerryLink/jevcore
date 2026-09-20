@@ -1,6 +1,6 @@
 # Session state — dsh-jev
 
-Last updated: 2026-09-20. Read this first when resuming.
+Last updated: 2026-09-20 (round 2). Read this first when resuming.
 
 ## Where things stand
 
@@ -8,65 +8,69 @@ Last updated: 2026-09-20. Read this first when resuming.
 |---|---|
 | 1. TypeSafe SDK issue drafts | **Done** — `../typesafe-sdk-issue-drafts.md`, four ready-to-paste issues |
 | 2. M0 scaffolding | **Done** |
-| 3. M1 offline core engine | **Done** — in `packages/core` |
-| 4. M2 service + 3 tools | **Code done and tested; live activation needs a `dsh web` restart** (proven below) |
-| 5. M3 gates | **Done** — both opt-in |
+| 3. M1 offline core engine | **Done** — `packages/core`, 191 tests |
+| 4. M2 service + 3 tools | **Code done and tested; live activation blocked on a restart** (see below) |
+| 5. M3 gates | **Done** — both opt-in, tested |
 | 6. M4 live verification | **Blocked** — needs a TypeSafe API key |
-| 7. M5 publish | **Blocked** — needs your npm/GitHub account; everything else ready |
-| 8. Core split | **Done** — `@dsh-jev/core` + `dsh-jev` |
-| 9. MCP entry | Not started |
-| 10. DSH skill for `typesafe-ai/skills` | Not started |
+| 7. Core split | **Done** — three packages, one decision layer |
+| 8. MCP entry | **Done** — `packages/mcp`, 21 tests, stdio binary verified offline |
+| 9. DSH skill proposal | **Done** — `../typesafe-dsh-skill-proposal.md` |
+| 10. Repo hygiene for publishing | **Done** — CONTRIBUTING, SECURITY, CHANGELOG, PUBLISHING, CI over all three packages |
+| 11. Actual publish + M4 | **Blocked** — needs your accounts and an API key |
+
+**255 tests pass** (191 core, 43 dsh, 21 mcp) with no credential and no network
+access. `pnpm run check` is green. All three tarballs pack correctly.
 
 ## Repository layout
 
 ```
 dsh-jev/
-├── package.json              workspace root (private)
-├── pnpm-workspace.yaml       packages/* + the esbuild allowBuilds entry
-├── tsconfig.base.json        shared compiler options (no outDir — see traps)
-├── packages/core/            @dsh-jev/core — no framework dependency
-│   ├── src/  types, primitives, check, redact, egress, config, schema,
-│   │         credentials, providers, service, policy, render, gates
-│   └── test/ 191 tests
-└── packages/dsh/             dsh-jev — the DeepSeek Harness plugin
-    ├── src/  index (apply/Config/inject), ask, rank, check
-    ├── cordis.patch.yml
-    └── test/ 43 tests
+├── package.json / pnpm-workspace.yaml / tsconfig.base.json
+├── CONTRIBUTING.md  SECURITY.md  CHANGELOG.md  PUBLISHING.md
+├── README.md        (also copied into packages/dsh)
+├── .github/workflows/ci.yml    typecheck+test+build on Node 20 and 22,
+│                               then a job that asserts each tarball contains
+│                               what the package needs to load
+└── packages/
+    ├── core/   @dsh-jev/core   the decisions; no framework imports; 191 tests
+    ├── dsh/    dsh-jev         the DSH plugin; 4 source files; 43 tests
+    └── mcp/    @dsh-jev/mcp    the same tools over MCP; 21 tests
 ```
 
-`packages/core` imports nothing from DeepSeek Harness or Cordis. `packages/dsh`
-is a thin adapter: it declares tool schemas and translates hook payloads, and
-everything decision-shaped lives in core.
+`packages/dsh` and `packages/mcp` are both thin: they declare schemas, translate
+transport payloads, and delegate every judgment to core. That is deliberate — an
+adapter cannot drift from the guarantees the others make if it owns no decision
+logic.
 
-## The one blocker, with evidence
+## The one blocker, now with reproducible evidence
 
-The plugin row shows `failed` with:
+The DSH plugin row still shows `failed`:
 
 ```
 jev (dsh-jev): TypeError: Cannot read properties of undefined (reading 'validate')
 ```
 
-**This error does not come from the current code.** Established by instrumenting
-the built entry point with a probe that appends to a log file on load, then
-toggling the row and reading the log:
+**The running server has never imported the current module.** Proven by putting a
+`process.pid`-recording probe in the built entry, toggling the row, and reading
+the log:
 
-- The probe fired for a local `node` import.
-- It did **not** fire when the running server toggled the row — only one entry
-  in the log, from the smoke test.
+- importing the file with `node` → probe fires
+- toggling the row in the running server → **no probe entry at all**
 
-So the running process resolves `dsh-jev` from an internal cache and never
-re-imports the file. Cordis stores a plugin's `Plugin.Runtime` — including its
-`Config` — in a registry keyed by the plugin callback
-(`vendor/cordis/src/registry.ts:322-328`), and that record is created on first
-load and reused. Toggling `disabled` does not evict it.
+Not "stale text" — the server genuinely keeps an earlier module instance. Cordis
+caches a plugin's `Plugin.Runtime`, including its `Config`, keyed by the plugin
+callback (`vendor/cordis/src/registry.ts:322-328`); the record is created on
+first load and reused, and toggling `disabled` does not evict it.
 
-The fix is already in place; the process must restart to observe it.
+The server running the profile has PID 29812, started 10:17:17 — before the
+restructure that repointed the profile. Everything since then is invisible to it.
 
-**Action needed: restart `dsh web`.**
+**Action needed: restart the process serving `dsh web`.**
 
-If it still fails after a restart, the error is then genuinely current, and the
-first thing to check is the profile's resolved entry:
-`%DSH_HOME%\profiles\web\node_modules\dsh-jev\lib\index.js`.
+If it still fails after a restart, the error is then current, and the next step is
+to run the module through the loader path directly:
+`node --input-type=module -e "import('dsh-jev').then(m => console.log(typeof m.Config?.['~standard']?.validate))"`
+from `%DSH_HOME%\profiles\web`.
 
 ## Verify after the restart
 
@@ -78,7 +82,7 @@ first thing to check is the profile's resolved entry:
 
 ## Profile wiring (already done)
 
-`%DSH_HOME%\profiles\web\package.json` links both packages:
+`%DSH_HOME%\profiles\web\package.json`:
 
 ```json
 "dependencies": {
@@ -87,47 +91,47 @@ first thing to check is the profile's resolved entry:
 }
 ```
 
-Both must be present: `dsh-jev` imports `@dsh-jev/core` by name, so the
-dependency has to resolve from the profile's own `node_modules`, not from a
-nested one.
+Both are required: `dsh-jev` imports `@dsh-jev/core` by name, so the dependency
+must resolve from the profile's own `node_modules`.
 
 ## Next actions in order
 
-1. **Restart `dsh web`**, then run the three checks above.
+1. **Restart the process serving `dsh web`**, then run the three checks above.
 2. **Apply for a TypeSafe API key** — `https://console.typesafe.ai/settings/keys`.
 3. **Post issue #1** from the issue drafts, then #2, #3, #4 one at a time.
-4. **M4** once the key exists: set `provider: live`, `apiKeyRef: TYPESAFE_API_KEY`,
-   run one `jev_ask`, and record real latency, cost, and transmitted fields.
-   `LiveProvider` has never talked to the real API — only an injected stub.
-5. **MCP entry** — a `packages/mcp` that wraps core. Note the case is weaker than
-   it looks: `jkudish/jev-mcp` already ships ten tools, so the only defensible
-   version is a thin MCP surface over *this* core, not another tool collection.
-6. **M5 publish** — `pnpm -r publish --access public` after `pnpm run check`.
-   `zhangxaochen/dsh-jev` already exists on npm at 0.2.0 and is a different
-   project; publish under a scope or add a README line disambiguating them.
+4. **M4** once the key exists: run the MCP server with `JEV_PROVIDER=live` and one
+   `jev_ask`, and record real latency, cost, and transmitted fields. `LiveProvider`
+   has never talked to the real API — only an injected stub.
+5. **MCP transport check** — drive `packages/mcp` from a real MCP host once. Tools
+   and egress are tested; the handshake is not.
+6. **Publish** — follow `PUBLISHING.md`. Decide the package name first:
+   `dsh-jev` already exists on npm at 0.2.0 as an unrelated project.
 
 ## Traps hit while building this (do not repeat)
 
-- **PowerShell `Set-Content` corrupts UTF-8.** It mangled several source files.
-  Use `[System.IO.File]::WriteAllText($p, $t, (New-Object System.Text.UTF8Encoding($false)))`.
-  Note the damage can leave *valid* UTF-8 that is silently wrong (a truncated em
-  dash as `U+00E2 U+0080`), so an encoding validity check is not enough — check
-  code points. Prefer `edit`/`write` over shell rewriting.
-- **Cordis `Config` is load-bearing.** Cordis calls
-  `Config['~standard'].validate(config)` before the plugin starts
-  (`vendor/cordis/src/fiber.ts:53`). Exporting documentation under that name
-  crashes activation. Implement the Standard Schema protocol, or name the
-  documentation something else.
+- **The running harness caches plugin modules and does not re-import on toggle.**
+  Editing a linked plugin's build output has no effect until the process restarts.
+  A probe in the built file settles "did it load?" in one step; do that instead of
+  reasoning about caches.
+- **PowerShell `Set-Content` corrupts UTF-8.** Use
+  `[System.IO.File]::WriteAllText($p, $t, (New-Object System.Text.UTF8Encoding($false)))`.
+  Damage can leave *valid* UTF-8 that is still wrong (a truncated em dash becomes
+  `U+00E2 U+0080`), so check code points, not just validity. Prefer `edit`/`write`.
+- **Cordis `Config` is load-bearing.** It calls `Config['~standard'].validate(config)`
+  before the plugin starts (`vendor/cordis/src/fiber.ts:53`). Exporting
+  documentation under that name crashes activation.
 - **A relative `outDir` in an extended tsconfig resolves against the file that
-  declares it**, not the extending one. A base-config `"./lib"` wrote output to
-  the repo root, and `tsc` still exited 0. Declare `outDir` in each package.
-- **pnpm 11 blocks dependency build scripts AND exits non-zero on every later
-  command** until the dependency is listed in `allowBuilds`. esbuild (a vitest
-  transitive) is the only entry here.
+  declares it**, not the extending one — output silently landed in the repo root
+  while `tsc` exited 0. Declare `outDir` in each package.
+- **pnpm 11 blocks dependency build scripts and then exits non-zero on every later
+  command** until the dependency is in `allowBuilds`. esbuild is the only entry.
+- **pnpm's isolation means a peer's transitive dependency is not importable.** The
+  MCP package needs `zod` in `dependencies` even though the SDK also depends on it.
 - **Tool output schemas need implicit index signatures.** Types crossing into a
-  tool output must be `type` aliases, not `interface`es, or they are not
-  assignable to `JsonValue`. Arrays must be mutable (`T[]`, not `readonly T[]`).
-- **Do not depend on `@deepseek-ai/dsh-tools@latest`** — it depends on
+  tool output must be `type` aliases, not `interface`es, or they are not assignable
+  to `JsonValue`. Arrays must be mutable.
+- **Do not depend on `@deepseek-ai/dsh-tools@latest`** — it needs
   `@deepseek-ai/dsh-type-meta`, which is not published. Use `0.1.6-alpha.2`.
-- **GitHub's unauthenticated API returns 403 when rate-limited, not 404.** A
-  probe treating 403 as "missing" produces false negatives.
+- **On a stdio MCP transport, stdout is the protocol channel.** Diagnostics go to
+  stderr; a `console.log` corrupts the stream.
+- **GitHub's unauthenticated API returns 403 when rate-limited, not 404.**

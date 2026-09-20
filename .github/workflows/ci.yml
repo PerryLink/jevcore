@@ -33,18 +33,13 @@ jobs:
       - name: Install
         run: pnpm install --no-frozen-lockfile
 
-      - name: Typecheck, test, and build
-        # Deliberately no TYPESAFE_API_KEY. Every test in this repository must
-        # pass without a credential and without network access; the offline
+      - name: Typecheck, test, and build every package
+        # No TYPESAFE_API_KEY, deliberately. Every test in this repository must
+        # pass without a credential and without network access — the offline
         # path is the default contract, so CI holds it to that.
         env:
           TYPESAFE_API_KEY: ''
         run: pnpm run check
-
-      - name: Assert no credential is required
-        env:
-          TYPESAFE_API_KEY: ''
-        run: pnpm test
 
   package:
     runs-on: ubuntu-latest
@@ -55,20 +50,36 @@ jobs:
           node-version: '22'
       - run: corepack enable
       - run: pnpm install --no-frozen-lockfile
-      - name: Build
-        run: pnpm run build
-      - name: Verify the published file set
-        # `files` in package.json must actually cover what the plugin needs to
-        # load: the build output plus the patch file.
+      - run: pnpm run build
+
+      - name: Verify each published package contains what it needs
+        # `files` in each manifest must cover the artifacts the package needs to
+        # load. A missing entry here is a broken publish that `npm install`
+        # would not catch, because the tarball installs fine — it just does not
+        # work.
         run: |
-          npm pack --dry-run --json > /tmp/pack.json
           node -e "
-            const files = require('/tmp/pack.json')[0].files.map((f) => f.path);
-            const required = ['lib/index.js', 'cordis.patch.yml', 'README.md', 'LICENSE'];
-            const missing = required.filter((r) => !files.includes(r));
-            if (missing.length > 0) {
-              console.error('missing from the published package:', missing.join(', '));
-              process.exit(1);
+            const { execSync } = require('node:child_process');
+            const fsp = require('node:fs');
+            const path = require('node:path');
+
+            const required = {
+              'packages/core': ['lib/index.js', 'lib/index.d.ts', 'README.md', 'LICENSE'],
+              'packages/dsh': ['lib/index.js', 'lib/index.d.ts', 'cordis.patch.yml', 'README.md', 'LICENSE'],
+              'packages/mcp': ['lib/index.js', 'lib/bin.js', 'lib/index.d.ts', 'README.md', 'LICENSE'],
+            };
+
+            let failed = false;
+            for (const [dir, wanted] of Object.entries(required)) {
+              const out = execSync('npm pack --dry-run --json', { cwd: dir, encoding: 'utf8' });
+              const files = JSON.parse(out)[0].files.map((f) => f.path);
+              const missing = wanted.filter((w) => !files.includes(w));
+              if (missing.length) {
+                console.error(\`\${dir}: missing from the published package -> \${missing.join(', ')}\`);
+                failed = true;
+              } else {
+                console.log(\`\${dir}: \${files.length} files, all required present\`);
+              }
             }
-            console.log('package contains', files.length, 'files, including every required one');
+            if (failed) process.exit(1);
           "

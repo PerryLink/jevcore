@@ -1,0 +1,61 @@
+{
+  "name": "@dsh-jev/mcp",
+  "version": "0.1.0",
+  "description": "TypeSafe Jev over the Model Context Protocol: typed judgments (ask, rank, check) that return calibrated probabilities instead of prose.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "jev",
+    "typesafe",
+    "typesafe-ai",
+    "system-one",
+    "decision-model"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "bin": {
+    "dsh-jev-mcp": "./lib/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@dsh-jev/core": "workspace:*",
+    "zod": "^3.25.0"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
