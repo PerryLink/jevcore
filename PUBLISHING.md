@@ -2,33 +2,52 @@
 
 Status as of writing:
 
-- the repository exists and `main` is pushed — <https://github.com/PerryLink/jevcore>;
-- **nothing has been published to npm**, because the npm token available in this
-  workspace is dead (see the next section);
-- the publish workflow is in place, so once a working token is stored as a
-  repository secret, releasing is one tag push.
+- **0.1.0 is published to npm** — `jevcore`, `jevcore-dsh` and `jevcore-mcp` are
+  live, verified by installing them from the public registry into an empty
+  directory rather than by trusting the publish output;
+- the repository is public at <https://github.com/PerryLink/jevcore>, with CI
+  green, and a mirror is pushed to Gitee at
+  <https://gitee.com/perrylink/jevcore>;
+- the `Publish` workflow is in place for future releases, but it needs an
+  `NPM_TOKEN` repository secret before a tag push can use it (below).
 
 Run every step from the repository root.
 
-## The npm token is currently invalid — fix this first
+## Before the next release: add the NPM_TOKEN secret
 
-`npm whoami` returns `E401` for the token recorded in the workspace's token file,
-which matches that file's own note that it has been dead since 2026-08-23. No
-publishing can happen until it is replaced.
-
-To unblock publishing:
+The 0.1.0 release was published from a laptop, which works but produces no
+provenance attestation. To release the next version through the workflow:
 
 1. Create an npm **automation** token with publish rights for `jevcore`,
    `jevcore-dsh` and `jevcore-mcp` (npm → Access Tokens → Generate New Token →
    Automation; automation tokens bypass 2FA, which CI needs).
 2. Add it to the repository: **Settings → Secrets and variables → Actions → New
    repository secret**, named `NPM_TOKEN`.
-3. Push a version tag (section 6). The `Publish` workflow does the rest, with
-   provenance.
+3. Bump the version in all four manifests and `pnpm install`, then push a `v*`
+   tag.
 
-The dead token was never written to this repository or any of its files, and
-neither should its replacement: the workflow reads `NPM_TOKEN` from repository
-secrets only.
+Without that secret the workflow **fails** rather than skipping, deliberately: a
+tag that "passes" while publishing nothing is easy to mistake for a release.
+
+The token is never written to this repository or any of its files. It belongs in
+repository secrets, and locally only in the environment of the command that needs
+it.
+
+### Why the first attempt failed, recorded so it is not repeated
+
+The unscoped name `jevkit` was rejected outright:
+
+```
+403 Forbidden - PUT https://registry.npmjs.org/jevkit - Package name too similar
+to existing package jev-kit
+```
+
+`npm view jevkit` returned 404 right up to that moment, which is the trap: a 404
+proves a name is unregistered, never that it will pass the similarity check.
+npm's rule for that check is [undocumented and cannot be queried before
+publishing](https://github.com/orgs/community/discussions/205030), so the only
+reliable defence is a name that is not close to anything — or a scope. `jevcore`
+passed, and the same name was verified free on GitHub and Gitee first.
 
 ## 0. Package names — decided
 
@@ -63,10 +82,24 @@ does.
 
 ### Why `jevcore`
 
-`jev-kit`, `jev-mcp`, `jev-tools`, `jev-core` and `jev-plugin` are taken or
-risk reading as official TypeSafe packages. `jevcore` is free, avoids a `jev-`
-prefix that implies first-party status, and `kit` says "tools for" rather than
-"attachment to a framework".
+`jevkit` was the first choice and npm refused it as too similar to the existing
+`jev-kit`. `jev-core`, `jev-tools` and `jev-plugin` are unregistered but sit one
+hyphen away from names that are not, which is the same trap. Coined alternatives
+(`probanda`, `kalibr`) were considered and rejected on a different ground: they
+say nothing about Jev, and a name nobody can connect to the project is not worth
+the safety.
+
+`jevcore` keeps the association, is unhyphenated — further from any hyphenated
+neighbour than `jevkit` sat from `jev-kit` — and was verified free on npm, GitHub
+and Gitee before anything was published. Candidate families that failed the
+GitHub half of that check: `jevkit` (`ariel-frischer/jevkit`), `jev-decision-*`
+(`zhangxaochen/dsh-jev`), `jev-dsh` (`buberlo/dsh-jev`), and `jev-mcp` which is
+taken on npm itself.
+
+A scope (`@perrylink/jevcore`) would have side-stepped the similarity check
+entirely and npm recommends it, but it was not wanted: the scoped form reads more
+like a personal namespace than a project, and unscoped names are simpler to
+install.
 
 ### Unscoped names must be claimed individually
 
@@ -191,16 +224,24 @@ nothing.
 
 ## 5. Publish — a tag push, not a laptop
 
+**0.1.0 is already published**, from a laptop, so this section is for the *next*
+release. Do not push a `v0.1.0` tag: the workflow would try to publish versions
+that already exist and npm would refuse them.
+
+For the next release: bump the version in all four manifests, move the
+`CHANGELOG.md` entry off `unreleased`, `pnpm install` so the lockfile records it,
+then push the matching tag:
+
+```sh
+git tag -a v0.1.1 -m "0.1.1"
+git push origin main --follow-tags
+gh run watch                    # follow the Publish run
+```
+
 The `Publish` workflow (`.github/workflows/publish.yml`) triggers on a `v*` tag.
 It verifies that every manifest agrees with the tag, re-runs the full check and
 the vendor schema cross-check, then publishes the three packages **in dependency
 order** with provenance. Order matters: both adapters depend on `jevcore`.
-
-```sh
-git tag -a v0.1.0 -m "0.1.0"
-git push origin main --follow-tags
-gh run watch                    # follow the Publish run
-```
 
 Requires the `NPM_TOKEN` repository secret described at the top of this file. If
 that secret is missing the run fails rather than skipping — deliberately, because
@@ -210,14 +251,23 @@ You can rehearse without publishing: **Actions → Publish → Run workflow** wi
 `dry-run` left checked. It packs and verifies, and stops.
 
 Publishing by hand is possible but second best, because it has no provenance
-attestation:
+attestation — and it is how 0.1.0 went out:
 
 ```sh
-# Only if you have a working token locally. `pnpm`, never `npm`, so the
-# `workspace:*` dependency is rewritten to a real version.
-pnpm --filter jevcore publish --access public
-pnpm --filter jevcore-dsh publish --access public
-pnpm --filter jevcore-mcp publish --access public
+# Needs a token in the environment. `pnpm`, never `npm`, so the `workspace:*`
+# dependency is rewritten to a real version.
+pnpm --filter jevcore publish --access public --no-git-checks
+pnpm --filter jevcore-dsh publish --access public --no-git-checks
+pnpm --filter jevcore-mcp publish --access public --no-git-checks
+```
+
+Then verify by installing from the registry into an empty directory, not by
+reading the publish output:
+
+```sh
+mkdir /tmp/verify && cd /tmp/verify && npm init -y
+npm install jevcore jevcore-dsh jevcore-mcp
+node -e "import('jevcore').then(m => console.log(Object.keys(m).length, 'exports'))"
 ```
 
 Note that pnpm publishes what is on disk in `lib/`, so run `pnpm run build`
@@ -228,7 +278,7 @@ first — the workflow does this as part of `pnpm run check`.
 That is the same command as section 5; the tag *is* the release trigger.
 
 ```sh
-git tag -a v0.1.0 -m "0.1.0"
+git tag -a v0.1.1 -m "0.1.1"     # not v0.1.0; that version is already on npm
 git push origin main --follow-tags
 ```
 
