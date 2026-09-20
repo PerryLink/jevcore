@@ -61,7 +61,7 @@ const goodResponse = {
   model: 'typesafe/jev-1.13',
   provider: 'TypeSafe',
   answers: {
-    urgent: { type: 'noul', noul: 0.91, confidence: 0.88 },
+    urgent: { type: 'noul', noul: 0.91 },
     team: {
       type: 'choice',
       choice: 'billing',
@@ -212,7 +212,7 @@ describe('response normalization', () => {
   it('parses a noul answer', async () => {
     const { instance } = provider()
     const result = await instance.answer(request())
-    expect(result.answers.urgent).toEqual({ type: 'noul', noul: 0.91, confidence: 0.88 })
+    expect(result.answers.urgent).toEqual({ type: 'noul', noul: 0.91 })
   })
 
   it('parses a choice answer with its distribution', async () => {

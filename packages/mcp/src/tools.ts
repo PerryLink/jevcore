@@ -110,7 +110,8 @@ export const runRank = async (service: JevService, input: RankInput) => {
         index,
         candidate,
         relevance: answer.noul,
-        ...(answer.confidence === undefined ? {} : { confidence: answer.confidence }),
+        // No `confidence`: a noul answer carries none, so offering the field
+        // would invite a caller to compare values that never arrive.
       }
     })
     .sort(

@@ -139,7 +139,11 @@ export const jevRankTool = (service: JevService) =>
           index,
           candidate,
           relevance: answer.noul,
-          ...(answer.confidence === undefined ? {} : { confidence: answer.confidence }),
+          // No `confidence` alongside: a noul answer has none. The ranking tool
+          // used to offer one per candidate, which told the model to compare a
+          // field that never arrives and invited it to treat "absent" as "low".
+          // Relevance is `noul` — the probability the criterion holds — and that
+          // is the whole signal for sorting.
         }
       })
       // A candidate Jev did not answer sorts last rather than being treated as

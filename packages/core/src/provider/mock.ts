@@ -78,10 +78,14 @@ const answerFor = (questionId: string, request: JevRequest): JevAnswer | undefin
   if (question === undefined) return undefined
 
   if (question.type === 'noul') {
+    // No `confidence`: a noul has none — not in either SDK's schema, not on the
+    // wire. Attaching one here made the mock's answers judge *differently* from a
+    // real provider's under the same policy, which is the opposite of what a
+    // stand-in should do: with MOCK_CONFIDENCE below the default floor, every
+    // hazard resolved `undecided` and the safety gate never decided anything.
     const answer: NoulAnswer = {
       type: 'noul',
       noul: round4(unit(probe(questionId, request))),
-      confidence: MOCK_CONFIDENCE,
     }
     return answer
   }
@@ -105,7 +109,7 @@ const answerFor = (questionId: string, request: JevRequest): JevAnswer | undefin
     const legend: Record<string, string> = {}
     let expected = 0
     for (const [index, description] of question.criteria.entries()) {
-      legend[String(index)] = description ?? ''
+      legend[String(index)] = description
       expected += (probabilities[String(index)] ?? 0) * index
     }
     const answer: ScoreAnswer = {

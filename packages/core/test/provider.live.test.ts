@@ -52,7 +52,7 @@ const request = (overrides: Partial<JevRequest> = {}): JevRequest => ({
 const goodResponse = {
   model: 'jev-1.13.0',
   answers: {
-    urgent: { noul: 0.91, confidence: 0.88 },
+    urgent: { noul: 0.91 },
     team: { choice: 'billing', probabilities: { billing: 0.7, technical: 0.3 }, confidence: 0.7 },
   },
   usage: { input_tokens: 120, output_tokens: 0 },
@@ -195,7 +195,7 @@ describe('response normalization', () => {
     const sdk = stubSdk(() => goodResponse)
     const provider = new LiveProvider({ apiKey: 'k', loadSdk: async () => sdk.module as never })
     const result = await provider.answer(request())
-    expect(result.answers.urgent).toEqual({ type: 'noul', noul: 0.91, confidence: 0.88 })
+    expect(result.answers.urgent).toEqual({ type: 'noul', noul: 0.91 })
   })
 
   it('parses a choice answer with its distribution', async () => {

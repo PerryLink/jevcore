@@ -57,7 +57,11 @@ export const normalizeAnswer = (
   if (expected === 'noul') {
     const noul = finite(raw.noul)
     if (noul === undefined) return undefined
-    const answer: NoulAnswer = { type: 'noul', noul, ...confidenceOf(raw) }
+    // No `confidence`, deliberately: the vendor reports none for a noul, in both
+    // SDK schemas and on the wire. Reading one here — which this code used to do —
+    // meant a provider that *did* send an unrecognised `confidence` (the mock did)
+    // could silently change how the answer was judged downstream.
+    const answer: NoulAnswer = { type: 'noul', noul }
     return answer
   }
 

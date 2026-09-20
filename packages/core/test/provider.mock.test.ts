@@ -89,9 +89,18 @@ describe('answer validity', () => {
     expect(result.answers.risk?.type).toBe('score')
   })
 
-  it('reports a fixed, low confidence rather than a plausible-looking high one', async () => {
+  it('reports a fixed, low confidence for choice and score, and none for noul', async () => {
+    // Confidence is a statistic over a multi-outcome distribution, so it belongs
+    // on choice and score. A noul has two outcomes and no such field. Attaching
+    // one made the mock judge differently from a real provider under the same
+    // policy — which is the opposite of a stand-in's job, and it silently
+    // disabled the safety gate, since 0.5 sits below the default floor of 0.7.
     const result = await new MockProvider().answer(request())
     for (const answer of Object.values(result.answers)) {
+      if (answer.type === 'noul') {
+        expect(answer).not.toHaveProperty('confidence')
+        continue
+      }
       expect(answer.confidence).toBe(MOCK_CONFIDENCE)
       expect(answer.confidence).toBeLessThan(0.8)
     }

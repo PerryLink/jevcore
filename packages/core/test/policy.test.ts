@@ -2,10 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_POLICY, answerOf, applyPolicy, verdictToAction } from '../src/policy.js'
 import type { CategoricalAnswer, JevResult, NoulAnswer } from '../src/types.js'
 
-const noul = (value: number, confidence?: number): NoulAnswer => ({
+/**
+ * Build a noul answer.
+ *
+ * No `confidence` parameter: a noul answer has no such field. This helper used to
+ * take one, and the tests below used it to assert that a low confidence blocked a
+ * decisive probability — a behaviour that could only exist because this package
+ * invented the field. See the note on `NoulAnswer`.
+ */
+const noul = (value: number): NoulAnswer => ({
   type: 'noul',
   noul: value,
-  ...(confidence === undefined ? {} : { confidence }),
 })
 
 const choice = (
@@ -37,15 +44,24 @@ describe('noul policy', () => {
     })
   })
 
-  it('stays undecided when confidence is below the floor', () => {
-    expect(applyPolicy(noul(0.99, 0.4), ['true', 'false'])).toMatchObject({
+  it('judges a noul on its probability alone, since that is all it carries', () => {
+    // These replace a test asserting that a low `confidence` blocked a decisive
+    // noul. That could only happen because this package attached a confidence
+    // the vendor never sends: on the live routes the field is absent so the floor
+    // never fired, while the mock supplied 0.5 and made every hazard
+    // `undecided` — the safety gate could not decide at all. The strength of the
+    // answer is `max(noul, 1 - noul)` and nothing else.
+    expect(applyPolicy(noul(0.99), ['true', 'false'])).toEqual({
+      kind: 'decided',
+      answer: 'true',
+      probability: 0.99,
+    })
+    // Strength is `max(noul, 1 - noul)`, so 0.55 is 0.55 — below the 0.6 floor.
+    // Note 0.4 would *not* qualify: its strength is 0.6, exactly the floor.
+    expect(applyPolicy(noul(0.55), ['true', 'false'])).toEqual({
       kind: 'undecided',
       reason: 'below-confidence',
     })
-  })
-
-  it('treats a missing confidence as acceptable and judges on probability', () => {
-    expect(applyPolicy(noul(0.99), ['true', 'false']).kind).toBe('decided')
   })
 
   it('flags a resolved value outside the declared criteria as invalid', () => {

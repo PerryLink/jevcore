@@ -70,12 +70,26 @@ export interface ScoreQuestion {
 
 export type JevQuestion = NoulQuestion | ChoiceQuestion | ScoreQuestion
 
-/** Jev's answer to one `noul` question. */
+/**
+ * Jev's answer to one `noul` question.
+ *
+ * **There is no `confidence` here, on purpose.** It is tempting to model a
+ * yes/no answer as a two-outcome Choice and carry a confidence alongside it, but
+ * TypeSafe is explicit that this field does not exist for Noul — twice in the
+ * docs ("Noul answers don't carry one"; "no separate `confidence` value for a
+ * Noul ... the single `noul` value describes it completely") and in both SDK
+ * schemas, where `NoulResponse` declares only `noul` and `type`. Verified against
+ * the live API: a noul answer comes back as `{"noul":0.91,"type":"noul"}`.
+ *
+ * Confidence is a *concentration statistic over a multi-outcome distribution*.
+ * A two-outcome distribution has nothing for it to summarise, and the docs warn
+ * that a noul and its negation are not even additive across separate questions.
+ * So an answer's strength is `max(noul, 1 - noul)` and nothing else.
+ */
 export interface NoulAnswer {
   readonly type: 'noul'
   /** Probability of `true`, in `[0, 1]`. */
   readonly noul: number
-  readonly confidence?: number
 }
 
 /** Jev's answer to one `choice` question. */

@@ -66,10 +66,13 @@ export const applyPolicy = (
   if (answer === undefined) return { kind: 'undecided', reason: 'no-answer' }
 
   if (answer.type === 'noul') {
-    const confidence = answer.confidence
-    if (confidence !== undefined && confidence < options.minConfidence) {
-      return { kind: 'undecided', reason: 'below-confidence' }
-    }
+    // No confidence floor here, because a noul has no confidence to floor — see
+    // `NoulAnswer`. This branch used to read one, which had two consequences that
+    // pointed in opposite directions for the same configuration: on the live
+    // routes the field is absent so the floor never applied, while the mock
+    // attached its own `MOCK_CONFIDENCE` of 0.5, below the 0.7 default, so every
+    // hazard resolved `undecided` and the safety gate could never decide at all.
+    // The answer's strength is the only signal: `max(noul, 1 - noul)`.
     const probability = answer.noul
     const key = probability >= 0.5 ? 'true' : 'false'
     const strength = Math.max(probability, 1 - probability)

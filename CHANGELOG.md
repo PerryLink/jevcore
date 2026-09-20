@@ -4,6 +4,63 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+Findings from a full audit against the official TypeSafe documentation, each
+confirmed against the live API before and after the change. The architecture was
+not in question — code-owned control flow, atomic questions, probabilities
+returned to code, and offline-by-default all match the documented design, and the
+egress contract has no upstream equivalent. What follows are the defects.
+
+### Security
+
+- **`TYPESAFE_LOG_LEVEL` could make the SDK log what redaction had removed.** The
+  TypeSafe SDK falls back to that environment variable, and its own documentation
+  says `debug` "adds headers and bodies. Known credential headers are redacted;
+  **bodies are not**." Reproduced live: with the variable set, an unmodified
+  `LiveProvider` wrote the request body — including the state this package redacts
+  before sending — to stderr. The provider now always passes `logLevel`
+  explicitly, for the same reason it always passes `apiKey`.
+
+  `timeout` and `retry` are now passed too, and exposed as `requestTimeoutMs` /
+  `requestMaxRetries`. They are not a security fix: the JavaScript SDK has no
+  total retry budget, so its 10s-per-attempt default across three attempts lets a
+  single call occupy roughly 30s inside a `tools/pre-execute` gate.
+
+### Fixed
+
+- **`provider: openrouter` threw at startup with the default configuration.** The
+  guard required a `typesafe/` prefix, while the shared default model is
+  `jev-latest`, so the DSH plugin passed the bare id through and threw while the
+  MCP runtime quietly substituted a prefixed one — two entry points disagreeing
+  about whether the feature worked at all. Live, the route accepts `jev-latest`
+  and `jev-1.13`, and accepts `typesafe/jev-1.13` but *not* `typesafe/jev-latest`,
+  so "must carry the prefix" was never the real rule. The guard now accepts the
+  `jev-` family bare or prefixed, and still refuses other families.
+
+- **An undescribed score level silently renumbered the scale.** A level's position
+  in `criteria` *is* its score, so filtering a `null` entry out shortened the
+  rubric and moved every level after it: `{low, medium: null, high}` sent a
+  two-level scale in which `high` occupied position 1, and the answer's `legend`
+  came back keyed `"1"` — read by any position-to-name mapping as the *medium*
+  level. The live API rejects `null` entries anyway (422), so there was no correct
+  fallback, only a wrong one to hide. It is now refused with an error that names
+  the empty string as the way to hold a position, which the API accepts: verified
+  live, `["No impact", "", "Users blocked"]` keeps `high` at index 2.
+
+  Also enforces the ceilings the API states in its own error messages: at most 10
+  score levels and 255 choice options, both previously unvalidated.
+
+- **`NoulAnswer.confidence` was a field the vendor does not have, and it disabled
+  the safety gate.** The docs say it twice, both SDK schemas agree, and live
+  answers confirm it: a noul returns `{noul, type}` and nothing else. The package
+  invented the field and acted on it, which made the same configuration behave
+  oppositely per provider — absent on the live routes so the floor never applied,
+  while the mock attached `0.5`, below the default `0.7`, so *every* hazard
+  resolved `undecided` and the gate could never decide anything. Removed from the
+  type, the normalizers, the mock, the policy and every rendered payload; a noul
+  is judged on `max(noul, 1 - noul)` alone.
+
 ## 0.1.1 — 2026-09-20
 
 ### Fixed

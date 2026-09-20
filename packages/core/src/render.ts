@@ -60,13 +60,14 @@ export const renderAnswer = (questionId: string, answer: JevAnswer | undefined):
     return { question: questionId, type: 'noul', note: 'no answer returned for this question' }
   }
   if (answer.type === 'noul') {
+    // No `confidence` on the way out either: the answer never has one, and
+    // emitting the key would invite a caller to read meaning into its absence.
     return {
       question: questionId,
       type: 'noul',
       answer: answer.noul >= 0.5 ? 'true' : 'false',
       noul: answer.noul,
       probability: Math.max(answer.noul, 1 - answer.noul),
-      ...(answer.confidence === undefined ? {} : { confidence: answer.confidence }),
     }
   }
   if (answer.type === 'score') {

@@ -22,7 +22,7 @@ const service = (provider: JevProvider = new MockProvider()) =>
   })
 
 /** A provider that answers every question with the given noul probability. */
-const answering = (noul: number, confidence = 0.9): JevProvider => ({
+const answering = (noul: number): JevProvider => ({
   id: 'fixed',
   answer: async (_request, _signal) => ({
     model: 'm',
@@ -31,7 +31,7 @@ const answering = (noul: number, confidence = 0.9): JevProvider => ({
     answers: Object.fromEntries(
       Object.keys(HAZARD_QUESTIONS).map((key) => [
         key,
-        { type: 'noul', noul, confidence } as JevAnswer,
+        { type: 'noul', noul } as JevAnswer,
       ]),
     ),
   }),
@@ -100,7 +100,7 @@ describe('safety gate decisions', () => {
   })
 
   it('fails closed on undecided when configured to deny', async () => {
-    const decision = await gate(answering(0.5, 0.1), 'deny')({
+    const decision = await gate(answering(0.5), 'deny')({
       name: 'pwsh',
       args: { command: 'ls' },
     })
@@ -108,7 +108,7 @@ describe('safety gate decisions', () => {
   })
 
   it('fails open on undecided only when explicitly configured to', async () => {
-    const decision = await gate(answering(0.5, 0.1), 'allow')({
+    const decision = await gate(answering(0.5), 'allow')({
       name: 'pwsh',
       args: { command: 'ls' },
     })
@@ -116,14 +116,22 @@ describe('safety gate decisions', () => {
   })
 
   it('defaults an undecided call to ask, never to allow', async () => {
-    const decision = await gate(answering(0.5, 0.1))({ name: 'pwsh', args: { command: 'ls' } })
+    const decision = await gate(answering(0.5))({ name: 'pwsh', args: { command: 'ls' } })
     expect(decision.kind).toBe('ask')
   })
 
-  it('does not treat a low-confidence hazard answer as a raised hazard', async () => {
-    // High probability but low confidence: not reportable as a raised hazard.
-    const decision = await gate(answering(0.99, 0.2))({ name: 'pwsh', args: { command: 'x' } })
-    expect(decision.raised).toBeUndefined()
+  it('judges a hazard on its probability, since a noul carries nothing else', async () => {
+    // This replaced a test asserting that a high probability with a low
+    // confidence was not a raised hazard. That confidence was supplied by this
+    // package rather than by Jev — see `NoulAnswer` — and it made the two routes
+    // behave oppositely: absent on live, 0.5 on the mock, which is below the
+    // default floor, so every hazard resolved `undecided`. What decides now is
+    // the probability floor alone.
+    const decisive = await gate(answering(0.99))({ name: 'pwsh', args: { command: 'x' } })
+    expect(decisive.raised).toBeDefined()
+
+    const weak = await gate(answering(0.55))({ name: 'pwsh', args: { command: 'x' } })
+    expect(weak.raised).toBeUndefined()
   })
 
   it('honours an operator floor of 0.9 rather than a hardcoded 0.6', async () => {
@@ -254,7 +262,7 @@ describe('the hazard list is the disclosure', () => {
 
 describe('context gate', () => {
   /** A provider that answers every context question with the given probability. */
-  const answeringContext = (noul: number, confidence = 0.9): JevProvider => ({
+  const answeringContext = (noul: number): JevProvider => ({
     id: 'fixed',
     answer: async () => ({
       model: 'm',
@@ -263,7 +271,7 @@ describe('context gate', () => {
       answers: Object.fromEntries(
         Object.keys(CONTEXT_QUESTIONS).map((key) => [
           key,
-          { type: 'noul', noul, confidence } as JevAnswer,
+          { type: 'noul', noul } as JevAnswer,
         ]),
       ),
     }),
