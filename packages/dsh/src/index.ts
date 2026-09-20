@@ -159,6 +159,9 @@ export const buildRuntime = (
       },
     },
     config.baseURL ?? DEFAULT_ENDPOINT,
+    // The operator's state cap, if one was set. Without forwarding it the
+    // configured value would be parsed, typed, documented and then ignored.
+    config.maxStateChars,
   )
 
   const provider: JevProvider =

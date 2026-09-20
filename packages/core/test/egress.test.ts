@@ -168,6 +168,63 @@ describe('measurement', () => {
   })
 })
 
+describe('the operator state cap is honoured, not merely documented', () => {
+  // Regression guard: `maxStateChars` was parsed, typed, documented and then
+  // never read, so a configured limit bounded nothing. The declared caps live in
+  // EGRESS_FIELDS; an override has to change both what is measured and what the
+  // report claims.
+
+  const withCap = (maxStateChars: number) =>
+    new EgressContract(
+      { transmitting: true, enabled: everyFeatureOn() },
+      'https://api.typesafe.ai',
+      maxStateChars,
+    )
+
+  it('leaves the declared cap when no override is configured', () => {
+    const declared = EGRESS_FIELDS['tool:jev_ask'][0]!.maxChars
+    expect(live(everyFeatureOn()).fieldsOf('tool:jev_ask')[0]!.maxChars).toBe(declared)
+  })
+
+  it('reports the override in the effective field set', () => {
+    expect(withCap(500).fieldsOf('tool:jev_ask')[0]).toMatchObject({ field: 'state', maxChars: 500 })
+  })
+
+  it('leaves the questions cap alone, since the override names state only', () => {
+    const questions = withCap(500).fieldsOf('tool:jev_ask').find((f) => f.field === 'questions')
+    expect(questions?.maxChars).toBe(EGRESS_FIELDS['tool:jev_ask'][1]!.maxChars)
+  })
+
+  it('applies the override to every feature, not just the first', () => {
+    for (const feature of EGRESS_FEATURES) {
+      const state = withCap(500).fieldsOf(feature).find((f) => f.field === 'state')
+      expect(state?.maxChars).toBe(500)
+    }
+  })
+
+  it('actually caps the payload at the override, not at the declared value', () => {
+    const payload = withCap(500).measure({
+      feature: 'tool:jev_ask',
+      state: { body: 'x'.repeat(50_000) },
+      questions: { q: noul('ok?') },
+      redact,
+    })
+    expect(payload.truncated).toBe(true)
+    // Well under the declared 16_000: proof the override reached the capping
+    // path rather than only the report.
+    expect(payload.stateChars).toBeLessThan(1_000)
+  })
+
+  it('shows the override in the startup report', () => {
+    const contract = new EgressContract(
+      { transmitting: true, enabled: { ...everyFeatureOff(), 'tool:jev_ask': true } },
+      'https://api.typesafe.ai',
+      500,
+    )
+    expect(contract.reportLines().join('\n')).toContain('state<=500c')
+  })
+})
+
 describe('no implicit egress', () => {
   it('does not touch global fetch while constructing or measuring offline', () => {
     // The plugin's central promise is that the default path makes no network

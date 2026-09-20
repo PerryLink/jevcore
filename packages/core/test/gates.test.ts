@@ -126,6 +126,50 @@ describe('safety gate decisions', () => {
     expect(decision.raised).toBeUndefined()
   })
 
+  it('honours an operator floor of 0.9 rather than a hardcoded 0.6', async () => {
+    // Regression guard: `decide` re-tested the probability against `?? 0.6`
+    // after `applyPolicy` had already enforced the configured floor, so raising
+    // minProbability to 0.9 still flagged a 0.8 hazard as raised.
+    const strict = createSafetyGate({
+      service: service(answering(0.8)),
+      onUndecided: 'ask',
+      minConfidence: 0.7,
+      minProbability: 0.9,
+    })
+    const decision = await strict({ name: 'pwsh', args: { command: 'ls' } })
+    expect(decision.raised).toBeUndefined()
+    expect(decision.kind).toBe('ask')
+    expect(decision.reason).toContain('could not judge')
+  })
+
+  it('still raises a hazard that clears a raised floor', async () => {
+    const strict = createSafetyGate({
+      service: service(answering(0.95)),
+      onUndecided: 'ask',
+      minConfidence: 0.7,
+      minProbability: 0.9,
+    })
+    const decision = await strict({ name: 'pwsh', args: { command: 'rm -rf /' } })
+    expect(decision.raised?.length).toBeGreaterThan(0)
+  })
+
+  it('honours a relaxed floor by raising what the default floor would not', async () => {
+    // 0.55 resolves to a decided `true`, but sits below the 0.6 default, so only
+    // a relaxed floor should treat it as a raised hazard.
+    const relaxed = createSafetyGate({
+      service: service(answering(0.55)),
+      onUndecided: 'ask',
+      minConfidence: 0.7,
+      minProbability: 0.5,
+    })
+    const decision = await relaxed({ name: 'pwsh', args: { command: 'ls' } })
+    expect(decision.raised?.length).toBeGreaterThan(0)
+
+    // The same answer under the default floor is undecided, not raised.
+    const byDefault = await gate(answering(0.55))({ name: 'pwsh', args: { command: 'ls' } })
+    expect(byDefault.raised).toBeUndefined()
+  })
+
   it('never runs when the egress contract forbids it', async () => {
     const answer = vi.fn()
     const spy: JevProvider = { id: 'spy', answer }

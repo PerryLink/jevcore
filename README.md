@@ -177,8 +177,13 @@ logged, never returned from a tool, and never written to configuration.
 | `logLevel` | `warn` | `silent` \| `warn` \| `info` \| `debug` |
 | `minConfidence` | `0.7` | Below this, an answer is not acted on |
 | `minProbability` | `0.6` | Below this, a decision is not acted on |
+| `maxStateChars` | per feature | Replaces the `state` cap for every feature. `0` means "keep the declared cap" |
 | `gates.safety` | `false` | Judge tool calls before dispatch |
 | `gates.context` | `false` | Withhold large, uninformative tool results |
+
+The declared `state` caps are 16,000 characters for the three tools and 8,000 / 6,000 for the safety
+and context gates. `maxStateChars` replaces all of them, and the startup report shows the effective
+value rather than the declared one, so what it prints is what is enforced.
 
 Gates accept a bare boolean (`safety: false`) or an object with `onUndecided`: `ask` (default),
 `allow`, or `deny`.
@@ -256,7 +261,7 @@ that could be mistaken for a real judgment would be worse than no mock at all.
 Honest accounting of what has and has not been verified.
 
 **Verified**
-- 294 tests pass across three packages (211 core, 60 DSH, 23 MCP), with no network access and no
+- 303 tests pass across three packages (220 core, 60 DSH, 23 MCP), with no network access and no
   `TYPESAFE_API_KEY`. CI clears the variable and expects the suite to pass anyway.
 - **The plugin activates in a running harness and its tools work.** The plugin row reports `active`;
   `jev_ask` returned `urgent=true (0.8307)` and `team=billing (0.5027)` against the mock in 1 ms, and

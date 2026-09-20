@@ -75,6 +75,9 @@ export const buildRuntime = async (
   const egress = new EgressContract(
     { transmitting: kind === 'live', enabled: MCP_EGRESS },
     env('TYPESAFE_BASE_URL')?.trim() || 'https://api.typesafe.ai',
+    // No MCP-side config surface for the cap yet, so the per-feature declared
+    // caps apply unchanged.
+    undefined,
   )
 
   let provider: JevProvider

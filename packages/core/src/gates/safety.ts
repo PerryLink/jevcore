@@ -130,15 +130,27 @@ export const serializeArguments = (args: unknown): string => {
 export const createSafetyGate = (options: SafetyGateOptions) => {
   const patterns = options.toolPatterns ?? DEFAULT_GATED_TOOL_PATTERNS
 
+  /**
+   * The thresholds, resolved once.
+   *
+   * `applyPolicy` already enforces both floors before a verdict can be
+   * `decided`, so `decide` below must not re-test the probability against a
+   * second, hardcoded value: doing so silently overrode the operator's setting,
+   * letting a hazard through at 0.62 even when they had asked for 0.9.
+   */
+  const policy = {
+    minConfidence: options.minConfidence ?? 0.7,
+    minProbability: options.minProbability ?? 0.6,
+  }
+
   const decide = (verdicts: Readonly<Record<string, Verdict>>): GateDecision => {
     const raised: string[] = []
     let undecided: string | undefined
 
     for (const [hazard, verdict] of Object.entries(verdicts)) {
+      // A `decided` verdict has already cleared both floors inside `applyPolicy`.
       if (verdict.kind === 'decided' && verdict.answer === 'true') {
-        const probability = verdict.probability
-        if (probability >= (options.minProbability ?? 0.6)) raised.push(hazard)
-        else undecided ??= hazard
+        raised.push(hazard)
         continue
       }
       if (verdict.kind !== 'decided') undecided ??= hazard
@@ -207,10 +219,6 @@ export const createSafetyGate = (options: SafetyGateOptions) => {
       }
     }
 
-    const policy = {
-      minConfidence: options.minConfidence ?? 0.7,
-      minProbability: options.minProbability ?? 0.6,
-    }
     const verdicts: Record<string, Verdict> = {}
     for (const [hazard, question] of Object.entries(HAZARD_QUESTIONS)) {
       if (question.type !== 'noul') continue

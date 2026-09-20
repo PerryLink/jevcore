@@ -37,6 +37,17 @@ Initial implementation. Pre-1.0, so the API may change between minor versions.
 
 ### Fixed
 
+- **The safety gate ignored a raised `minProbability`.** It built its policy from
+  the configured floors and then `decide` re-tested the probability against a
+  hardcoded `?? 0.6`, so an operator asking for 0.9 still had a 0.8 hazard
+  flagged as raised. The gates now resolve their thresholds once and `decide`
+  trusts `applyPolicy`, which already enforces both floors.
+- **`maxStateChars` was parsed, typed and documented but never read**, so a
+  configured limit bounded nothing. This is the exact defect this project exists
+  to avoid in other plugins — a documented config key that silently does not
+  apply — and it was present here. The operator's cap now reaches the egress
+  contract, bounds what is actually measured, and is shown in the startup report
+  in place of the declared value. `0` still means "keep the declared cap".
 - `rankingSize` threw on `undefined` and other non-object input, from a
   presentation callback where an exception breaks the tool card rather than
   merely displaying a wrong number. It now returns `0` for anything that is not

@@ -149,9 +149,19 @@ export class EgressDeniedError extends Error {
 }
 
 export class EgressContract {
+  /**
+   * @param settings - which features may transmit, and whether the provider can
+   *   reach the network at all.
+   * @param endpoint - the host a live provider posts to, for the report.
+   * @param maxStateChars - optional operator override for the per-feature
+   *   `state` cap. Without this, a configured limit would be parsed, typed,
+   *   documented, and then ignored — the exact defect this project exists to
+   *   avoid in other plugins. `undefined` leaves each feature's declared cap.
+   */
   constructor(
     private readonly settings: EgressSettings,
     private readonly endpoint: EndpointLabel,
+    private readonly maxStateChars?: number | undefined,
   ) {}
 
   /**
@@ -170,17 +180,24 @@ export class EgressContract {
     if (!this.allows(feature)) throw new EgressDeniedError(feature)
   }
 
-  /** The declared field set for a feature, for reports and documentation. */
+  /**
+   * The effective field set for a feature: the declared fields, with the
+   * operator's state cap applied when one was configured.
+   */
   fieldsOf(feature: EgressFeature): readonly EgressField[] {
-    return EGRESS_FIELDS[feature]
+    const declared = EGRESS_FIELDS[feature]
+    if (this.maxStateChars === undefined) return declared
+    return declared.map((field) =>
+      field.field === 'state' ? { ...field, maxChars: this.maxStateChars as number } : field,
+    )
   }
 
-  /** One row per feature, in stable order. */
+  /** One row per feature, in stable order, using the effective caps. */
   lines(): readonly EgressLine[] {
     return EGRESS_FEATURES.map((feature) => ({
       feature,
       enabled: this.allows(feature),
-      fields: EGRESS_FIELDS[feature],
+      fields: this.fieldsOf(feature),
     }))
   }
 
@@ -201,7 +218,9 @@ export class EgressContract {
     }
   }): MeasuredPayload {
     this.assert(input.feature)
-    const limits = EGRESS_FIELDS[input.feature]
+    // The effective caps, so a configured `maxStateChars` actually bounds what
+    // leaves and not merely what the report claims.
+    const limits = this.fieldsOf(input.feature)
     const stateLimit = limits.find((field) => field.field === 'state')?.maxChars ?? 16_000
     const questionsLimit = limits.find((field) => field.field === 'questions')?.maxChars ?? 4_000
 

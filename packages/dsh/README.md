@@ -256,7 +256,7 @@ that could be mistaken for a real judgment would be worse than no mock at all.
 Honest accounting of what has and has not been verified.
 
 **Verified**
-- 294 tests pass across three packages (211 core, 60 DSH, 23 MCP), with no network access and no
+- 303 tests pass across three packages (220 core, 60 DSH, 23 MCP), with no network access and no
   `TYPESAFE_API_KEY`. CI clears the variable and expects the suite to pass anyway.
 - **The plugin activates in a running harness and its tools work.** The plugin row reports `active`;
   `jev_ask` returned `urgent=true (0.8307)` and `team=billing (0.5027)` against the mock in 1 ms, and
