@@ -31,6 +31,7 @@ export type {
   NoulAnswer,
   NoulQuestion,
   ChoiceQuestion,
+  ScoreAnswer,
   ScoreQuestion,
   Redacted,
   RedactionSummary,
@@ -38,7 +39,18 @@ export type {
 export { JevProviderError } from './types.js'
 
 // Primitives
-export { assertValidBatch, assertValidQuestion, choice, noul, score, topCriterion } from './primitives.js'
+export {
+  assertValidBatch,
+  assertValidQuestion,
+  choice,
+  noul,
+  score,
+  scoreCriteriaArray,
+  topCriterion,
+} from './primitives.js'
+
+// Answer normalization, shared by every route so they cannot drift apart
+export { isRecord, normalizeAnswer } from './answers.js'
 
 // Redaction
 export {

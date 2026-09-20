@@ -15,7 +15,7 @@
  */
 
 import { topCriterion } from './primitives.js'
-import type { JevAnswer, JevResult } from './types.js'
+import type { CategoricalAnswer, JevAnswer, JevResult, ScoreAnswer } from './types.js'
 
 /** The outcome of applying a local policy to one Jev answer. */
 export type Verdict =
@@ -80,21 +80,44 @@ export const applyPolicy = (
     return { kind: 'decided', answer: key, probability: strength }
   }
 
-  if (criteria.length > 0 && !criteria.includes(answer.choice)) {
+  if (answer.type === 'score') {
+    // A score answer's "criteria" are its rubric indices, because that is what
+    // its distribution is over. An index outside the rubric it returned means
+    // the answer and its own legend disagree, which is not something to act on.
+    const indices = Object.keys(answer.legend)
+    const declared =
+      criteria.length > 0 ? criteria : indices.length > 0 ? indices : Object.keys(answer.probabilities)
+    return selectFrom(answer, answer.probabilities, undefined, declared, options)
+  }
+
+  return selectFrom(answer, answer.probabilities, answer.choice, criteria, options)
+}
+
+/**
+ * Resolve which key an answer selects, then judge its strength.
+ *
+ * The reported `choice` wins when the distribution corroborates it; otherwise
+ * the argmax does. Only then is the confidence floor applied, so a weak reported
+ * choice cannot mask a strong distribution.
+ */
+const selectFrom = (
+  answer: CategoricalAnswer | ScoreAnswer,
+  probabilities: Readonly<Record<string, number>>,
+  reported: string | undefined,
+  criteria: readonly string[],
+  options: PolicyOptions,
+): Verdict => {
+  if (reported !== undefined && criteria.length > 0 && !criteria.includes(reported)) {
     return {
       kind: 'invalid',
-      reason: `answer "${answer.choice}" is not one of the declared criteria`,
+      reason: `answer "${reported}" is not one of the declared criteria`,
     }
   }
 
-  // Resolve which key the answer actually selects before judging its strength.
-  // The reported `choice` wins when the distribution corroborates it; otherwise
-  // the argmax does. Only then is the confidence floor applied, so a weak
-  // reported choice cannot mask a strong distribution.
-  const reported = answer.probabilities[answer.choice]
-  const selected = reported !== undefined ? answer.choice : topCriterion(answer.probabilities)
+  const reportedProbability = reported === undefined ? undefined : probabilities[reported]
+  const selected = reportedProbability !== undefined ? reported : topCriterion(probabilities)
   if (selected === undefined) return { kind: 'undecided', reason: 'no-answer' }
-  const probability = answer.probabilities[selected] ?? reported ?? 0
+  const probability = probabilities[selected] ?? reportedProbability ?? 0
 
   const confidence = answer.confidence
   if (confidence !== undefined && confidence < options.minConfidence) {

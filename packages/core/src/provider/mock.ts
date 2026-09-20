@@ -23,6 +23,7 @@ import type {
   JevRequest,
   JevResult,
   NoulAnswer,
+  ScoreAnswer,
 } from '../types.js'
 
 export const MOCK_MODEL = 'mock/jev-synthetic'
@@ -85,7 +86,9 @@ const answerFor = (questionId: string, request: JevRequest): JevAnswer | undefin
     return answer
   }
 
-  const keys = Object.keys(question.criteria)
+  const keys = question.type === 'score'
+    ? question.criteria.map((_unused, index) => String(index))
+    : Object.keys(question.criteria)
   if (keys.length === 0) return undefined
   const probabilities = weights(probe(questionId, request), keys)
   // Pick the argmax deterministically; a tie is impossible here because the
@@ -94,8 +97,29 @@ const answerFor = (questionId: string, request: JevRequest): JevAnswer | undefin
   for (const key of keys) {
     if ((probabilities[key] ?? 0) > (probabilities[best] ?? 0)) best = key
   }
+
+  if (question.type === 'score') {
+    // A score question is answered with an expected score plus the rubric it was
+    // scored against, so the mock reports the same shape a real route does
+    // rather than an argmax wearing a score's clothing.
+    const legend: Record<string, string> = {}
+    let expected = 0
+    for (const [index, description] of question.criteria.entries()) {
+      legend[String(index)] = description ?? ''
+      expected += (probabilities[String(index)] ?? 0) * index
+    }
+    const answer: ScoreAnswer = {
+      type: 'score',
+      score: round4(expected),
+      legend,
+      probabilities,
+      confidence: MOCK_CONFIDENCE,
+    }
+    return answer
+  }
+
   const answer: CategoricalAnswer = {
-    type: question.type,
+    type: 'choice',
     choice: best,
     probabilities,
     confidence: MOCK_CONFIDENCE,

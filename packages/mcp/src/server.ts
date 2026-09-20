@@ -25,7 +25,10 @@ const questionSchema = z.object({
     .record(z.string(), z.string().nullable())
     .optional()
     .describe(
-      'Required for choice and score. Maps each permitted answer key to an optional description.',
+      'Required for choice and score. For choice: each permitted answer key mapped to an optional ' +
+        'description. For score: each scale level mapped to its description, written in ascending ' +
+        'order with at least two levels, because the order written is the scale. A level described ' +
+        'as null sends no description.',
     ),
 })
 
@@ -56,7 +59,9 @@ export const createServer = (service: JevService): McpServer => {
         'judgments the rest of the work branches on — routing, classifying, scoring, triaging. ' +
         'Do NOT use it to write prose, explain, summarize, or generate code.\n\n' +
         'Batch related questions into one call: they are answered against the same state in one ' +
-        'round-trip. This tool returns probabilities, not decisions — apply your own confidence ' +
+        'round-trip. A score question answers with a numeric "score" that may fall between ' +
+        'levels, a "legend" mapping each level index to its description, and probabilities per ' +
+        'level. This tool returns probabilities, not decisions — apply your own confidence ' +
         'threshold before acting, and treat a low-confidence answer as unknown rather than ' +
         'picking for it.',
       inputSchema: {

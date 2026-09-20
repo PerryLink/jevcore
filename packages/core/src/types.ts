@@ -46,11 +46,25 @@ export interface ChoiceQuestion {
   readonly criteria: Readonly<Record<string, string | null>>
 }
 
-/** An ordered-scale question. Criteria keys are the permitted levels. */
+/**
+ * An ordered-scale question.
+ *
+ * `criteria` is an ordered array, not a keyed map, because a scale is ordered
+ * and a map is not: Jev scores position `0..n-1`, so the sequence *is* the
+ * rubric. This mirrors `ScoreCriteria` in the official SDK, which types it as
+ * `readonly [EntryType, EntryType, ...EntryType[]]` — a tuple of at least two.
+ *
+ * The tuple length is enforced at runtime by {@link assertValidQuestion}
+ * rather than in this type, because the level map a caller passes is an
+ * arbitrary `Record` and its length is not statically known.
+ *
+ * `null` leaves a level undescribed. That is legal on the TypeSafe route and is
+ * dropped from the payload on the OpenRouter route.
+ */
 export interface ScoreQuestion {
   readonly type: 'score'
   readonly instructions: string
-  readonly criteria: Readonly<Record<string, string | null>>
+  readonly criteria: readonly string[]
 }
 
 export type JevQuestion = NoulQuestion | ChoiceQuestion | ScoreQuestion
@@ -63,9 +77,9 @@ export interface NoulAnswer {
   readonly confidence?: number
 }
 
-/** Jev's answer to one `choice` or `score` question. */
+/** Jev's answer to one `choice` question. */
 export interface CategoricalAnswer {
-  readonly type: 'choice' | 'score'
+  readonly type: 'choice'
   /** The selected criterion key. */
   readonly choice: string
   /** Probability per criterion key. */
@@ -73,7 +87,27 @@ export interface CategoricalAnswer {
   readonly confidence?: number
 }
 
-export type JevAnswer = NoulAnswer | CategoricalAnswer
+/**
+ * Jev's answer to one `score` question.
+ *
+ * The expected score is a number that may fall *between* integer levels, so the
+ * rubric travels back with it: `legend` maps each index to the level's
+ * description and `probabilities` maps each index to its probability. Keys are
+ * stringified indices (`"0"`, `"1"`, …), matching the SDK's `ScoreLegend` and
+ * `ScoreResponse`.
+ */
+export interface ScoreAnswer {
+  readonly type: 'score'
+  /** Expected score, which may fall between integer rubric levels. */
+  readonly score: number
+  /** Rubric index to its description, as reported by the provider. */
+  readonly legend: Readonly<Record<string, string>>
+  /** Probability per rubric index. */
+  readonly probabilities: Readonly<Record<string, number>>
+  readonly confidence?: number
+}
+
+export type JevAnswer = NoulAnswer | CategoricalAnswer | ScoreAnswer
 
 /**
  * Token and cost accounting as reported by the provider.

@@ -15,8 +15,18 @@ describe('question builders', () => {
     })
   })
 
-  it('builds a score question', () => {
-    expect(score('How risky?', { low: null, medium: null, high: null }).type).toBe('score')
+  it('builds a score question as an ordered array of level descriptions', () => {
+    // The API scores positions, so the scale is the sequence of descriptions,
+    // not a keyed map. See `ScoreCriteria` in the official SDK.
+    expect(score('How risky?', { low: 'none', medium: null, high: 'severe' })).toEqual({
+      type: 'score',
+      instructions: 'How risky?',
+      criteria: ['none', 'severe'],
+    })
+  })
+
+  it('keeps level order, since order is the scale', () => {
+    expect(score('How risky?', { high: 'severe', low: 'none' }).criteria).toEqual(['severe', 'none'])
   })
 })
 
@@ -33,8 +43,16 @@ describe('question validation', () => {
     expect(() => assertValidQuestion('q', choice('pick', { only: null }))).toThrow(/declares 1 criteria/)
   })
 
-  it('rejects a score question with no criteria', () => {
-    expect(() => assertValidQuestion('q', score('rate', {}))).toThrow(/declares 0 criteria/)
+  it('rejects a score question with no described levels', () => {
+    expect(() => assertValidQuestion('q', score('rate', {}))).toThrow(/declares 0 described level/)
+  })
+
+  it('rejects a score question whose levels are all undescribed', () => {
+    // `null` means "leave this level undescribed", which sends nothing, so a
+    // rubric of nulls is an empty rubric.
+    expect(() => assertValidQuestion('q', score('rate', { low: null, high: null }))).toThrow(
+      /declares 0 described level/,
+    )
   })
 
   it('rejects an empty batch', () => {

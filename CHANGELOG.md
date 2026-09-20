@@ -50,6 +50,39 @@ Initial implementation. Pre-1.0, so the API may change between minor versions.
 
 ### Fixed
 
+- **`score` criteria were sent in the wrong shape, and score answers were read
+  in the wrong shape.** Both are corrected against the vendors' own type
+  definitions rather than by observation.
+
+  A `score` question declares an ordered rubric. TypeSafe types it
+  `ScoreCriteria = readonly [EntryType, EntryType, ...EntryType[]]` and OpenRouter
+  types it `Array<...>` — an **array**, indexed by score from zero. This project
+  sent a keyed map, the shape `choice` uses, so a score question was malformed on
+  both routes. `score()` now converts its level map to the ordered array in the
+  order written (validating that at least two levels carry a description) and
+  refuses integer-like level names, which `Object.keys` would reorder ahead of
+  the rest.
+
+  A score answer carries an expected score that may fall *between* levels, plus
+  the rubric it was scored against: `{ score, confidence, legend, probabilities }`,
+  with `legend` mapping each index to its description and `probabilities` keyed by
+  the same indices. This project read it as a choice answer (`choice` naming a
+  level plus probabilities keyed by name), so a real score answer parsed to
+  nothing useful. There is now a distinct `ScoreAnswer` in the `JevAnswer` union,
+  and the mock, both live routes, the renderer and the policy all handle it.
+
+- **OpenRouter usage spelling.** The vendor's wire schema requires snake_case
+  `input_tokens` / `output_tokens`, while its TypeScript type declares camelCase
+  `inputTokens` / `outputTokens` and its `fromJSON` remaps one to the other.
+  Reading the wrong spelling does not throw; it reports no usage at all. Both are
+  now read, on both routes.
+
+- **Build output had been committed into `src/`.** An inherited relative `outDir`
+  once resolved against the config file that declared it and emitted 16 `.d.ts`
+  files beside their sources, where they were committed and then silently went
+  stale. They are removed and `.gitignore` now covers that path, so the same
+  misconfiguration cannot be committed again.
+
 - **The safety gate ignored a raised `minProbability`.** It built its policy from
   the configured floors and then `decide` re-tested the probability against a
   hardcoded `?? 0.6`, so an operator asking for 0.9 still had a 0.8 hazard
@@ -72,6 +105,16 @@ Initial implementation. Pre-1.0, so the API may change between minor versions.
 
 ### Tests
 
+- Added `packages/core/test/vendor-conformance.test.ts` — pins this project's
+  question and answer shapes against **both** vendors' own type definitions, so a
+  drift on either side is a compile error rather than a malformed request on the
+  one route that costs money and transmits data.
+- Added `packages/core/scripts/check-openrouter-schemas.mjs` — parses the payloads
+  this project actually builds against OpenRouter's real zod schemas, in both
+  directions, including a negative check that a keyed score map is rejected. It
+  runs offline with no credential and is wired into CI. **It is what found the
+  `score` defect**: the stubbed unit tests passed the whole time, because a stub
+  accepts whatever it is handed.
 - Added `packages/core/test/contracts.test.ts` — 20 tests pinning the public
   identifiers that bind the pieces together: the egress feature constants, the
   verdict question ids, the gate question sets, and the render helpers. A wrong
@@ -81,5 +124,17 @@ Initial implementation. Pre-1.0, so the API may change between minor versions.
 
 ### Notes
 
-- Nothing is verified against the live TypeSafe API yet. `LiveProvider` is
-  covered only against an injected stub. See the README's status section.
+- **Verified against the live OpenRouter route.** `scripts/probe-openrouter-live.mjs`
+  drives the provider and `packages/mcp/scripts/mcp-smoke-live.mjs` drives the
+  whole MCP surface — transport, tool schemas, service, provider — against real
+  System One models. Both need `OPENROUTER_API_KEY` and are excluded from CI; the
+  suite stays offline. The live answers confirmed the shapes above: a score came
+  back as `score: 1.05` with a four-level `legend` and index-keyed
+  probabilities, and usage arrived as `inputTokens` / `outputTokens` / `cost`.
+- **Not verified against the live TypeSafe API.** No TypeSafe credential was
+  available. `LiveProvider` is covered against an injected stub and against the
+  vendor's own type definitions, which is a weaker guarantee than a real call:
+  the question shape is now known-correct, but the account-level behaviour
+  (rate limits, quota, model entitlements) is untested. The two routes accept the
+  same primitives, so a TypeSafe key is expected to work unchanged — expected,
+  not observed.

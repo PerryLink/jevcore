@@ -13,6 +13,7 @@
  *    a synthetic value cannot be mistaken for a real judgment.
  */
 
+import { topCriterion } from './primitives.js'
 import type { JevAnswer, JevResult, JevUsage } from './types.js'
 
 /**
@@ -29,10 +30,28 @@ export type RenderedAnswer = {
   probability?: number
   /** Probability of `true`, for noul answers only. */
   noul?: number
+  /** Expected score, for score answers only. May fall between levels. */
+  score?: number
+  /** Rubric index to level description, as reported, for score answers only. */
+  legend?: Record<string, string>
   confidence?: number
   probabilities?: Record<string, number>
   /** Present when the question was asked and Jev returned nothing for it. */
   note?: string
+}
+
+/**
+ * The rubric index a score sits nearest.
+ *
+ * Ties go to the lower level, matching how a scale is normally read: a score of
+ * exactly `2.5` on a four-level rubric is reported as level 2 unless the
+ * distribution says otherwise. Only used when `probabilities` cannot name a
+ * level outright.
+ */
+const nearestLevel = (score: number, levelCount: number): string | undefined => {
+  if (levelCount <= 0 || !Number.isFinite(score)) return undefined
+  const index = Math.min(Math.max(Math.floor(score), 0), levelCount - 1)
+  return String(index)
 }
 
 /** One answer, flattened for the model. */
@@ -47,6 +66,24 @@ export const renderAnswer = (questionId: string, answer: JevAnswer | undefined):
       answer: answer.noul >= 0.5 ? 'true' : 'false',
       noul: answer.noul,
       probability: Math.max(answer.noul, 1 - answer.noul),
+      ...(answer.confidence === undefined ? {} : { confidence: answer.confidence }),
+    }
+  }
+  if (answer.type === 'score') {
+    // The expected score may fall between levels, so the nearest level is
+    // reported alongside it rather than instead of it: rounding is a
+    // presentation choice, and the caller may need the unrounded value.
+    const level = topCriterion(answer.probabilities) ?? nearestLevel(answer.score, Object.keys(answer.legend).length)
+    const probability = level === undefined ? undefined : answer.probabilities[level]
+    const label = level === undefined ? undefined : answer.legend[level]
+    return {
+      question: questionId,
+      type: 'score',
+      ...(label === undefined ? {} : { answer: label }),
+      score: answer.score,
+      ...(probability === undefined ? {} : { probability }),
+      legend: { ...answer.legend },
+      probabilities: { ...answer.probabilities },
       ...(answer.confidence === undefined ? {} : { confidence: answer.confidence }),
     }
   }
@@ -77,7 +114,7 @@ export type RenderedResult = {
 
 const MOCK_WARNING =
   'These answers are SYNTHETIC. The mock provider derived them from a hash of the input; ' +
-  'they carry no judgment. Set provider to "live" and configure a TypeSafe credential for real answers.'
+  'they carry no judgment. Set provider to "live" or "openrouter" with a credential for real answers.'
 
 /** Build the canonical value every tool returns. */
 export const renderResult = (result: JevResult, questionIds: readonly string[]): RenderedResult => ({

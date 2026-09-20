@@ -48,6 +48,14 @@ jobs:
           TYPESAFE_API_KEY: ''
         run: pnpm --filter @dsh-jev/mcp run smoke
 
+      - name: Cross-check our payloads against the vendor's own schemas
+        # The unit tests stub the SDKs, so they prove our side of the contract
+        # but not that a vendor would accept it. This imports the real zod
+        # schemas and parses what this project actually builds. Offline and
+        # credential-free by design. It is what caught `score.criteria` being
+        # sent as a keyed map when both vendors require an ordered array.
+        run: pnpm --filter @dsh-jev/core run check:schemas
+
   package:
     runs-on: ubuntu-latest
     steps:

@@ -71,12 +71,15 @@ export const jevAskTool = (service: JevService) =>
       'judgments the rest of the work branches on —routing, classifying, scoring, deciding, ' +
       'triaging. Do NOT use it to write prose, explain, summarize, or generate code.\n\n' +
       'Question types: "noul" is yes/no and returns the probability of true; "choice" picks one ' +
-      'of the criteria keys you declare; "score" places the state on an ordered scale of criteria ' +
-      'keys. Several questions in one call are answered against the same state and cost one ' +
-      'round-trip, so batch what you need.\n\n' +
-      'Put the evidence in "state" and the question in "instructions". Every key you declare in ' +
-      'criteria is a value Jev may return, so declare exactly the outcomes you can act on. This ' +
-      'tool returns probabilities, not decisions —apply your own confidence threshold before ' +
+      'of the criteria keys you declare; "score" places the state on an ordered scale whose levels ' +
+      'you declare in ascending order. Several questions in one call are answered against the same ' +
+      'state and cost one round-trip, so batch what you need.\n\n' +
+      'Put the evidence in "state" and the question in "instructions". For "choice", every key you ' +
+      'declare in criteria is a value Jev may return, so declare exactly the outcomes you can act ' +
+      'on. For "score", criteria is a map of level name to its description, written in ascending ' +
+      'scale order, and it answers with a numeric "score" that may fall between levels, a "legend" ' +
+      'mapping each level index to its description, and probabilities per level. ' +
+      'This tool returns probabilities, not decisions —apply your own confidence threshold before ' +
       'acting, and treat a low-confidence answer as "unknown" rather than picking for it.',
     parameters: {
       state: {
@@ -92,8 +95,10 @@ export const jevAskTool = (service: JevService) =>
         additionalProperties: true,
         description:
           'Map of question id to question. Each question is { type, instructions, criteria? }. ' +
-          'criteria is required for choice and score and is a map of permitted answer key to an ' +
-          'optional description of that key.',
+          'criteria is required for choice and score. For choice it is a map of permitted answer ' +
+          'key to an optional description of that key. For score it is a map of scale level to its ' +
+          'description, written in ascending order, with at least two levels: the order written is ' +
+          'the scale, and reversing it reverses the meaning of every score.',
       },
     },
     output: {

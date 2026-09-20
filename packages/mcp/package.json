@@ -47,7 +47,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "smoke": "node scripts/mcp-smoke.mjs"
+    "smoke": "node scripts/mcp-smoke.mjs",
+    "smoke:live": "node scripts/mcp-smoke-live.mjs"
   },
   "dependencies": {
     "@dsh-jev/core": "workspace:*",

@@ -106,12 +106,57 @@ describe('jev_ask', () => {
           instructions: 'Which team?',
           criteria: { billing: 'Payments', technical: 'Bugs' },
         },
-        risk: { type: 'score', instructions: 'Risk?', criteria: { low: null, high: null } },
+        risk: {
+          type: 'score',
+          instructions: 'Risk?',
+          criteria: { low: 'No user impact', high: 'Users blocked' },
+        },
       },
-    })) as { answers: { question: string; type: string }[] }
+    })) as {
+      answers: {
+        question: string
+        type: string
+        answer?: string
+        score?: number
+        legend?: Record<string, string>
+      }[]
+    }
 
     expect(value.answers.map((answer) => answer.question)).toEqual(['urgent', 'team', 'risk'])
     expect(value.answers.map((answer) => answer.type)).toEqual(['noul', 'choice', 'score'])
+  })
+
+  it('reports a score with its rubric, not just a number', async () => {
+    const value = (await run(tool, {
+      state: 'x',
+      questions: {
+        risk: {
+          type: 'score',
+          instructions: 'Risk?',
+          criteria: { low: 'No user impact', high: 'Users blocked' },
+        },
+      },
+    })) as { answers: { answer?: string; score?: number; legend?: Record<string, string> }[] }
+
+    const answer = value.answers[0]
+    // The scale is the order written, so the rubric comes back indexed from zero
+    // and the score may fall between levels.
+    expect(answer?.legend).toEqual({ '0': 'No user impact', '1': 'Users blocked' })
+    expect(typeof answer?.score).toBe('number')
+    expect(['No user impact', 'Users blocked']).toContain(answer?.answer)
+  })
+
+  it('refuses a score whose levels carry no descriptions', async () => {
+    // `null` means "leave this level undescribed", so a rubric of nulls sends
+    // nothing for Jev to score against.
+    await expect(
+      run(tool, {
+        state: 'x',
+        questions: {
+          risk: { type: 'score', instructions: 'Risk?', criteria: { low: null, high: null } },
+        },
+      }),
+    ).rejects.toThrow(/at least two/)
   })
 
   it('returns probabilities, not decisions', async () => {

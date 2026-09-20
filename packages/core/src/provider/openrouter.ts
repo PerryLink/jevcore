@@ -25,15 +25,14 @@
  */
 
 import type {
-  CategoricalAnswer,
   JevAnswer,
   JevProvider,
   JevRequest,
   JevResult,
   JevUsage,
-  NoulAnswer,
 } from '../types.js'
 import { JevProviderError } from '../types.js'
+import { isRecord, normalizeAnswer } from '../answers.js'
 
 export const DEFAULT_OPENROUTER_ENDPOINT = 'https://openrouter.ai'
 export const DEFAULT_OPENROUTER_MODEL = 'typesafe/jev-1.13'
@@ -140,57 +139,35 @@ export const loadOpenRouterSdk = async (
   }
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-
+/**
+ * Pull the usage fields the SDK reports.
+ *
+ * The vendor is inconsistent here, so both spellings are read:
+ *
+ *  - the wire schema (`DecisionsResponseUsage$inboundSchema`) requires
+ *    snake_case `input_tokens` / `output_tokens`;
+ *  - the TypeScript type (`DecisionsResponseUsage`) declares camelCase
+ *    `inputTokens` / `outputTokens`, and the generated `fromJSON` remaps wire
+ *    keys to those names.
+ *
+ * Which spelling arrives depends on whether the SDK has already deserialized
+ * the response, and reading the wrong one does not throw — it silently reports
+ * no usage at all. Accepting both is the only option that is correct either way.
+ */
 const readUsage = (value: unknown): JevUsage | undefined => {
   if (!isRecord(value)) return undefined
+  const count = (camel: string, snake: string): number | undefined => {
+    const entry = typeof value[camel] === 'number' ? value[camel] : value[snake]
+    return typeof entry === 'number' && Number.isFinite(entry) ? entry : undefined
+  }
   const usage: { inputTokens?: number; outputTokens?: number; costUsd?: number } = {}
-  if (typeof value.inputTokens === 'number') usage.inputTokens = value.inputTokens
-  if (typeof value.outputTokens === 'number') usage.outputTokens = value.outputTokens
-  if (typeof value.cost === 'number') usage.costUsd = value.cost
+  const inputTokens = count('inputTokens', 'input_tokens')
+  const outputTokens = count('outputTokens', 'output_tokens')
+  const costUsd = count('cost', 'cost_usd')
+  if (inputTokens !== undefined) usage.inputTokens = inputTokens
+  if (outputTokens !== undefined) usage.outputTokens = outputTokens
+  if (costUsd !== undefined) usage.costUsd = costUsd
   return Object.keys(usage).length > 0 ? usage : undefined
-}
-
-/**
- * Normalize one answer.
- *
- * Unknown shapes are dropped rather than coerced, for the same reason as the
- * TypeSafe provider: an answer the caller cannot distinguish from a real one is
- * worse than no answer.
- */
-const normalizeAnswer = (
-  raw: unknown,
-  expected: 'noul' | 'choice' | 'score',
-): JevAnswer | undefined => {
-  if (!isRecord(raw)) return undefined
-
-  if (expected === 'noul') {
-    const value = raw.noul
-    if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
-    const answer: NoulAnswer = {
-      type: 'noul',
-      noul: value,
-      ...(typeof raw.confidence === 'number' ? { confidence: raw.confidence } : {}),
-    }
-    return answer
-  }
-
-  const choice = typeof raw.choice === 'string' ? raw.choice : undefined
-  if (choice === undefined) return undefined
-  const probabilities: Record<string, number> = {}
-  if (isRecord(raw.probabilities)) {
-    for (const [key, value] of Object.entries(raw.probabilities)) {
-      if (typeof value === 'number' && Number.isFinite(value)) probabilities[key] = value
-    }
-  }
-  const answer: CategoricalAnswer = {
-    type: expected,
-    choice,
-    probabilities,
-    ...(typeof raw.confidence === 'number' ? { confidence: raw.confidence } : {}),
-  }
-  return answer
 }
 
 /** Read an HTTP-ish status off an SDK error without assuming its class. */
@@ -202,6 +179,20 @@ const statusOf = (error: unknown): number | undefined => {
   }
   return undefined
 }
+
+/**
+ * Detect the account-level provider allowlist failure.
+ *
+ * OpenRouter answers a model whose provider the account has not permitted with
+ * HTTP 404 and a body saying so. The status alone reads as "the model does not
+ * exist", which sends the reader hunting for a typo in a model id that is
+ * perfectly valid. The message is the only signal that distinguishes the two,
+ * so it is worth matching on — narrowly, and only to pick a better error.
+ */
+const isProviderNotAllowed = (error: unknown): boolean =>
+  isRecord(error) &&
+  typeof error.message === 'string' &&
+  /no allowed providers|allowed-providers setting/i.test(error.message)
 
 /** A provider backed by OpenRouter's Decisions route. */
 export class OpenRouterProvider implements JevProvider {
@@ -257,6 +248,16 @@ export class OpenRouterProvider implements JevProvider {
       // Classify without echoing the upstream body, which can quote request
       // headers. A 401/403 is a credential or access problem; anything else is
       // treated as a transport failure.
+      if (isProviderNotAllowed(cause)) {
+        throw new JevProviderError(
+          'OpenRouter refused the request because this account does not permit the "typesafe" ' +
+            'provider. System One models are served by TypeSafe alone, so no other provider can ' +
+            'answer them. Enable it under "Allowed providers" at ' +
+            'https://openrouter.ai/settings/privacy and retry.',
+          'provider-unavailable',
+          { cause },
+        )
+      }
       const status = statusOf(cause)
       const code =
         status === 401 || status === 403

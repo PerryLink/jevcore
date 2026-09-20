@@ -34,7 +34,12 @@ you wanted a sentence.
 |---|---|---|
 | `noul` | yes/no | probability of true |
 | `choice` | one of a named set | the selection plus a distribution |
-| `score` | one of an ordered scale | the level plus a distribution |
+| `score` | where on an ordered scale | a numeric expected score, the rubric as `legend`, and probabilities per level |
+
+Declare `score` levels in ascending order, because the order written *is* the
+scale, and give each level a description. The score that comes back may fall
+between levels — `1.4` on a three-level rubric is a real answer, not a bug — so
+read `legend` to name the level rather than assuming an integer.
 
 Batch related questions into one call: they are answered against the same state in
 a single round-trip, which is where most of the cost saving comes from.

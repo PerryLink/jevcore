@@ -45,7 +45,9 @@
     "clean": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:schemas": "node scripts/check-openrouter-schemas.mjs",
+    "probe:live": "node scripts/probe-openrouter-live.mjs"
   },
   "optionalDependencies": {
     "@typesafe-ai/sdk": "^0.6.0",

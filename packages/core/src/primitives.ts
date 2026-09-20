@@ -29,15 +29,56 @@ export const choice = (
   criteria,
 })
 
-/** Ask Jev to place the state on an ordered scale of named levels. */
+/**
+ * Ask Jev to place the state on an ordered scale of named levels.
+ *
+ * Pass the levels in scale order: the first entry is score `0` and the last is
+ * score `n-1`. The map is converted to the ordered array the API expects, so
+ * insertion order is what defines the scale.
+ *
+ * Keys are level *names*, used in this project's output and never sent: Jev
+ * scores positions, so it receives the descriptions alone and returns a numeric
+ * expected score with a `legend` mapping each index back to its description.
+ *
+ * @param criteria - level name to its description, in ascending scale order.
+ *   `null` leaves a level undescribed.
+ */
 export const score = (
   instructions: string,
   criteria: Readonly<Record<string, string | null>>,
 ): ScoreQuestion => ({
   type: 'score',
   instructions,
-  criteria,
+  criteria: scoreCriteriaArray(criteria),
 })
+
+/**
+ * A key that parses as a JavaScript integer index.
+ *
+ * `Object.keys` reorders these ahead of every other key, so a level map using
+ * them would silently produce a scale in an order the author never wrote. That
+ * is worth an error rather than a surprise.
+ */
+const INDEX_LIKE_KEY = /^(?:0|[1-9][0-9]*)$/
+
+/** Convert a level map to the ordered array the API expects. */
+export const scoreCriteriaArray = (
+  levels: Readonly<Record<string, string | null>>,
+): readonly string[] => {
+  const keys = Object.keys(levels)
+  const reordered = keys.filter((key) => INDEX_LIKE_KEY.test(key))
+  if (reordered.length > 0 && keys.length > 1) {
+    throw new Error(
+      `score criteria use integer-like level names (${reordered.join(', ')}). JavaScript reorders ` +
+        'integer-like keys ahead of the rest, so the scale would not follow the order written. ' +
+        'Name the levels instead, such as "low"/"medium"/"high".',
+    )
+  }
+  // `null` leaves a level undescribed; it carries no description to send.
+  return keys
+    .map((key) => levels[key])
+    .filter((description): description is string => typeof description === 'string' && description !== '')
+}
 
 /** Reject a question whose criteria map would make an answer unverifiable. */
 export const assertValidQuestion = (id: string, question: JevQuestion): void => {
@@ -45,6 +86,15 @@ export const assertValidQuestion = (id: string, question: JevQuestion): void => 
     throw new Error(`question "${id}" has empty instructions`)
   }
   if (question.type === 'noul') return
+  if (question.type === 'score') {
+    if (question.criteria.length < 2) {
+      throw new Error(
+        `question "${id}" is a score but declares ${question.criteria.length} described level(s). ` +
+          'A scale needs at least two, because a one-level scale carries no ordering.',
+      )
+    }
+    return
+  }
   const keys = Object.keys(question.criteria)
   if (keys.length < 2) {
     throw new Error(`question "${id}" is ${question.type} but declares ${keys.length} criteria`)

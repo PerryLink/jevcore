@@ -7,3 +7,10 @@ coverage/
 .env.local
 *.tsbuildinfo
 _probe.log
+
+# Build output must never land beside its source. An inherited relative `outDir`
+# once resolved against the declaring config and emitted declarations into
+# `src/`, where 16 of them were committed before anyone noticed.
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.js
+packages/*/src/**/*.js.map

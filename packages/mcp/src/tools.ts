@@ -67,7 +67,8 @@ export const runAsk = async (service: JevService, input: AskInput) => {
 
 const SYNTHETIC_WARNING =
   'These answers are SYNTHETIC. The mock provider derived them from a hash of the input; they ' +
-  'carry no judgment. Set TYPESAFE_API_KEY (or JEV_PROVIDER=live) for real answers.'
+  'carry no judgment. Set TYPESAFE_API_KEY (or OPENROUTER_API_KEY), or JEV_PROVIDER=live, for ' +
+  'real answers.'
 
 export interface RankInput {
   readonly query: string

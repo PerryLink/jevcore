@@ -18,15 +18,14 @@
  */
 
 import type {
-  CategoricalAnswer,
   JevAnswer,
   JevProvider,
   JevRequest,
   JevResult,
   JevUsage,
-  NoulAnswer,
 } from '../types.js'
 import { JevProviderError } from '../types.js'
+import { isRecord, normalizeAnswer } from '../answers.js'
 
 export const DEFAULT_ENDPOINT = 'https://api.typesafe.ai'
 export const DEFAULT_MODEL = 'jev-latest'
@@ -106,55 +105,21 @@ export const loadOfficialSdk = async (specifier = '@typesafe-ai/sdk'): Promise<S
 
 const defaultLoadSdk = (): Promise<SdkModule> => loadOfficialSdk()
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-
 /** Pull the numeric fields the SDK reports, ignoring anything unshaped. */
 const readUsage = (value: unknown): JevUsage | undefined => {
   if (!isRecord(value)) return undefined
+  const count = (camel: string, snake: string): number | undefined => {
+    const entry = typeof value[snake] === 'number' ? value[snake] : value[camel]
+    return typeof entry === 'number' && Number.isFinite(entry) ? entry : undefined
+  }
   const usage: { inputTokens?: number; outputTokens?: number; costUsd?: number } = {}
-  if (typeof value.input_tokens === 'number') usage.inputTokens = value.input_tokens
-  if (typeof value.output_tokens === 'number') usage.outputTokens = value.output_tokens
-  if (typeof value.cost_usd === 'number') usage.costUsd = value.cost_usd
+  const inputTokens = count('inputTokens', 'input_tokens')
+  const outputTokens = count('outputTokens', 'output_tokens')
+  const costUsd = count('costUsd', 'cost_usd')
+  if (inputTokens !== undefined) usage.inputTokens = inputTokens
+  if (outputTokens !== undefined) usage.outputTokens = outputTokens
+  if (costUsd !== undefined) usage.costUsd = costUsd
   return Object.keys(usage).length > 0 ? usage : undefined
-}
-
-/**
- * Normalize the SDK's answer payload.
- *
- * Anything that does not match a known primitive shape is dropped rather than
- * coerced: a caller that receives no answer knows to fall back, whereas a
- * coerced answer is indistinguishable from a real one.
- */
-const normalizeAnswer = (raw: unknown, expected: 'noul' | 'choice' | 'score'): JevAnswer | undefined => {
-  if (!isRecord(raw)) return undefined
-
-  if (expected === 'noul') {
-    const value = raw.noul
-    if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
-    const answer: NoulAnswer = {
-      type: 'noul',
-      noul: value,
-      ...(typeof raw.confidence === 'number' ? { confidence: raw.confidence } : {}),
-    }
-    return answer
-  }
-
-  const choice = typeof raw.choice === 'string' ? raw.choice : undefined
-  if (choice === undefined) return undefined
-  const probabilities: Record<string, number> = {}
-  if (isRecord(raw.probabilities)) {
-    for (const [key, value] of Object.entries(raw.probabilities)) {
-      if (typeof value === 'number' && Number.isFinite(value)) probabilities[key] = value
-    }
-  }
-  const answer: CategoricalAnswer = {
-    type: expected,
-    choice,
-    probabilities,
-    ...(typeof raw.confidence === 'number' ? { confidence: raw.confidence } : {}),
-  }
-  return answer
 }
 
 /** A provider backed by the official TypeSafe SDK. */
