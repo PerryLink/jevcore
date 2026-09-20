@@ -36,7 +36,11 @@ node tools/verify-submission-artifacts.mjs --sync
   When a claim stops holding it says the draft is obsolete rather than passing
   quietly.
 - **`verify-submission-artifacts.mjs`** — runs both and exits non-zero if either
-  fails.
+  fails, or if neither could run at all. A missing sibling script is reported as
+  `SKIP … (not present, so nothing was verified by it)` and is never counted as a
+  pass: the runner used to treat an absent script as success, which meant a
+  `tools/` directory holding only the runner announced that both artifacts were
+  current without having opened either.
 
 ## Paths
 

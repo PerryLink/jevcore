@@ -1,10 +1,13 @@
 # Publishing checklist
 
-Status as of writing:
+Status as of the 0.4.0 release:
 
-- **0.1.0 is published to npm** — `jevcore`, `jevcore-dsh` and `jevcore-mcp` are
-  live, verified by installing them from the public registry into an empty
-  directory rather than by trusting the publish output;
+- **0.3.1 is published to npm and is the current `latest`** for `jevcore`,
+  `jevcore-dsh` and `jevcore-mcp`; `jevcore-cli` is new in 0.4.0 and its name was
+  unclaimed on the registry when that version was prepared. Each release is
+  verified by installing from the public registry into an empty directory rather
+  than by trusting the publish output — the section below explains why that
+  distinction is not pedantry;
 - the repository is public at <https://github.com/PerryLink/jevcore>, with CI
   green, and a mirror is pushed to Gitee at
   <https://gitee.com/perrylink/jevcore>;
