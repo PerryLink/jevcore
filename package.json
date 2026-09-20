@@ -1,9 +1,9 @@
 {
   "name": "jevcore-workspace",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "TypeSafe Jev for DeepSeek Harness: a framework-agnostic decision core and the DSH plugin built on it.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -13,8 +13,10 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
     "legal": "node scripts/sync-legal-files.mjs --check",
+    "check:readmes": "node scripts/check-readme-sync.mjs",
     "//check": "Build runs BEFORE typecheck on purpose. Each adapter resolves the core through the `jevcore` workspace link, and the core's `types` entry is `lib/index.d.ts` — which does not exist until it is built. Typechecking first works on any machine that already has a `lib/` and fails on a clean checkout, which is exactly how CI caught it.",
-    "check": "pnpm run legal && pnpm run build && pnpm run typecheck && pnpm run test",
+    "check": "pnpm run legal && pnpm run check:readmes && pnpm run build && pnpm run typecheck && pnpm run test",
+    "prepublishOnly": "pnpm run check",
     "clean": "pnpm -r run clean"
   },
   "devDependencies": {

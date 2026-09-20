@@ -104,5 +104,6 @@ No test requires a credential or a network connection.
 
 ## License
 
-MIT. TypeSafe, Jev, and System One are trademarks of TypeSafe AI; this is an
-independent integration and is not affiliated with or endorsed by them.
+[Apache License 2.0](LICENSE) © 2026 jevcore contributors. TypeSafe, Jev, and
+System One are trademarks of TypeSafe AI; this is an independent integration and
+is not affiliated with or endorsed by them.

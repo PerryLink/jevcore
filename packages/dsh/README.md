@@ -383,7 +383,7 @@ No test requires a credential or a network connection, and CI enforces that by r
 
 ## License
 
-MIT
+[Apache License 2.0](LICENSE) © 2026 jevcore contributors
 
 TypeSafe, Jev, and System One are trademarks of TypeSafe AI. This project is an independent
 integration and is not affiliated with or endorsed by TypeSafe AI.

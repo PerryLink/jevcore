@@ -1,0 +1,178 @@
+name: Compat
+
+# Compatibility verification (weekly + per PR + on demand):
+#   1. bare-import: install the packed tarballs into an empty project and import
+#      every published entry - catches devDependencies mistaken for
+#      dependencies, a workspace sibling that does not survive packing, and
+#      native-build gate regressions. The plugin face additionally installs the
+#      package's own `@deepseek-ai/*` peer set, because `jevcore-dsh`'s entry
+#      statically imports `@deepseek-ai/dsh-tools`; without those peers the
+#      import fails for a reason that is not this repository's fault.
+#   2. profile: install the core + plugin tarballs into a scratch DSH_HOME
+#      profile next to dsh-base + dsh-headless, assert the bundle row mounts
+#      (dump-config), and run one keyless headless task. MISSING_CREDENTIAL
+#      proves the plugin tree loaded; a hang (a row stuck on a missing injected
+#      service) hits the 120s timeout and fails, which is exactly how that
+#      failure surfaces.
+#   3. uninstall: the profile install must be fully reversible.
+#
+# The core tarball rides along in both jobs on purpose. `jevcore-dsh` depends on
+# `jevcore` through `workspace:*`, which pnpm rewrites to a real version when it
+# packs; packing the core here too keeps both jobs green on a version-bump PR,
+# before that version exists on npm.
+#
+# Platform guard: every assertion here is platform-neutral. Platform-specific
+# behavior (Windows/macOS-only rows) is never asserted on this Linux runner.
+on:
+  pull_request:
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+jobs:
+  bare-import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build and pack
+        # `pnpm pack`, never `npm pack`: only pnpm rewrites `workspace:*` into a
+        # real version, and an npm-packed tarball is not installable at all.
+        run: |
+          pnpm run build
+          pnpm --filter jevcore pack --pack-destination "$RUNNER_TEMP"
+          pnpm --filter jevcore-dsh pack --pack-destination "$RUNNER_TEMP"
+          pnpm --filter jevcore-mcp pack --pack-destination "$RUNNER_TEMP"
+
+      - name: Bare install + import smoke
+        run: |
+          set -euo pipefail
+          # `jevcore-[0-9]*` deliberately does not match `jevcore-dsh-*` or
+          # `jevcore-mcp-*`.
+          CORE="$(ls "$RUNNER_TEMP"/jevcore-[0-9]*.tgz | head -n1)"
+          DSH="$(ls "$RUNNER_TEMP"/jevcore-dsh-*.tgz | head -n1)"
+          MCP="$(ls "$RUNNER_TEMP"/jevcore-mcp-*.tgz | head -n1)"
+          mkdir -p "$RUNNER_TEMP/bare" && cd "$RUNNER_TEMP/bare"
+          pnpm init >/dev/null
+          cat > pnpm-workspace.yaml <<'YAML'
+          packages:
+            - .
+          nodeLinker: hoisted
+          minimumReleaseAge: 0
+          autoInstallPeers: true
+          # pnpm 11 blocks an unlisted install script and then fails every later
+          # command in the project. The first five entries are the family
+          # allowlist the DSH plugin repos here all carry; `esbuild` is this
+          # repository's own entry, copied from pnpm-workspace.yaml.
+          allowBuilds:
+            '@deepseek-ai/dsh-subprocess-local': true
+            koffi: true
+            node-pty: true
+            protobufjs: true
+            '@google/genai': true
+            esbuild: true
+          YAML
+
+          # Core and MCP faces: nothing but what the tarballs declare.
+          pnpm add "$CORE" "$MCP" >/dev/null
+          node --input-type=module -e "import('jevcore').then((m)=>{if(typeof m.noul!=='function')throw new Error('jevcore did not load');console.log('core face ok')}).catch(e=>{console.error(e);process.exit(1)})"
+          node --input-type=module -e "import('jevcore-mcp').then((m)=>{if(typeof m.createServer!=='function')throw new Error('createServer missing from jevcore-mcp');console.log('mcp face ok')}).catch(e=>{console.error(e);process.exit(1)})"
+
+          # Plugin face. The host provides these peers. Install the package's
+          # whole `@deepseek-ai/*` peer set explicitly: they are optional peers,
+          # and their ranges are prerelease unions containing spaces, so one
+          # peer per line plus a bash array keeps each spec a single argument.
+          node -e "const p=require(process.argv[1]);console.log(Object.entries(p.peerDependencies).filter(([n])=>n.startsWith('@deepseek-ai/')).map(([n,r])=>n+'@'+r).join('\n'))" "$GITHUB_WORKSPACE/packages/dsh/package.json" > peers.txt
+          mapfile -t PEER_ARR < peers.txt
+          pnpm add "$DSH" "${PEER_ARR[@]}" >/dev/null
+          node --input-type=module -e "import('jevcore-dsh').then((m)=>{if(typeof m.apply!=='function')throw new Error('the plugin entry must export apply');if(!Array.isArray(m.inject))throw new Error('the plugin entry must declare inject as an array');console.log('plugin face ok')}).catch(e=>{console.error(e);process.exit(1)})"
+
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build and pack
+        run: |
+          pnpm run build
+          pnpm --filter jevcore pack --pack-destination "$RUNNER_TEMP"
+          pnpm --filter jevcore-dsh pack --pack-destination "$RUNNER_TEMP"
+
+      - name: Install dsh CLI
+        run: npm install -g @deepseek-ai/dsh@0.1.6-alpha.2
+
+      - name: Install into a scratch profile (builds allowlisted)
+        run: |
+          set -euo pipefail
+          CORE="$(ls "$RUNNER_TEMP"/jevcore-[0-9]*.tgz | head -n1)"
+          PLUGIN="$(ls "$RUNNER_TEMP"/jevcore-dsh-*.tgz | head -n1)"
+          export DSH_HOME="$RUNNER_TEMP/dsh-home"
+          mkdir -p "$DSH_HOME/profiles/compat"
+          cat > "$DSH_HOME/profiles/compat/pnpm-workspace.yaml" <<'YAML'
+          packages:
+            - .
+          nodeLinker: hoisted
+          minimumReleaseAge: 0
+          autoInstallPeers: false
+          allowBuilds:
+            '@deepseek-ai/dsh-subprocess-local': true
+            koffi: true
+            node-pty: true
+            protobufjs: true
+            '@google/genai': true
+            esbuild: true
+          YAML
+          dsh plugin --profile compat add '@deepseek-ai/dsh-base@0.1.6-alpha.2' '@deepseek-ai/dsh-headless@0.1.6-alpha.2' "$CORE" "$PLUGIN"
+
+      - name: Row-mount assertion
+        # The row is `id: jev` / `name: 'jevcore-dsh'` in packages/dsh/cordis.patch.yml.
+        run: |
+          set -euo pipefail
+          export DSH_HOME="$RUNNER_TEMP/dsh-home"
+          dsh --profile compat --dump-config > dump.txt
+          grep -q "jevcore-dsh" dump.txt
+
+      - name: Keyless headless smoke
+        run: |
+          set -euo pipefail
+          export DSH_HOME="$RUNNER_TEMP/dsh-home"
+          set +e
+          timeout 120 dsh --profile compat "Reply with exactly: ok" > smoke.log 2>&1
+          code="$?"
+          set -e
+          if grep -q 'MISSING_CREDENTIAL' smoke.log; then
+            echo 'PASS: plugin tree loaded (keyless)'
+          elif [ "$code" -eq 0 ] && grep -qiE '(^|[^a-z])ok([^a-z]|$)' smoke.log; then
+            echo 'PASS: plugin tree loaded (with key)'
+          else
+            echo 'FAIL: headless smoke did not prove tree load'
+            cat smoke.log
+            exit 1
+          fi
+
+      - name: Uninstall
+        run: |
+          set -euo pipefail
+          export DSH_HOME="$RUNNER_TEMP/dsh-home"
+          dsh plugin --profile compat remove jevcore-dsh

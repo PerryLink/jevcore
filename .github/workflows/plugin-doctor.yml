@@ -1,0 +1,45 @@
+name: plugin-doctor
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  doctor:
+    name: dsh-plugin-doctor (static R/K)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run dsh-plugin-doctor (static R/K on the committed tree)
+        # `--repo packages/dsh`, not `--repo .`: this repository is a workspace
+        # and the plugin is the only package that carries `dsh.bundle.patch`.
+        # Pointed at the root it would grade `jevcore-workspace` (private, no
+        # src/, no patch) and fail R1.
+        run: |
+          set +e
+          out="$(npx --yes @perrylink/dsh-plugin-doctor@0.1.6 --repo packages/dsh --no-smoke --only "R,K" --json /tmp/doctor.json 2>&1)"
+          set -e
+          printf '%s\n' "$out"
+          echo "$out" | grep -q 'R0 ' || { echo "::error::doctor ran no R checks"; exit 1; }
+          echo "$out" | grep -q 'K1 ' || { echo "::error::doctor ran no K checks"; exit 1; }
+          if [ ! -f /tmp/doctor.json ]; then echo "::error::doctor produced no JSON report"; exit 1; fi
+          # R2/R4 read the built entry (lib/). `lib/` is git-ignored in this
+          # repository, so on a clean checkout both fail for a reason that is
+          # not a source defect: the committed tree has no build output. They
+          # are reported but gated by ci.yml instead, which builds the packages
+          # and then checks the packed file list and a clean-room install.
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync("/tmp/doctor.json", "utf8")).results
+            const buildDep = r.filter((x) => /^R[24] /.test(x.name))
+            const gated = r.filter((x) => !/^R[24] /.test(x.name))
+            const bad = gated.filter((x) => x.status === "fail" || x.status === "error")
+            console.log("gated " + gated.length + " checks; build-dependent (reported, not gated): " + (buildDep.map((x) => x.name.split(" ")[0] + "=" + x.status).join(" ") || "none"))
+            if (bad.length) { console.error("::error::failing: " + bad.map((x) => x.name).join(" | ")); process.exit(1) }
+          '

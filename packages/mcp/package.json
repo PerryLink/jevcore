@@ -1,6 +1,6 @@
 {
   "name": "jevcore-mcp",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "TypeSafe Jev over the Model Context Protocol: typed judgments (ask, rank, check) that return calibrated probabilities instead of prose.",
   "keywords": [
     "mcp",
@@ -11,7 +11,7 @@
     "system-one",
     "decision-model"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/PerryLink/jevcore.git"
@@ -38,8 +38,14 @@
   },
   "files": [
     "lib",
+    "src",
     "scripts",
     "README.md",
+    "README-zh.md",
+    "README-es.md",
+    "README-pt.md",
+    "README-hi.md",
+    "CHANGELOG.md",
     "LICENSE",
     "NOTICE"
   ],

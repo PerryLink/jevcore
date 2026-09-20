@@ -1,6 +1,6 @@
 {
   "name": "jevcore-dsh",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "TypeSafe Jev as a first-class Cordis service and three model-visible tools for DeepSeek Harness — offline by default, egress disclosed, never default-on.",
   "keywords": [
     "dsh-plugin",
@@ -12,7 +12,7 @@
     "decision-model",
     "cordis"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/PerryLink/jevcore.git"
@@ -23,7 +23,8 @@
   "homepage": "https://github.com/PerryLink/jevcore#readme",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0"
   },
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -36,13 +37,20 @@
   },
   "files": [
     "lib",
+    "src",
     "skills",
     "cordis.patch.yml",
     "README.md",
+    "README-zh.md",
+    "README-es.md",
+    "README-pt.md",
+    "README-hi.md",
+    "CHANGELOG.md",
     "LICENSE",
     "NOTICE"
   ],
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
@@ -59,7 +67,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-tools": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0"
+    "@deepseek-ai/dsh-tools": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {

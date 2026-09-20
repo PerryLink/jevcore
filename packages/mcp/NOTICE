@@ -2,7 +2,9 @@
 
 jevcore — TypeSafe Jev for DeepSeek Harness
 Copyright (c) 2026 jevcore contributors
-Licensed under the MIT License. See [LICENSE](./LICENSE).
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for the
+full text.
 
 ## Not affiliated with TypeSafe AI
 
@@ -22,34 +24,47 @@ remain under their own licences:
 
 | Package | Role | Declared as |
 |---|---|---|
-| `@typesafe-ai/sdk` | Official TypeSafe client, used by the `live` provider | optional dependency of `jevcore` |
-| `@openrouter/sdk` | Official OpenRouter client, used by the `openrouter` provider | optional dependency of `jevcore` and `jevcore-mcp` |
+| `@typesafe-ai/sdk` | Official TypeSafe client, used by both the `live` and `openrouter` providers | optional dependency of `jevcore` |
 | `@modelcontextprotocol/sdk` | MCP server and stdio transport | dependency of `jevcore-mcp` |
 | `zod` | Wire-schema validation for the MCP surface | dependency of `jevcore-mcp` |
-| `@deepseek-ai/dsh-tools` | DeepSeek Harness tool registry | peer dependency of `jevcore-dsh`, supplied by the harness at runtime |
+| `@deepseek-ai/cordis` | Cordis service registry and plugin loader | optional peer dependency of `jevcore-dsh`, supplied by the harness at runtime |
+| `@deepseek-ai/dsh-tools` | DeepSeek Harness tool registry | optional peer dependency of `jevcore-dsh`, supplied by the harness at runtime |
 
-The optional dependencies are loaded lazily. An install that omits them still
-runs, on the offline mock provider.
+`@typesafe-ai/sdk` is the only optional dependency. It is loaded lazily, so an
+install that omits it still runs — on the offline `mock` provider, which makes no
+network call.
+
+There is one vendor client, not two. The `openrouter` provider runs that same
+official client against a different `baseURL`, because OpenRouter serves the
+documented `/v1/systemone` endpoint. `@openrouter/sdk` was a second client for a
+second, alpha-named payload shape; it was removed in **0.2.0** — the published
+`0.1.2` metadata still lists it as `@openrouter/sdk@^1.3.6`, and every version
+from `0.2.0` on lists only `@typesafe-ai/sdk`.
 
 ## Development dependencies
 
-`typescript`, `vitest`, `@types/node`, and the `@typesafe-ai/sdk` /
-`@openrouter/sdk` type definitions are used to build and test this project. They
-are not redistributed in the published packages.
+`typescript`, `vitest`, and `@types/node` are used to build and test this
+project. They are not redistributed in the published packages.
 
-## Verification scripts and vendor schemas
+## Vendor schemas
 
-`packages/core/scripts/check-openrouter-schemas.mjs` and the conformance test in
-`packages/core/test/vendor-conformance.test.ts` **import** type declarations and
-runtime schemas from the vendors' published SDKs in order to check this project's
-payloads against them. Those schemas are the vendors' work, are not copied into
-this repository, and are read from the installed package at build and test time.
+`packages/core/test/vendor-conformance.test.ts` **imports type declarations
+only** from `@typesafe-ai/sdk` in order to check this project's question and
+answer shapes against the vendor's own types, so that a drift in either
+direction is a compile error rather than a runtime surprise. Those declarations
+are the vendor's work, they are read from the installed package at build and
+test time, and they are not copied into this repository.
+
+The OpenRouter route has no separate schema to conform to: it is the same client
+and the same request body against a different host, and the test asserts exactly
+that. (The file `packages/core/scripts/check-openrouter-schemas.mjs`, which
+parsed payloads against the removed client's schemas, no longer exists.)
 
 ## No warranty of fitness for decisions
 
-The MIT License disclaims all warranties. Said plainly and separately, because
-this software is used to make decisions: Jev returns calibrated probabilities,
-not permissions. Thresholds, consequences, and whether to act are the caller's
-responsibility. Answers from the `mock` provider are synthetic — derived from a
-hash of the input, carrying no judgment at all — and every such result is
-labelled as synthetic.
+The Apache License 2.0 disclaims all warranties and limits liability. Said
+plainly and separately, because this software is used to make decisions: Jev
+returns calibrated probabilities, not permissions. Thresholds, consequences, and
+whether to act are the caller's responsibility. Answers from the `mock` provider
+are synthetic — derived from a hash of the input, carrying no judgment at all —
+and every such result is labelled as synthetic.

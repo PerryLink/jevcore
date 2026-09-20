@@ -1,0 +1,12 @@
+# Stabilize line endings across platforms: every text file checks out as LF, so
+# the Windows CRLF round-trip never shows up as diff noise. This repository is
+# developed on Windows and consumed everywhere, and `scripts/check-readme-sync.mjs`
+# compares fenced code blocks between the READMEs byte for byte — a line-ending
+# difference would fail that gate for a reason that has nothing to do with the
+# READMEs.
+* text=auto eol=lf
+
+# Binary assets stay byte-identical.
+*.tgz binary
+*.png binary
+*.gif binary

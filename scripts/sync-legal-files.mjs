@@ -1,10 +1,13 @@
 /**
- * Assert every package ships the same LICENSE and NOTICE as the repository root.
+ * Assert every package ships the same legal and changelog files as the repository root.
  *
  * npm can only include files inside the package directory, so the root copies
  * have to be duplicated into each package before packing. Duplication drifts
  * unless something checks it, and the failure is quiet: a package publishes with
- * a stale or missing attribution file and nobody notices until it matters.
+ * a stale or missing attribution file and nobody notices until it matters. The
+ * changelog is the same problem with the same fix — and here the drift is not
+ * hypothetical: `files[]` listed four README translations that were never copied
+ * into the packages, so npm silently dropped them from every published tarball.
  *
  * This runs as part of `pnpm run check`, so a drift fails the build rather than
  * the publish. Fix it with:
@@ -20,7 +23,7 @@ import { dirname, join } from 'node:path'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const packages = ['core', 'dsh', 'mcp']
-const files = ['LICENSE', 'NOTICE']
+const files = ['LICENSE', 'NOTICE', 'CHANGELOG.md']
 const checkOnly = process.argv.includes('--check')
 
 let failures = 0
@@ -65,4 +68,4 @@ for (const name of packages) {
 }
 
 if (failures > 0) process.exit(1)
-console.log(checkOnly ? 'legal files are in sync' : 'legal files synced')
+console.log(checkOnly ? 'shipped documents are in sync' : 'shipped documents synced')

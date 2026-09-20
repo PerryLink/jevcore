@@ -1,6 +1,6 @@
 {
   "name": "jevcore",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Framework-agnostic TypeSafe Jev decision core: typed primitives, pluggable providers, an explicit egress contract, redaction, and local decision policy.",
   "keywords": [
     "jev",
@@ -13,7 +13,7 @@
     "choice",
     "score"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/PerryLink/jevcore.git"
@@ -37,8 +37,14 @@
   },
   "files": [
     "lib",
+    "src",
     "scripts",
     "README.md",
+    "README-zh.md",
+    "README-es.md",
+    "README-pt.md",
+    "README-hi.md",
+    "CHANGELOG.md",
     "LICENSE",
     "NOTICE"
   ],
