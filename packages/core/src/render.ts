@@ -26,10 +26,24 @@ export type RenderedAnswer = {
   type: JevAnswer['type']
   /** Selected key: `"true"`/`"false"` for noul, the criterion otherwise. */
   answer?: string
-  /** Probability of the selected key. */
+  /**
+   * Probability of the selected key.
+   *
+   * For a noul this is *not* a decision — see {@link band}.
+   */
   probability?: number
   /** Probability of `true`, for noul answers only. */
   noul?: number
+  /**
+   * Which band a noul's probability falls in, for noul answers only.
+   *
+   * Reported alongside `answer` rather than instead of it, because `answer` is
+   * the binary reading callers already consume and silently changing its meaning
+   * would be worse than adding a field. Read `band` when the difference between
+   * "probably" and "certainly" matters, which for anything with consequences it
+   * does.
+   */
+  band?: NoulBand
   /** Expected score, for score answers only. May fall between levels. */
   score?: number
   /** Rubric index to level description, as reported, for score answers only. */
@@ -38,6 +52,56 @@ export type RenderedAnswer = {
   probabilities?: Record<string, number>
   /** Present when the question was asked and Jev returned nothing for it. */
   note?: string
+}
+
+/** Where a noul probability sits: a confident no, uncertain, or a confident yes. */
+export type NoulBand = 'no' | 'uncertain' | 'yes'
+
+/** The boundaries of a band. */
+export interface NoulBandBounds {
+  /** At or below this, the answer reads as a confident no. */
+  readonly low: number
+  /** Above this, the answer reads as a confident yes. */
+  readonly high: number
+}
+
+/**
+ * The band the official self-consistency cookbook prescribes.
+ *
+ * "`no` below `0.30`; `uncertain` from `0.30` through `0.70`, including both
+ * boundaries; `yes` above `0.70`." The page is careful to call the numbers
+ * illustrative rather than calibrated, which is why they are a parameter.
+ *
+ * @see https://docs.typesafe.ai/cookbooks/consistency_noul_cookbook
+ */
+export const DEFAULT_NOUL_BAND: NoulBandBounds = { low: 0.3, high: 0.7 }
+
+/**
+ * Place a noul probability in a band.
+ *
+ * The point is that a noul is a calibrated probability, not a decision: 0.51
+ * rendered as a settled `true` invites a caller to branch on a coin toss. The
+ * cookbook's own words — "probabilities 0.49 and 0.51 cause opposite actions even
+ * though both express substantial uncertainty".
+ *
+ * Both boundaries belong to `uncertain`, matching the cookbook's "including both
+ * boundaries".
+ */
+export const noulBand = (noul: number, bounds: NoulBandBounds = DEFAULT_NOUL_BAND): NoulBand => {
+  const { low, high } = bounds
+  if (!(low >= 0 && high <= 1 && low <= high)) {
+    throw new Error(
+      `a noul band must be ordered fractions within 0 and 1, got low=${low} high=${high}. ` +
+        'An inverted or out-of-range band would classify every answer the same way.',
+    )
+  }
+  // Both boundaries belong to `uncertain` — the cookbook says "from 0.30 through
+  // 0.70, including both boundaries". Using `<=` on the low edge would put 0.30
+  // in `no`, which is the off-by-one this comment exists to prevent: it reinstates
+  // a knife edge at exactly the value the band is meant to describe as unclear.
+  if (noul < low) return 'no'
+  if (noul > high) return 'yes'
+  return 'uncertain'
 }
 
 /**
@@ -66,6 +130,7 @@ export const renderAnswer = (questionId: string, answer: JevAnswer | undefined):
       question: questionId,
       type: 'noul',
       answer: answer.noul >= 0.5 ? 'true' : 'false',
+      band: noulBand(answer.noul),
       noul: answer.noul,
       probability: Math.max(answer.noul, 1 - answer.noul),
     }

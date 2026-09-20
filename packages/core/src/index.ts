@@ -147,11 +147,15 @@ export {
 
 // Rendering helpers (framework-agnostic: they produce plain objects)
 export {
+  DEFAULT_NOUL_BAND,
   asRendered,
+  noulBand,
   rankingSize,
   renderAnswer,
   renderResult,
   summarize,
+  type NoulBand,
+  type NoulBandBounds,
   type RenderedAnswer,
   type RenderedResult,
 } from './render.js'

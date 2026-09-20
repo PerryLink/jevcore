@@ -22,10 +22,17 @@ egress contract has no upstream equivalent. What follows are the defects.
   before sending — to stderr. The provider now always passes `logLevel`
   explicitly, for the same reason it always passes `apiKey`.
 
+- **Redaction covered `state` alone, so question text left unredacted.** The
+  ranking tools build one question per candidate, which meant candidate text
+  travelled inside the question map — a path `measure` never passed to the
+  redactor. Reproduced: the same string was redacted in `state` and left the
+  machine intact in `questions`. Redaction now runs over the whole payload and the
+  call record counts removals from both.
+
   `timeout` and `retry` are now passed too, and exposed as `requestTimeoutMs` /
-  `requestMaxRetries`. They are not a security fix: the JavaScript SDK has no
-  total retry budget, so its 10s-per-attempt default across three attempts lets a
-  single call occupy roughly 30s inside a `tools/pre-execute` gate.
+  `requestMaxRetries`. Not a security fix: the JavaScript SDK has no total retry
+  budget, so its 10s-per-attempt default across three attempts lets a single call
+  occupy roughly 30s inside a `tools/pre-execute` gate.
 
 ### Fixed
 
@@ -58,8 +65,52 @@ egress contract has no upstream equivalent. What follows are the defects.
   oppositely per provider — absent on the live routes so the floor never applied,
   while the mock attached `0.5`, below the default `0.7`, so *every* hazard
   resolved `undecided` and the gate could never decide anything. Removed from the
-  type, the normalizers, the mock, the policy and every rendered payload; a noul
-  is judged on `max(noul, 1 - noul)` alone.
+  type, the normalizers, the mock, the policy and every rendered payload.
+
+- **The declared `questions` cap was measured and reported but never enforced.**
+  `measure` computed a capped length, used it for the startup report line, and
+  returned the original map. It now refuses an over-long batch with
+  `EgressTooLargeError`. Refused rather than truncated, unlike `state`: answers are
+  keyed by question, so a shortened question map would return answers that cannot
+  be matched back to what was asked.
+
+- **`jev_rank` no longer splices candidate text into the question.** The docs name
+  this anti-pattern outright — "put it in its own field instead of splicing it into
+  a string template" — and it was the reason candidate contents could reach the
+  wire as question text. Candidates now travel in `state` and each question refers
+  to its own by a backticked path; verified live that ranking is unchanged (the
+  credential runbook scores 0.91 against 0.01 for the billing guide).
+
+- **An undescribed score level rendered as an empty answer.** The empty string is
+  the supported way to hold a position in a scale, so an answer landing on such a
+  level produced `answer: ''` — indistinguishable from "no answer". It now reports
+  the level's index with a note saying so.
+
+### Added
+
+- **`EntryType` support for `instructions` and criteria.** The API accepts a
+  string, object, array or null wherever guidance is written, and the docs spend a
+  section on when structure helps — a code-sourced value in its own field,
+  contrastive definitions, shared wording across questions. All three question
+  builders accept it now, as do choice descriptions. Verified live.
+- **A noul can describe its own boundary** via `criteria: {true, false}`, new in
+  API v1. The tool boundaries accepted the field and silently dropped it for nouls.
+- **`noulBand` / `DEFAULT_NOUL_BAND`.** A noul is a calibrated probability, not a
+  decision, and rendering 0.51 as a settled `true` invites a branch on a coin toss.
+  The official self-consistency cookbook's band — `no` below 0.30, `uncertain`
+  0.30 through 0.70 inclusive, `yes` above — is now reported alongside the binary
+  reading, which is left unchanged for compatibility.
+- `DEFAULT_REQUEST_TIMEOUT_MS`, `DEFAULT_REQUEST_MAX_RETRIES`, `MAX_SCORE_LEVELS`,
+  `MAX_CHOICE_OPTIONS`, `EgressTooLargeError`, `isEmptyEntry`, `NoulCriteria`,
+  `NoulBand`, `NoulBandBounds`.
+
+### Changed
+
+- **Thresholds have one source rather than five.** `minConfidence` and
+  `minProbability` were literal in `DEFAULT_POLICY`, `DEFAULT_CONFIG`, both gates
+  and the DSH plugin's `CONFIG_DOC`, so tuning one left the others enforcing a
+  different floor. `DEFAULT_POLICY` is now the source; `CONFIG_DOC` derives from
+  `DEFAULT_CONFIG`, since it is the copy a user reads.
 
 ## 0.1.1 — 2026-09-20
 
