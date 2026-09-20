@@ -104,6 +104,40 @@ jobs:
       - name: Verify before publishing
         run: pnpm run check
 
+      - name: Diagnose trusted publishing
+        # Manual runs only, and it publishes nothing: this is what to reach for
+        # when a release fails with `Skipped OIDC: ... Unknown error (status code
+        # 404)`. That 404 means npm did not match the run against a trusted
+        # publisher, and pnpm reports it without npm's response body, so the two
+        # halves that must agree are printed side by side instead:
+        #
+        #   - `job_workflow_ref`, the exact string npm matches its "Workflow
+        #     filename" field against (filename *with* extension, no path);
+        #   - npm's own answer per package, which distinguishes "no trusted
+        #     publisher for this package" from "one exists but does not match".
+        #
+        # Claims and response bodies only. The OIDC token is never printed.
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          response="$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org")"
+          token="$(node -e "process.stdout.write(JSON.parse(process.argv[1]).value)" "$response")"
+
+          echo "--- claims npm matches against ---"
+          node -e "
+            const payload = process.argv[1].split('.')[1];
+            const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+            for (const key of ['job_workflow_ref', 'repository', 'repository_owner', 'ref', 'event_name', 'aud']) {
+              if (claims[key] !== undefined) console.log(key + ' = ' + claims[key]);
+            }
+          " "$token"
+
+          echo "--- npm's answer per package ---"
+          for pkg in jevcore jevcore-dsh jevcore-mcp; do
+            code="$(curl -sS -o exchange.json -w '%{http_code}' -X POST -H "Authorization: bearer $token" "https://registry.npmjs.org/-/npm/v1/oidc/token-exchange/$pkg")"
+            echo "$pkg -> HTTP $code $(head -c 400 exchange.json)"
+          done
+
       - name: Publish
         # Core first: both adapters depend on `jevcore`.
         if: github.event_name == 'push'
