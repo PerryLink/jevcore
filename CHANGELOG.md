@@ -4,9 +4,13 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-09-20
 
-Initial implementation. Pre-1.0, so the API may change between minor versions.
+Initial release. Pre-1.0, so the API may change between minor versions.
+
+Published to npm as `jevcore`, `jevcore-dsh` and `jevcore-mcp`. Repository at
+<https://github.com/PerryLink/jevcore>, mirrored to
+<https://gitee.com/perrylink/jevcore>.
 
 ### Changed
 
