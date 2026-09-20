@@ -9,7 +9,10 @@ Status as of writing:
   green, and a mirror is pushed to Gitee at
   <https://gitee.com/perrylink/jevcore>;
 - the `Release` workflow is in place, authenticated by OIDC trusted publishing:
-  there is no token to add and none to rotate (below).
+  there is no token to add and none to rotate (below). **It cannot publish yet**
+  — npm's registry rejects this repository's OIDC tokens, for a reason recorded
+  below and tracked as [npm/cli#9969](https://github.com/npm/cli/issues/9969);
+  releases currently take the staged fallback in the same section.
 
 Run every step from the repository root.
 
@@ -47,7 +50,33 @@ and pnpm treats a configured token as an instruction to publish with it and skip
 the OIDC exchange. A stale value there downgrades the release to token publishing
 and fails on auth, which is harder to diagnose than no token at all.
 
-### Why hand-publishing no longer works, recorded so it is not repeated
+### This repository cannot use trusted publishing yet (npm/cli#9969)
+
+The configuration above is correct and still does not work, for a reason that is
+not in this repository:
+
+- **GitHub gives repositories created after 2026-07-15 an immutable OIDC subject
+  claim.** This repository was created `2026-09-20T04:11:31Z`, and its subject
+  reads `repo:PerryLink@255665900/jevcore@1377893932:ref:...` — numeric ids where
+  the legacy format has names.
+- **npm's registry cannot match that format.** It rejects the token exchange, and
+  the failure is easy to misread: pnpm reports
+  `ERR_PNPM_AUTH_TOKEN_EXCHANGE: ... (status code 404)` — which looks like a
+  missing trusted publisher, and is not — while the same request made by hand
+  against `/-/npm/v1/oidc/token/exchange/package/<name>` answers
+  `401 {"message":"OIDC token exchange error - unauthorized"}`. Either way the
+  configuration is not the problem.
+- **It cannot be switched off.** `PUT /repos/{owner}/{repo}/actions/oidc/customization/sub`
+  with `{"use_immutable_subject":false}` returns `422` here and the setting stays
+  `true`.
+
+Tracked upstream as [npm/cli#9969](https://github.com/npm/cli/issues/9969), open
+with the same symptoms and the same conclusion ("all claims match the trusted
+publisher configuration except the `sub` format"). Until it is fixed, releases
+take the staged path below, and `release.yml` keeps the OIDC configuration so it
+starts working the day the registry does.
+
+### The fallback that does work: publish, then approve on the website
 
 With 2FA enabled on the account, an automation token can no longer publish
 directly. `pnpm publish` **prints `✅ Published` and exits 0 while only *staging*
@@ -57,6 +86,19 @@ version number: the registry does not list it, a re-publish fails with
 `total: 0` for it, so the stage-id needed to approve or reject it cannot be
 obtained from the CLI. That is how 0.2.2 was consumed without ever being
 published.
+
+So the working sequence is:
+
+1. `pnpm --filter <pkg> publish --access public --no-git-checks` — it stages.
+2. Approve the staged version on npmjs.com. The CLI cannot do this for you.
+3. Verify against the registry, never against the publish output:
+
+   ```sh
+   npm view jevcore-dsh@0.2.2 version   # 404 means "still staged", not "failed"
+   ```
+
+The cost is a manual approval per package and no provenance attestation. That is
+the whole reason OIDC is worth keeping configured.
 
 ### Why the first attempt failed, recorded so it is not repeated
 

@@ -29,6 +29,17 @@ name: Release
 # before its trusted-publishing step for exactly this reason. `actions/setup-node`
 # writes the key into `.npmrc` whenever it is given `registry-url`, which is why
 # no step below passes it.
+#
+# KNOWN BLOCKER, and not a configuration error. This repository was created
+# 2026-09-20, so GitHub issues its OIDC tokens with an immutable subject claim
+# (`repo:PerryLink@255665900/jevcore@1377893932:ref:...`) and npm's registry
+# cannot match that format yet: the exchange is rejected and the step ends at
+# "Skipped OIDC". Tracked upstream as https://github.com/npm/cli/issues/9969, and
+# it cannot be switched off on this side -- PUT to
+# /repos/PerryLink/jevcore/actions/oidc/customization/sub with
+# {"use_immutable_subject":false} answers 422 and the setting stays true.
+# PUBLISHING.md records the staged fallback that works until npm fixes it; this
+# configuration stays as it is so it starts working the day the registry does.
 
 on:
   push:
