@@ -136,8 +136,16 @@ cujo patch insere o próprio cliente MCP do harness:
         transport: stdio
         command: npx
         args: ['-y', 'jevcore-mcp']
+        env:
+          TYPESAFE_API_KEY: '<the key>'
         failOnStartupError: true
 ```
+
+O mapa env não é opcional: o DSH remove todo nome com forma de credencial
+(qualquer um que contenha KEY, PASSWORD, SECRET ou TOKEN, sem diferenciar
+maiúsculas) do ambiente que entrega a um servidor iniciado, e só depois mescla este
+mapa. Uma chave exportada no seu shell nunca chega, e o servidor permanece no mock
+offline sem relatar erro.
 
 O provedor é escolhido a partir do ambiente:
 
@@ -281,7 +289,7 @@ Três ferramentas, deliberadamente poucas e ortogonais:
 - **`jev_rank`** — pontua e ordena candidatos segundo um critério, uma pergunta por candidato em uma
   única ida e volta. As probabilidades são julgamentos independentes por candidato, não uma distribuição.
 - **`jev_check`** — esta evidência sustenta esta afirmação? Devolve `supported`, `contradicted`,
-  `conflicted`, `insufficient` ou `unknown`. A contradição tem precedência sobre o suporte, porque evidência que
+  `conflicted`, `insufficient`, `undecided` ou `unknown`. A contradição tem precedência sobre o suporte, porque evidência que
   sustenta e refuta ao mesmo tempo é um conflito, não um sim fraco.
 
 ### Uma skill incluída

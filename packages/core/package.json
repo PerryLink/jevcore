@@ -1,6 +1,6 @@
 {
   "name": "jevcore",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Framework-agnostic TypeSafe Jev decision core: typed primitives, pluggable providers, an explicit egress contract, redaction, and local decision policy.",
   "keywords": [
     "jev",

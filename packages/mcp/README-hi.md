@@ -26,8 +26,15 @@ npx -y jevcore-mcp
         transport: stdio
         command: npx
         args: ['-y', 'jevcore-mcp']
+        env:
+          TYPESAFE_API_KEY: '<the key>'
         failOnStartupError: true
 ```
+
+env map वैकल्पिक नहीं है: DSH किसी spawned server को दिए जाने वाले environment से
+credential जैसे हर नाम को हटा देता है (यानी KEY, PASSWORD, SECRET या TOKEN वाला कोई भी
+नाम, case की परवाह किए बिना), और उसके बाद यह map मिलाता है। shell में export की गई key
+कभी नहीं पहुँचती, और server बिना कोई error बताए offline mock पर ही रहता है।
 
 ## Configuration
 
@@ -60,7 +67,7 @@ default है, `typesafe/` किसी versioned id जैसे `typesafe/jev
 |---|---|
 | `jev_ask` | एक state पर एक या अधिक typed सवाल; उन्हें एक ही call में batch करें |
 | `jev_rank` | एक criterion पर candidates को score और sort करें, प्रति candidate एक सवाल |
-| `jev_check` | क्या यह evidence इस claim का समर्थन करता है? `supported`, `contradicted`, `conflicted`, `insufficient`, या `unknown` |
+| `jev_check` | क्या यह evidence इस claim का समर्थन करता है? `supported`, `contradicted`, `conflicted`, `insufficient`, `undecided`, या `unknown` |
 
 तीन tools, जानबूझकर कम और orthogonal। दो मौजूदा Jev MCP servers पहले से ही दस-दस tools
 ship करते हैं; यह वाला उस स्थिति के लिए है जहाँ host को तीनों primitives चाहिए

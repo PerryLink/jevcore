@@ -4,6 +4,165 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.0 — 2026-09-20
+
+A seven-angle audit of the three packages, with the findings fixed rather than
+recorded. Two of them were already published, and they come first because they
+are the reason this release exists. The minor-version bump is for the changed
+timeout semantics and the widened error vocabulary, not for the fixes.
+
+### Fixed
+
+- **`jev_rank` did not work at all in `jevcore-dsh` 0.2.2.** Its tool card was
+  built by calling `summarize(asRendered(value), …)`, and `summarize` reads
+  `value.answers` — a ranking carries `ranking`. `asRendered` is an assertion,
+  not a conversion, so every call threw, the registry turned the throw into
+  `returned invalid output`, and the model received zero candidates. The
+  expression is replaced by a summary written for a ranking, and the old one is
+  kept as a test that asserts it throws, so it cannot be "simplified" back.
+
+  All 410 tests passed while this shipped, because every one of them called
+  `execute`, and the projection the registry runs on **every** top-level call had
+  no coverage at all. `test/tools.test.ts` now calls
+  `output.presentationMeta` for all three tools, and reverting the fix turns four
+  of those tests red.
+
+- **`npx -y jevcore-mcp` did not start.** `lib/bin.js` had no shebang, and npm's
+  `cmd-shim` reads the first line to decide how to launch a bin: with no `#!` it
+  calls the file directly, so the generated Windows shim had no `node` prefix and
+  the `.js` went through its file association — a host that hangs with no output
+  rather than a process that fails. Both READMEs advertise that command. The
+  source now carries the shebang, the file carries its executable bit (which
+  `tsc` inherits, so the artifact is executable too), and the smoke test asserts
+  the shebang by byte and launches through a real shim instead of
+  `node <entry>` — the substitution that let this ship.
+
+- **`resolveCheck` failed open, and could contradict itself.** When the
+  sufficiency question had no answer it returned `supported` on the strength of
+  `supports` alone; and a payload whose `sufficient` was 0.9895 could still come
+  back `insufficient`. Both were reproduced against the built library before the
+  fix.
+
+- **Every HTTP status collapsed into one error code, so nothing could tell
+  "retry" from "give up".** `openrouter.ts`'s condition was a tautology — the
+  final `status !== undefined` subsumes the two tests before it — and the
+  `401 || 403` branch in the TypeSafe provider was dead code. Rate limiting, a
+  rejected key, exhausted quota, a malformed request and a transport failure were
+  indistinguishable. The original status now travels on the error.
+
+- **The timeout bounded one attempt, not the call, and the default did not do
+  what its own comment said it did.** The SDK's `timeout` is documented as
+  per-attempt "without a total retry budget", so 30s across 3 attempts is ~90s of
+  blocking — the number the comment existed to prevent. A total budget now bounds
+  the call. `requestTimeoutMs: 0`, documented as "disables the timeout" and
+  impossible under the SDK's own validation, is either honoured or refused
+  explicitly instead of failing every call behind a network-shaped error.
+
+- **The three tools silently opted out of the harness's parallel pool.**
+  `isConcurrencySafe` was never declared, and the host reads undeclared as
+  exclusive, so N independent judgments ran strictly in series against a pool
+  that allows ten.
+
+- **`noul` boundaries could not be reached from any tool.** The question builder
+  called `noul(instructions)` and dropped the documented `criteria: {true,
+  false}` boundary; the field's declared type was the choice/score map, so it
+  could not have carried one. Both the plugin and the MCP server now accept
+  `boundary?: NoulCriteria`, with the same field name on both surfaces.
+
+- The MCP server reported `version: 0.1.0` from a hardcoded string while the
+  package was at 0.2.2, so every host displayed a version that had never existed.
+
+- The MCP server's default OpenRouter baseURL was missing the `/api` the SDK's
+  path needs — it fed the egress report rather than the request, so the report
+  named an endpoint the call never used.
+
+- Three false statements in the READMEs, corrected in all five languages: the
+  OpenRouter model-id rule (the READMEs demanded a `typesafe/` prefix, and the id
+  that rule produces — `typesafe/jev-latest` — is the one the live route
+  rejects, while bare `jev-latest` works), the `engines.node` difference between
+  the packages, and that default baseURL. One table cell had also been truncated
+  mid-sentence in the English source for three releases.
+
+- The bundled skill described `confidence` as "Jev's own calibration". It is a
+  concentration statistic derived from the probabilities — and a `noul` answer
+  has none at all.
+
+- **The declared state cap was not a cap.** For payloads dense in characters that
+  need escaping, `capJsonText` measured the JSON before escaping and sent the
+  result afterwards: a 500-character cap emitted **692**, and a 16,000-character
+  cap emitted **23,344**. The head length is now found by bisecting the serialized
+  envelope, so the declared limit holds for every input, and the test that allowed
+  `maxChars + 200` slack now asserts the limit itself.
+
+- **Redaction erased ordinary field names.** Sixteen of sixteen non-secret names
+  were removed because the key rules matched substrings (`author` for `auth`), and
+  a label like `api_key=` was consumed along with its value, so a log could not
+  even be read to ask whether it held a credential assignment. Rules are anchored
+  to whole names now, and a label survives with its value replaced — the JSON
+  stays parseable. One over-redaction is kept deliberately: `totalTokens` is still
+  removed, because it cannot be told apart from `userToken` by shape.
+
+### Added
+
+- **Results account for themselves.** `truncated`, the size actually sent, and
+  the redaction counts travel on the result. A state over the cap used to be cut
+  silently, and the answer came back as though Jev had seen all of it.
+
+- **`docs/quickstart.md`** — the core had 69 exports and no runnable example.
+  Every snippet in it was run against both the published package and a fresh
+  build, and the outputs matched.
+
+- **`docs/hosts.md`** — seven MCP hosts, four mutually incompatible configuration
+  shapes, the Windows variants, and the failure modes worth knowing: some hosts
+  filter the environment a server is spawned with, and the DSH plugin row needs
+  its own `env` because the harness scrubs `KEY`/`PASSWORD`/`SECRET`/`TOKEN` from
+  the child environment. Without it a configured key silently yields synthetic
+  answers.
+
+- **`mcpName` and `server.json`**, so `jevcore-mcp` can be listed in the official
+  MCP Registry, where the sibling `dsh-cert-mcp` already is.
+
+- Error codes that name what happened, the original HTTP status, and the symbols
+  earlier release notes promised but never exported (`MAX_SCORE_LEVELS`,
+  `MAX_CHOICE_OPTIONS`, `isEmptyEntry`, `NoulCriteria`, `EntryType`, and the two
+  request defaults).
+
+- **`scripts/check-mojibake.mjs`** — the corrupted-dash class that shipped once
+  cannot be found by scanning for replacement characters, because the artifact is
+  a legal ASCII `?`. This gate also compares source against build output, which
+  is how a description that only exists in `lib/` reaches a host at runtime.
+
+### Changed
+
+- **The default probability floor now agrees with the self-consistency band.**
+  `minProbability` was 0.6 while the band's upper bound is 0.7, so a noul at 0.65
+  was simultaneously `decided` and `uncertain`; the comparison was also inclusive,
+  which left the same disagreement exactly at 0.7. Both floors are now 0.7 and the
+  noul threshold is strict, so the two readings agree everywhere. **This is the
+  one deliberate change to default behaviour, and it moves the wrong way for
+  nobody:** more answers resolve `undecided`, none resolve `allow` that did not
+  before.
+
+- `jev_check` gains `undecided` for the case where the evidence is sufficient but
+  neither side reaches its threshold — previously reported as `insufficient`,
+  which contradicted the same payload's own probability. A missing sufficiency
+  answer now fails closed instead of reading as support.
+
+- The mojibake gate runs after the build rather than before it, so it inspects the
+  bytes that will ship instead of reporting the same staleness on every run.
+
+- Tests: 410 → 551.
+
+### Known limitation
+
+Releases cannot use npm's trusted publishing from this repository yet. GitHub
+signs OIDC tokens for repositories created after 2026-07-15 with an immutable
+subject claim, and npm's registry cannot match that form; the exchange is
+rejected and the setting cannot be turned off. Reported upstream as
+[npm/cli#9969](https://github.com/npm/cli/issues/9969) with this repository's
+reproduction. Releases go out through the staged path described in
+`PUBLISHING.md` until it is fixed.
+
 ## 0.2.2 — 2026-09-20
 
 Repository and packaging changes. The decision core and the three entry points

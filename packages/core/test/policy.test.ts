@@ -56,12 +56,24 @@ describe('noul policy', () => {
       answer: 'true',
       probability: 0.99,
     })
-    // Strength is `max(noul, 1 - noul)`, so 0.55 is 0.55 — below the 0.6 floor.
-    // Note 0.4 would *not* qualify: its strength is 0.6, exactly the floor.
+    // Strength is `max(noul, 1 - noul)`, so 0.55 is 0.55 — below the default
+    // floor of 0.7. The floor is the noul band's upper edge and is compared
+    // strictly, so its own boundary value does not decide either: 0.3 and 0.7 are
+    // the two probabilities the band calls `uncertain`, and a policy verdict of
+    // `decided` at either would have contradicted the band rendered beside it.
     expect(applyPolicy(noul(0.55), ['true', 'false'])).toEqual({
       kind: 'undecided',
       reason: 'below-confidence',
     })
+    for (const edge of [0.3, 0.7]) {
+      expect(applyPolicy(noul(edge), ['true', 'false']), `noul ${edge}`).toEqual({
+        kind: 'undecided',
+        reason: 'below-confidence',
+      })
+    }
+    // One step outside the band on each side, and the answer is actionable.
+    expect(applyPolicy(noul(0.71), ['true', 'false'])).toMatchObject({ kind: 'decided' })
+    expect(applyPolicy(noul(0.29), ['true', 'false'])).toMatchObject({ kind: 'decided' })
   })
 
   it('flags a resolved value outside the declared criteria as invalid', () => {

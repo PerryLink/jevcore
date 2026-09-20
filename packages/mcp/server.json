@@ -3,12 +3,12 @@
   "name": "io.github.PerryLink/jevcore",
   "description": "MCP server over TypeSafe Jev: typed ask, rank and check judgments return calibrated probabilities.",
   "title": "TypeSafe Jev",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "jevcore-mcp",
-      "version": "0.2.2",
+      "version": "0.3.0",
       "transport": {
         "type": "stdio"
       }

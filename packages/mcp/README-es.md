@@ -26,8 +26,16 @@ bundle solo de configuración cuyo patch inserta el cliente MCP del harness:
         transport: stdio
         command: npx
         args: ['-y', 'jevcore-mcp']
+        env:
+          TYPESAFE_API_KEY: '<the key>'
         failOnStartupError: true
 ```
+
+El mapa env no es opcional: DSH elimina todo nombre con forma de credencial
+(cualquiera que contenga KEY, PASSWORD, SECRET o TOKEN, sin distinguir mayúsculas)
+del entorno que entrega a un servidor lanzado, y solo después fusiona este mapa.
+Una clave exportada en tu shell nunca llega, y el servidor se queda en el mock
+offline sin informar de ningún error.
 
 ## Configuración
 
@@ -60,7 +68,7 @@ un mensaje legible, no un fallo en la primera llamada a herramienta.
 |---|---|
 | `jev_ask` | Una o más preguntas tipadas sobre un estado; agrúpalas en una sola llamada |
 | `jev_rank` | Puntúa y ordena candidatos según un único criterio, con una pregunta por candidato |
-| `jev_check` | ¿Esta evidencia respalda esta afirmación? `supported`, `contradicted`, `conflicted`, `insufficient` o `unknown` |
+| `jev_check` | ¿Esta evidencia respalda esta afirmación? `supported`, `contradicted`, `conflicted`, `insufficient`, `undecided` o `unknown` |
 
 Tres herramientas, deliberadamente pocas y ortogonales. Ya existen dos servidores MCP
 de Jev que distribuyen diez herramientas cada uno; este existe para el caso en que un

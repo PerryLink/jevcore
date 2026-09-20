@@ -26,8 +26,14 @@ npx -y jevcore-mcp
         transport: stdio
         command: npx
         args: ['-y', 'jevcore-mcp']
+        env:
+          TYPESAFE_API_KEY: '<the key>'
         failOnStartupError: true
 ```
+
+env 映射不是可选项：DSH 交给被启动子进程的环境里，任何形如凭据的变量名都会被剥掉
+（名字中含 KEY、PASSWORD、SECRET 或 TOKEN，且不区分大小写），之后才把这份映射合并回去。
+你在 shell 中导出的 key 不会到达服务器，服务器会停留在离线 mock 上，并且不报告任何错误。
 
 ## 配置
 
@@ -60,7 +66,7 @@ endpoint，而不是让它由 provider 的名字来暗示。在 OpenRouter 路�
 |---|---|
 | `jev_ask` | 针对一个状态的一个或多个带类型问题；把它们批量放进一次调用 |
 | `jev_rank` | 依据一个判据对候选打分并排序，每个候选一个问题 |
-| `jev_check` | 这些证据支持这个断言吗？`supported`、`contradicted`、`conflicted`、`insufficient` 或 `unknown` |
+| `jev_check` | 这些证据支持这个断言吗？`supported`、`contradicted`、`conflicted`、`insufficient`、`undecided` 或 `unknown` |
 
 三个工具，刻意少而正交。已经有两个现存的 Jev MCP 服务器各自发布十个工具；
 这一个存在的意义，是应对某个宿主只想要这三个原语、别的什么都不要的情况，

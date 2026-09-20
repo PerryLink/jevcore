@@ -134,10 +134,10 @@ describe('safety gate decisions', () => {
     expect(weak.raised).toBeUndefined()
   })
 
-  it('honours an operator floor of 0.9 rather than a hardcoded 0.6', async () => {
-    // Regression guard: `decide` re-tested the probability against `?? 0.6`
-    // after `applyPolicy` had already enforced the configured floor, so raising
-    // minProbability to 0.9 still flagged a 0.8 hazard as raised.
+  it('honours an operator floor of 0.9 rather than the default one', async () => {
+    // Regression guard: `decide` re-tested the probability against a literal
+    // fallback after `applyPolicy` had already enforced the configured floor, so
+    // raising minProbability to 0.9 still flagged a 0.8 hazard as raised.
     const strict = createSafetyGate({
       service: service(answering(0.8)),
       onUndecided: 'ask',
@@ -162,7 +162,7 @@ describe('safety gate decisions', () => {
   })
 
   it('honours a relaxed floor by raising what the default floor would not', async () => {
-    // 0.55 resolves to a decided `true`, but sits below the 0.6 default, so only
+    // 0.55 resolves to a decided `true`, but sits below the 0.7 default, so only
     // a relaxed floor should treat it as a raised hazard.
     const relaxed = createSafetyGate({
       service: service(answering(0.55)),

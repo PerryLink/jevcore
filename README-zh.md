@@ -136,8 +136,14 @@ npx -y jevcore-mcp
         transport: stdio
         command: npx
         args: ['-y', 'jevcore-mcp']
+        env:
+          TYPESAFE_API_KEY: '<the key>'
         failOnStartupError: true
 ```
+
+env 映射不是可选项：DSH 交给被启动子进程的环境里，任何形如凭据的变量名都会被剥掉
+（名字中含 KEY、PASSWORD、SECRET 或 TOKEN，且不区分大小写），之后才把这份映射合并回去。
+你在 shell 中导出的 key 不会到达服务器，服务器会停留在离线 mock 上，并且不报告任何错误。
 
 provider 从环境中选出：
 
@@ -286,7 +292,7 @@ const result = await jev.ask({
 - **`jev_rank`** —— 依据一个判据对候选打分并排序，每个候选一个问题，
   在一次往返中完成。这些概率是对每个候选的独立判断，不是一个分布。
 - **`jev_check`** —— 这些证据支持这个断言吗？返回 `supported`、`contradicted`、
-  `conflicted`、`insufficient` 或 `unknown`。矛盾优先于支持，因为既支持
+  `conflicted`、`insufficient`、`undecided` 或 `unknown`。矛盾优先于支持，因为既支持
   又反驳的证据是冲突，而不是一个弱弱的 "是"。
 
 ### 内置的 skill

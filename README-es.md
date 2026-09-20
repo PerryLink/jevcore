@@ -140,8 +140,16 @@ parche inserte el propio cliente MCP del harness:
         transport: stdio
         command: npx
         args: ['-y', 'jevcore-mcp']
+        env:
+          TYPESAFE_API_KEY: '<the key>'
         failOnStartupError: true
 ```
+
+El mapa env no es opcional: DSH elimina todo nombre con forma de credencial
+(cualquiera que contenga KEY, PASSWORD, SECRET o TOKEN, sin distinguir mayúsculas)
+del entorno que entrega a un servidor lanzado, y solo después fusiona este mapa.
+Una clave exportada en tu shell nunca llega, y el servidor se queda en el mock
+offline sin informar de ningún error.
 
 El proveedor se elige desde el entorno:
 
@@ -290,7 +298,7 @@ Tres herramientas, deliberadamente pocas y ortogonales:
 - **`jev_rank`** — puntúa y ordena candidatos según un criterio, con una pregunta por candidato en
   una sola ida y vuelta. Las probabilidades son juicios independientes por candidato, no una distribución.
 - **`jev_check`** — ¿esta evidencia respalda esta afirmación? Devuelve `supported`, `contradicted`,
-  `conflicted`, `insufficient` o `unknown`. La contradicción pesa más que el respaldo, porque una
+  `conflicted`, `insufficient`, `undecided` o `unknown`. La contradicción pesa más que el respaldo, porque una
   evidencia que a la vez respalda y refuta es un conflicto, no un sí débil.
 
 ### Una skill incluida

@@ -137,8 +137,15 @@ npx -y jevcore-mcp
         transport: stdio
         command: npx
         args: ['-y', 'jevcore-mcp']
+        env:
+          TYPESAFE_API_KEY: '<the key>'
         failOnStartupError: true
 ```
+
+env map वैकल्पिक नहीं है: DSH किसी spawned server को दिए जाने वाले environment से
+credential जैसे हर नाम को हटा देता है (यानी KEY, PASSWORD, SECRET या TOKEN वाला कोई भी
+नाम, case की परवाह किए बिना), और उसके बाद यह map मिलाता है। shell में export की गई key
+कभी नहीं पहुँचती, और server बिना कोई error बताए offline mock पर ही रहता है।
 
 Provider environment से चुना जाता है:
 
@@ -279,7 +286,7 @@ const result = await jev.ask({
 - **`jev_rank`** — एक criterion पर candidates को score और sort करें, प्रति candidate एक सवाल एक
   ही round-trip में। Probabilities प्रति-candidate स्वतंत्र निर्णय हैं, कोई distribution नहीं।
 - **`jev_check`** — क्या यह evidence इस claim का समर्थन करता है? `supported`, `contradicted`,
-  `conflicted`, `insufficient`, या `unknown` लौटाता है। Contradiction, support से ऊपर है, क्योंकि जो evidence
+  `conflicted`, `insufficient`, `undecided`, या `unknown` लौटाता है। Contradiction, support से ऊपर है, क्योंकि जो evidence
   समर्थन और खंडन दोनों करता है वह एक conflict है, कोई कमज़ोर हाँ नहीं।
 
 ### एक bundled skill
