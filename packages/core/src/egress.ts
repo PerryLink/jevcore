@@ -148,6 +148,32 @@ export class EgressDeniedError extends Error {
   }
 }
 
+/**
+ * A payload field exceeded its declared cap and could not be reduced safely.
+ *
+ * `state` is truncated rather than refused, because a shorter state is still a
+ * valid state. `questions` is refused, because the question map is what answers
+ * are keyed by — a truncated map would yield answers that cannot be mapped back
+ * to the questions that produced them.
+ */
+export class EgressTooLargeError extends Error {
+  override readonly name = 'EgressTooLargeError'
+
+  constructor(
+    readonly feature: EgressFeature,
+    readonly field: string,
+    readonly maxChars: number,
+    readonly actualChars: number,
+  ) {
+    super(
+      `"${field}" for "${feature}" is ${actualChars} characters, over the declared limit of ` +
+        `${maxChars}. Send fewer or smaller questions. This is refused rather than truncated ` +
+        `because answers are keyed by question, so a shortened question map would return ` +
+        `answers that cannot be matched to what was asked.`,
+    )
+  }
+}
+
 export class EgressContract {
   /**
    * @param settings - which features may transmit, and whether the provider can
@@ -228,16 +254,27 @@ export class EgressContract {
     const stateText = JSON.stringify(safeState) ?? 'null'
     const questionsText = JSON.stringify(input.questions) ?? '{}'
 
+    // `state` is capped by truncation; `questions` is refused instead. The
+    // difference is what truncation would cost: a shortened state is still a
+    // state, but the question map is what the *answers* are keyed by, so cutting
+    // it down would produce a response this package could not map back — answers
+    // for questions that were never asked, in place of the ones that were.
+    // Refusing is the only option that does not quietly change the meaning of the
+    // result. The declared limit used to be measured and reported without ever
+    // being enforced, which is the exact defect this module's header names.
+    if (questionsText.length > questionsLimit) {
+      throw new EgressTooLargeError(input.feature, 'questions', questionsLimit, questionsText.length)
+    }
+
     const cappedState = capJsonText(stateText, stateLimit)
-    const cappedQuestions = capJsonText(questionsText, questionsLimit)
 
     return {
       feature: input.feature,
       state: cappedState.value,
       questions: input.questions,
       stateChars: cappedState.text.length,
-      questionsChars: cappedQuestions.text.length,
-      truncated: cappedState.truncated || cappedQuestions.truncated,
+      questionsChars: questionsText.length,
+      truncated: cappedState.truncated,
       redactionRules: summary.rules,
       redactions: summary.redactions,
     }

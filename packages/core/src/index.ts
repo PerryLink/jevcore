@@ -68,6 +68,7 @@ export {
   EGRESS_FIELDS,
   EgressContract,
   EgressDeniedError,
+  EgressTooLargeError,
   type EgressFeature,
   type EgressField,
   type EgressLine,
