@@ -283,6 +283,48 @@ describe('context gate', () => {
     expect(resultText(undefined)).toBe('')
   })
 
+  it('does not judge a result that carries no text, however large it is', async () => {
+    // A result can be big without being text: an attachment block, or a binary
+    // payload. There is nothing for the gate to read, so it must stay out of the
+    // way rather than call Jev with an empty state and guess.
+    const answer = vi.fn()
+    const spy: JevProvider = { id: 'spy', answer }
+    const decision = await gate(spy, 'goal')({
+      toolName: 'screenshot',
+      content: [{ type: 'image' }, { type: 'text', text: '   ' }],
+    })
+    expect(decision.block).toBe(false)
+    expect(answer).not.toHaveBeenCalled()
+  })
+
+  it('leaves an attachment-only result alone even with a goal set', async () => {
+    const answer = vi.fn()
+    const spy: JevProvider = { id: 'spy', answer }
+    await gate(spy, 'a goal')({ toolName: 'screenshot', content: [{ type: 'image' }] })
+    expect(answer).not.toHaveBeenCalled()
+  })
+
+  it('judges only the text of a mixed result', async () => {
+    // A block that is not text must not reach the transmitted state: a base64
+    // blob sent as text would be billed as input and would leak an image.
+    let seen: unknown
+    const capture: JevProvider = {
+      id: 'capture',
+      answer: async (request) => {
+        seen = request.state
+        return { model: 'm', provider: 'capture', latencyMs: 1, answers: {} }
+      },
+    }
+    await gate(capture, 'a goal')({
+      toolName: 'mixed',
+      content: [
+        { type: 'image', data: 'BLOB_SHOULD_NOT_APPEAR' },
+        { type: 'text', text: 'x'.repeat(5_000) },
+      ],
+    })
+    expect(JSON.stringify(seen)).not.toContain('BLOB_SHOULD_NOT_APPEAR')
+  })
+
   it('does not judge a small result at all', async () => {
     const answer = vi.fn()
     const spy: JevProvider = { id: 'spy', answer }
