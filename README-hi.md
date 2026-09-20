@@ -352,17 +352,20 @@ compose नहीं करती, उसे फिर भी service और त
   runtime के विरुद्ध जाँचा गया, और payload types installed declaration files से आते हैं।
 
 **Not verified, or known-broken**
-- **TypeSafe route कभी असली API के विरुद्ध नहीं चलाया गया।** कोई TypeSafe credential
-  उपलब्ध नहीं था, इसलिए `LiveProvider` एक injected stub के विरुद्ध और vendor की type
-  definitions के विरुद्ध covered है — असली call से कमज़ोर। Question shape अब ज्ञात-सही है और दोनों routes वही
-  primitives लेते हैं, इसलिए एक TypeSafe key के बिना बदलाव काम करने की *अपेक्षा* है; वह एक अपेक्षा है, कोई
-  प्रेक्षण नहीं। असली account पर quota, rate-limit और entitlement व्यवहार untested है।
+- **TypeSafe route exercised है, पर हल्के रूप से।** `packages/core/scripts/probe-live.mjs`
+  (`pnpm --filter jevcore run probe:typesafe`) असली API से तीन बातें पूछता है: दस claim/evidence
+  जोड़े जिनका verdict पहले से ज्ञात है, एक ही प्रश्न छह बार, और `criteria: {true, false}` सीमा वाला
+  एक noul। दो अलग runs सहमत हुए — समर्थन करता evidence 0.95, खंडन करता evidence 0.10,
+  claim पर चुप रहने वाला evidence 0.03, और दोहराया गया प्रश्न 0.01 या उससे कम हिला।
+  वह सीमा स्वीकार की गई। जो अब भी untested है वह request के चारों ओर की चीज़ें हैं,
+  request स्वयं नहीं: असली account पर quota, rate-limit और entitlement व्यवहार।
 - **जिस build पर यह अभी चल रहा है, उसमें `jev_ask` के description में एक भ्रष्ट dash है।** यह
   `branches on —?routing` पढ़ता है, जहाँ एक em dash और उसके बाद एक space होना चाहिए। कारण: development के
   शुरू में एक UTF-8 round-trip ने em dash के तीसरे byte को `?` से बदल दिया। यह disk पर ठीक है — चार
   occurrences, शून्य शेष, source और build output दोनों में पुष्ट — पर चल रहे process ने अपना module
-  fix से पहले load किया था और restart के बिना उसे दोबारा पढ़ नहीं सकता। केवल cosmetic; यह किसी व्यवहार को
-  नहीं बदलता।
+  fix से पहले load किया था और restart के बिना उसे दोबारा पढ़ नहीं सकता। dash स्वयं cosmetic है,
+  पर यह पुरानापन नहीं: उसी process के पास शुरू होने के बाद हुए हर fix भी नहीं हैं,
+  जिसमें वह `band` field भी है जो 0.51 को settled हाँ के रूप में पढ़े जाने से रोकता है।
 - MCP server को stdio पर एक असली MCP client द्वारा end to end चलाया गया है
   (`pnpm --filter jevcore-mcp run smoke`): handshake, tool discovery, तीन सफल calls, और एक
   invalid batch के लिए एक error result। इसे किसी अन्य third-party host द्वारा नहीं चलाया गया है।

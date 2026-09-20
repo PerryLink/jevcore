@@ -4,6 +4,41 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.1 — 2026-09-20
+
+Documentation and one script. Nothing about how the packages behave changed, but
+what they claim about themselves did — and a claim that has quietly become false is
+the kind of thing this project spends its time removing from other people's code.
+
+### Added
+
+- **`packages/core/scripts/probe-live.mjs`** — `pnpm --filter jevcore run
+  probe:typesafe`. The offline suite proves this project agrees with itself; it
+  cannot prove the vendor agrees with it, because every provider test runs against
+  a stub or the hash-based mock. This probe asks the real API three things: ten
+  claim/evidence pairs whose verdict is known in advance, one question repeated
+  six times, and a noul carrying a `criteria: {true, false}` boundary.
+
+  Two runs agreed. Supporting evidence scored 0.95 (0.952, then 0.950),
+  contradicting evidence 0.10, evidence silent about its claim 0.03, and the
+  repeated question varied by 0.01 and then by nothing at all. The boundary was
+  accepted — the first time that field has been exercised against the service
+  rather than against the SDK's types.
+
+### Fixed
+
+- **The READMEs said the TypeSafe route had never been exercised against the real
+  API.** It now has, by the probe above, and the five languages of all three
+  README sets carry the numbers instead of an expectation. What remains untested
+  is stated just as plainly: quota, rate-limit and entitlement behaviour on a real
+  account, which needs production traffic and cannot be probed from here.
+
+- **The corrupted-dash note called the stale build cosmetic.** The dash is; the
+  staleness is not. The process still displaying that corrupted dash also lacks
+  every fix made since it started, including the `band` field that keeps a 0.51
+  from being rendered as a settled yes. The note says so now, and says that a
+  restart is what clears it.
+
 ## 0.3.0 — 2026-09-20
 
 A seven-angle audit of the three packages, with the findings fixed rather than

@@ -336,16 +336,20 @@ values assert कर सकते हैं और कोई socket नहीं
   runtime के सामने जाँची गई, और payload types installed declaration files से आते हैं।
 
 **Not verified, or known-broken**
-- **TypeSafe route कभी असली API के सामने नहीं चलाया गया।** कोई TypeSafe credential
-  उपलब्ध नहीं था, इसलिए `LiveProvider` एक injected stub के सामने और vendor की type
-  definitions के सामने covered है — जो असली call से कमज़ोर है। दोनों routes वही primitives लेते हैं, इसलिए एक TypeSafe key के
-  बिना बदलाव काम करने की *अपेक्षा* है; वह एक अपेक्षा है, कोई प्रेक्षण नहीं।
+- **TypeSafe route exercised है, पर हल्के रूप से।** `packages/core/scripts/probe-live.mjs`
+  (`pnpm --filter jevcore run probe:typesafe`) असली API से तीन बातें पूछता है: दस claim/evidence
+  जोड़े जिनका verdict पहले से ज्ञात है, एक ही प्रश्न छह बार, और `criteria: {true, false}` सीमा वाला
+  एक noul। दो अलग runs सहमत हुए — समर्थन करता evidence 0.95, खंडन करता evidence 0.10,
+  claim पर चुप रहने वाला evidence 0.03, और दोहराया गया प्रश्न 0.01 या उससे कम हिला।
+  वह सीमा स्वीकार की गई। जो अब भी untested है वह request के चारों ओर की चीज़ें हैं,
+  request स्वयं नहीं: असली account पर quota, rate-limit और entitlement व्यवहार।
 - **जो build अभी चल रहा है उस पर `jev_ask` का description एक भ्रष्ट dash लिए हुए है।** वह
   `branches on —?routing` पढ़ता है, जहाँ em dash के बाद एक space होना चाहिए। कारण: development में शुरुआत में एक UTF-8 round-trip
   ने em dash के तीसरे byte को `?` से बदल दिया। यह disk पर ठीक है — चार
   occurrences, शून्य शेष, source और build output दोनों में पुष्ट — पर चल रहे process ने अपना module
-  fix से पहले load कर लिया था और restart के बिना उसे दोबारा नहीं पढ़ सकता। केवल cosmetic; यह
-  किसी व्यवहार को नहीं बदलता।
+  fix से पहले load कर लिया था और restart के बिना उसे दोबारा नहीं पढ़ सकता। dash स्वयं cosmetic है,
+  पर यह पुरानापन नहीं: उसी process के पास शुरू होने के बाद हुए हर fix भी नहीं हैं,
+  जिसमें वह `band` field भी है जो 0.51 को settled हाँ के रूप में पढ़े जाने से रोकता है।
 - MCP server को एक असली MCP client ने stdio पर end to end चलाया है
   (`pnpm --filter jevcore-mcp run smoke`): handshake, tool discovery, तीन सफल calls, और एक
   invalid batch के लिए एक error result। इसे किसी अन्य तीसरे पक्ष के host ने नहीं चलाया।

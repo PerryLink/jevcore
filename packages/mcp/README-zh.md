@@ -113,11 +113,13 @@ live 的那次运行通过 OpenRouter 针对真实的 System One 模型驱动了
 并且启动时的外发报告在 stderr 上点名了 OpenRouter endpoint，
 同时没有扰乱协议通道。
 
-**TypeSafe provider 从未针对真实 API 实际跑过** —— 当时没有可用的
-TypeSafe 凭据，因此它是只针对注入的桩和厂商自己的类型定义做的覆盖。
-两条路由使用相同的原语，
-因此它预期无需改动即可工作，但那是
-一个预期，而不是一个观察结果。
+**TypeSafe 路由已经实跑过，但只是轻量地跑。** `packages/core/scripts/probe-live.mjs`
+（`pnpm --filter jevcore run probe:typesafe`）向真实 API 问了三件事：十组
+判定结果事先已知的 claim/evidence 配对、同一个问题重复六次，以及一个
+带有 `criteria: {true, false}` 边界的 noul。两次独立的运行结果一致 —— 支持性证据得 0.95，
+反驳性证据得 0.10，对断言保持沉默的证据得 0.03，重复提问的波动不超过 0.01。
+该边界被接受。仍未测试的是请求之外的周边事项：
+真实账号上的配额、限流和权限行为。
 
 ## 许可证
 

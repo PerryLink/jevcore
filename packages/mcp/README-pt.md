@@ -115,11 +115,14 @@ runbook de credenciais acima de um guia de cobrança, `jev_check` devolveu `cont
 o relatório de saída da inicialização nomeou o endpoint da OpenRouter no stderr sem
 perturbar o canal do protocolo.
 
-**O provedor TypeSafe nunca foi exercitado contra a API real** — nenhuma
-credencial TypeSafe estava disponível, então ele é coberto contra um stub injetado e
-contra as próprias definições de tipo do fornecedor. Ambas as rotas usam as mesmas primitivas,
-então espera-se que funcione sem alterações, mas isso é uma expectativa, e não uma
-observação.
+**A rota TypeSafe está exercitada, mas apenas de forma leve.** `packages/core/scripts/probe-live.mjs`
+(`pnpm --filter jevcore run probe:typesafe`) pergunta à API real três coisas: dez pares
+claim/evidence cujo veredicto é conhecido de antemão, uma pergunta repetida seis vezes e um noul com
+um limite `criteria: {true, false}`. Duas execuções separadas concordaram — a evidência que sustenta
+obteve 0.95, a que contradiz 0.10, a que se cala sobre a afirmação 0.03, e a pergunta repetida
+variou 0.01 ou menos. O limite foi aceito. O que continua sem teste é tudo o que envolve a
+requisição em vez da requisição em si: o comportamento de cota, limite de requisições e
+entitlement em uma conta real.
 
 ## Licença
 

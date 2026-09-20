@@ -115,11 +115,13 @@ credential runbook above a billing guide, `jev_check` returned `contradicted`, a
 the startup egress report named the OpenRouter endpoint on stderr without
 disturbing the protocol channel.
 
-**The TypeSafe provider has never been exercised against the real API** — no
-TypeSafe credential was available, so it is covered against an injected stub and
-against the vendor's own type definitions. Both routes take the same primitives,
-so it is expected to work unchanged, but that is an expectation rather than an
-observation.
+**The TypeSafe route is exercised, but only lightly.** `packages/core/scripts/probe-live.mjs`
+(`pnpm --filter jevcore run probe:typesafe`) asks the real API three things: ten claim/evidence
+pairs whose verdict is known in advance, one question repeated six times, and a noul carrying a
+`criteria: {true, false}` boundary. Two separate runs agreed — supporting evidence scored 0.95,
+contradicting evidence 0.10, evidence silent about the claim 0.03, and the repeated question varied
+by 0.01 or less. The boundary was accepted. What remains untested is everything around the request
+rather than the request itself: quota, rate-limit and entitlement behaviour on a real account.
 
 ## License
 

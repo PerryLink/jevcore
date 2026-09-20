@@ -341,16 +341,21 @@ Prestação de contas honesta do que foi e do que não foi verificado.
   instalado antes do uso, e os tipos de payload vêm dos arquivos de declaração instalados.
 
 **Não verificado, ou sabidamente quebrado**
-- **A rota TypeSafe nunca foi exercitada contra a API real.** Nenhuma credencial TypeSafe estava
-  disponível, então `LiveProvider` é coberto contra um stub injetado e contra as definições de tipo
-  do fornecedor — mais fraco que uma chamada real. Ambas as rotas usam as mesmas primitivas, então
-  *espera-se* que uma chave TypeSafe funcione sem alterações; isso é uma expectativa, não uma observação.
+- **A rota TypeSafe está exercitada, mas apenas de forma leve.** `packages/core/scripts/probe-live.mjs`
+  (`pnpm --filter jevcore run probe:typesafe`) pergunta à API real três coisas: dez pares
+  claim/evidence cujo veredicto é conhecido de antemão, uma pergunta repetida seis vezes e um noul com
+  um limite `criteria: {true, false}`. Duas execuções separadas concordaram — a evidência que sustenta
+  obteve 0.95, a que contradiz 0.10, a que se cala sobre a afirmação 0.03, e a pergunta repetida
+  variou 0.01 ou menos. O limite foi aceito. O que continua sem teste é tudo o que envolve a
+  requisição em vez da requisição em si: o comportamento de cota, limite de requisições e
+  entitlement em uma conta real.
 - **A descrição de `jev_ask` carrega um travessão corrompido na build que está rodando agora.** Ela
   lê `branches on —?routing` onde caberia um travessão seguido de um espaço. Causa: uma ida e volta UTF-8
   no início do desenvolvimento substituiu o terceiro byte do travessão por `?`. Está corrigido no disco — quatro
   ocorrências, zero restantes, confirmado tanto no código-fonte quanto na saída da build — mas o processo em execução
-  carregou seu módulo antes da correção e não pode relê-lo sem reiniciar. Apenas cosmético; não muda
-  nenhum comportamento.
+  carregou seu módulo antes da correção e não pode relê-lo sem reiniciar. O travessão em si é
+  cosmético, mas a desatualização não é: o mesmo processo também não tem nenhuma correção feita desde
+  que iniciou, incluindo o campo `band` que impede que um 0.51 seja lido como um sim resolvido.
 - O servidor MCP foi conduzido de ponta a ponta por um cliente MCP real via stdio
   (`pnpm --filter jevcore-mcp run smoke`): handshake, descoberta de ferramentas, três chamadas bem-sucedidas e um
   resultado de erro para um lote inválido. Ele não foi conduzido por nenhum outro host de terceiros.

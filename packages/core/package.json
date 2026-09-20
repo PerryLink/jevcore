@@ -1,6 +1,6 @@
 {
   "name": "jevcore",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Framework-agnostic TypeSafe Jev decision core: typed primitives, pluggable providers, an explicit egress contract, redaction, and local decision policy.",
   "keywords": [
     "jev",
@@ -54,7 +54,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "probe:live": "node scripts/probe-openrouter-live.mjs"
+    "probe:live": "node scripts/probe-openrouter-live.mjs",
+    "probe:typesafe": "node scripts/probe-live.mjs"
   },
   "optionalDependencies": {
     "@typesafe-ai/sdk": "^0.6.0"

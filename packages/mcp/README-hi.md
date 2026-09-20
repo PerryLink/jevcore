@@ -111,10 +111,13 @@ Live run वही सतह OpenRouter के माध्यम से अस�
 `jev_check` ने `contradicted` लौटाया, और
 startup egress report ने protocol channel को बिना बिगाड़े stderr पर OpenRouter endpoint का नाम बताया।
 
-**TypeSafe provider कभी असली API के सामने नहीं चलाया गया** — कोई
-TypeSafe credential उपलब्ध नहीं था, इसलिए यह एक injected stub के सामने और
-vendor की अपनी type definitions के सामने covered है। दोनों routes वही primitives लेते हैं,
-इसलिए इसके बिना बदलाव काम करने की अपेक्षा है, पर वह एक अपेक्षा है, कोई प्रेक्षण नहीं।
+**TypeSafe route exercised है, पर हल्के रूप से।** `packages/core/scripts/probe-live.mjs`
+(`pnpm --filter jevcore run probe:typesafe`) असली API से तीन बातें पूछता है: दस claim/evidence
+जोड़े जिनका verdict पहले से ज्ञात है, एक ही प्रश्न छह बार, और `criteria: {true, false}` सीमा वाला
+एक noul। दो अलग runs सहमत हुए — समर्थन करता evidence 0.95, खंडन करता evidence 0.10,
+claim पर चुप रहने वाला evidence 0.03, और दोहराया गया प्रश्न 0.01 या उससे कम हिला।
+वह सीमा स्वीकार की गई। जो अब भी untested है वह request के चारों ओर की चीज़ें हैं,
+request स्वयं नहीं: असली account पर quota, rate-limit और entitlement व्यवहार।
 
 ## License
 

@@ -232,8 +232,16 @@ and per-level probabilities. **Delete the key from whatever shell or CI variable
 you put it in afterwards.**
 
 If you have a TypeSafe key instead, set `TYPESAFE_API_KEY` and select
-`provider: live`; that route has the same primitives but has never been exercised
-here, so treat the first run as a validation rather than a formality.
+`provider: live`. That route is exercised by `pnpm --filter jevcore run
+probe:typesafe` (`packages/core/scripts/probe-live.mjs`), which asks the real API
+ten claim/evidence pairs whose verdict is known in advance, one question repeated
+six times, and a noul carrying a `criteria: {true, false}` boundary. Two separate
+runs agreed on all of it — supporting evidence around 0.95, contradicting evidence
+around 0.10, evidence silent about the claim around 0.03, and a repeated question
+varying by 0.01 or less — so the request shape is observed rather than merely
+expected. What that does not cover is everything around the request: quota,
+rate-limit and entitlement behaviour on a real account is still untested, so treat
+a first production run as a validation rather than a formality.
 
 ### Before filing the drafted issues or the skill proposal
 

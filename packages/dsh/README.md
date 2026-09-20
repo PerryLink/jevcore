@@ -342,16 +342,20 @@ Honest accounting of what has and has not been verified.
   runtime before use, and the payload types come from the installed declaration files.
 
 **Not verified, or known-broken**
-- **The TypeSafe route has never been exercised against the real API.** No TypeSafe credential was
-  available, so `LiveProvider` is covered against an injected stub and against the vendor's type
-  definitions — weaker than a real call. Both routes take the same primitives, so a TypeSafe key is
-  *expected* to work unchanged; that is an expectation, not an observation.
+- **The TypeSafe route is exercised, but only lightly.** `packages/core/scripts/probe-live.mjs`
+  (`pnpm --filter jevcore run probe:typesafe`) asks the real API three things: ten claim/evidence
+  pairs whose verdict is known in advance, one question repeated six times, and a noul carrying a
+  `criteria: {true, false}` boundary. Two separate runs agreed — supporting evidence scored 0.95,
+  contradicting evidence 0.10, evidence silent about the claim 0.03, and the repeated question varied
+  by 0.01 or less. The boundary was accepted. What remains untested is everything around the request
+  rather than the request itself: quota, rate-limit and entitlement behaviour on a real account.
 - **`jev_ask`'s description carries a corrupted dash on the build that is currently running.** It
   reads `branches on —?routing` where an em dash followed by a space belongs. Cause: a UTF-8 round-trip
   early in development replaced the third byte of the em dash with `?`. It is fixed on disk — four
   occurrences, zero remaining, confirmed in both source and build output — but the running process
-  loaded its module before the fix and cannot re-read it without a restart. Cosmetic only; it changes
-  no behaviour.
+  loaded its module before the fix and cannot re-read it without a restart. The dash itself is
+  cosmetic, but the staleness is not: the same process also lacks every fix made since it started,
+  including the `band` field that keeps a 0.51 from being read as a settled yes.
 - The MCP server has been driven end to end by a real MCP client over stdio
   (`pnpm --filter jevcore-mcp run smoke`): handshake, tool discovery, three successful calls, and an
   error result for an invalid batch. It has not been driven by any other third-party host.

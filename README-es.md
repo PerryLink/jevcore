@@ -369,18 +369,22 @@ Recuento honesto de lo que se ha verificado y lo que no.
   instalados.
 
 **No verificado, o se sabe que está roto**
-- **La ruta de TypeSafe nunca se ha ejercitado contra la API real.** No había ninguna credencial de
-  TypeSafe disponible, así que `LiveProvider` está cubierto contra un stub inyectado y contra las
-  definiciones de tipos del proveedor — más débil que una llamada real. Ahora se sabe que la forma de
-  la pregunta es correcta y ambas rutas usan las mismas primitivas, así que se *espera* que una clave
-  de TypeSafe funcione sin cambios; eso es una expectativa, no una observación. El comportamiento de
-  cuota, límite de tasa y derechos en una cuenta real no está probado.
+- **La ruta de TypeSafe está ejercitada, pero solo de forma ligera.** `packages/core/scripts/probe-live.mjs`
+  (`pnpm --filter jevcore run probe:typesafe`) pregunta a la API real tres cosas: diez pares
+  claim/evidence cuyo veredicto se conoce de antemano, una pregunta repetida seis veces y un noul con
+  un límite `criteria: {true, false}`. Dos ejecuciones separadas coincidieron — la evidencia que
+  respalda obtuvo 0.95, la que contradice 0.10, la que guarda silencio sobre la afirmación 0.03, y la
+  pregunta repetida varió 0.01 o menos. El límite fue aceptado. Lo que sigue sin probarse es todo lo
+  que rodea a la petición en lugar de la petición misma: el comportamiento de cuota, límite de tasa y
+  derechos en una cuenta real.
 - **La descripción de `jev_ask` arrastra un guion corrupto en la compilación que se está ejecutando
   ahora mismo.** Dice `branches on —?routing` donde corresponde un guion em seguido de un espacio.
   Causa: una ida y vuelta UTF-8 al principio del desarrollo reemplazó el tercer byte del guion em por
   `?`. Está corregido en disco — cuatro ocurrencias, cero restantes, confirmado tanto en el código
   fuente como en la salida de compilación — pero el proceso en ejecución cargó su módulo antes de la
-  corrección y no puede volver a leerlo sin reiniciar. Solo cosmético; no cambia ningún comportamiento.
+  corrección y no puede volver a leerlo sin reiniciar. El guion en sí es cosmético, pero la
+  desactualización no lo es: el mismo proceso carece también de todas las correcciones hechas desde
+  que arrancó, incluido el campo `band` que evita que un 0.51 se lea como un sí resuelto.
 - El servidor MCP se ha ejecutado de extremo a extremo con un cliente MCP real sobre stdio
   (`pnpm --filter jevcore-mcp run smoke`): handshake, descubrimiento de herramientas, tres llamadas
   exitosas y un resultado de error para un lote inválido. Ningún otro host de terceros lo ha
