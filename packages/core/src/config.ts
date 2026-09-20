@@ -14,8 +14,14 @@
  *   gates.safety        false       — does not judge tool calls
  *   gates.context       false       — does not read tool results
  *   defaultModel        'jev-latest'
- *   maxConfidenceFloor  0.7         — an unsure Jev produces `ask`, not `allow`
+ *   minConfidence       0.7         — an unsure Jev produces `ask`, not `allow`
+ *
+ * The two numeric thresholds are read from `DEFAULT_POLICY` rather than written
+ * here, so the posture described above and the posture enforced cannot drift
+ * apart. They used to be literals in five separate places.
  */
+
+import { DEFAULT_POLICY } from './policy.js'
 
 /**
  * Which provider serves System One requests.
@@ -136,8 +142,14 @@ export const DEFAULT_CONFIG: JevConfig = {
   logLevel: 'warn',
   requestTimeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
   requestMaxRetries: DEFAULT_REQUEST_MAX_RETRIES,
-  minConfidence: 0.7,
-  minProbability: 0.6,
+  // Taken from `DEFAULT_POLICY` rather than restated. Both values used to be
+  // written out literally here *and* in the policy module *and* in both gates
+  // *and* in the DSH plugin's own config docs — five copies of two numbers, so
+  // tuning one left the others silently disagreeing. The official guidance is
+  // blunt about it: "Put the constants (questions and thresholds) in a single
+  // place so they're easy to review."
+  minConfidence: DEFAULT_POLICY.minConfidence,
+  minProbability: DEFAULT_POLICY.minProbability,
   maxStateChars: undefined,
   gates: {
     safety: { enabled: false, onUndecided: 'ask' },

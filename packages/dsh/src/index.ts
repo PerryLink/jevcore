@@ -18,6 +18,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import {
+  DEFAULT_CONFIG,
   DEFAULT_ENDPOINT,
   EgressContract,
   JevProviderError,
@@ -74,14 +75,21 @@ export { Config } from 'jevcore'
  *
  * Kept under a different name from `Config`, which must remain the Standard
  * Schema above.
+ *
+ * Derived from `DEFAULT_CONFIG` rather than restated. This is the copy a user
+ * reads to decide what to set, so it is the worst one to let drift: it held its
+ * own literals for the model, the log level and both thresholds, which meant a
+ * change to the real defaults would leave the documentation confidently wrong.
  */
 export const CONFIG_DOC = {
-  provider: 'mock',
-  apiKeyRef: 'TYPESAFE_API_KEY',
-  model: 'jev-latest',
-  logLevel: 'warn',
-  minConfidence: 0.7,
-  minProbability: 0.6,
+  provider: DEFAULT_CONFIG.provider,
+  apiKeyRef: DEFAULT_CONFIG.apiKeyRef,
+  model: DEFAULT_CONFIG.model,
+  logLevel: DEFAULT_CONFIG.logLevel,
+  requestTimeoutMs: DEFAULT_CONFIG.requestTimeoutMs,
+  requestMaxRetries: DEFAULT_CONFIG.requestMaxRetries,
+  minConfidence: DEFAULT_CONFIG.minConfidence,
+  minProbability: DEFAULT_CONFIG.minProbability,
   gates: {
     safety: { enabled: false, onUndecided: 'ask' },
     context: { enabled: false, onUndecided: 'ask' },

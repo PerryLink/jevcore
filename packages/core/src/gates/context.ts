@@ -23,7 +23,7 @@
 
 import type { EgressFeature } from '../egress.js'
 import { noul } from '../primitives.js'
-import { applyPolicy } from '../policy.js'
+import { DEFAULT_POLICY, applyPolicy } from '../policy.js'
 import type { JevService } from '../service.js'
 import { JevProviderError, type JevQuestion } from '../types.js'
 
@@ -145,7 +145,7 @@ export const createContextGate = (options: ContextGateOptions) => {
     }
 
     const policy = {
-      minConfidence: options.minConfidence ?? 0.7,
+      minConfidence: options.minConfidence ?? DEFAULT_POLICY.minConfidence,
       minProbability: minRelevance,
     }
 

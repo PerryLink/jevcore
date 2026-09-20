@@ -22,7 +22,7 @@
 
 import type { EgressFeature } from '../egress.js'
 import { noul } from '../primitives.js'
-import { applyPolicy, type Verdict } from '../policy.js'
+import { DEFAULT_POLICY, applyPolicy, type Verdict } from '../policy.js'
 import type { JevService } from '../service.js'
 import { JevProviderError, type JevQuestion } from '../types.js'
 
@@ -139,8 +139,11 @@ export const createSafetyGate = (options: SafetyGateOptions) => {
    * letting a hazard through at 0.62 even when they had asked for 0.9.
    */
   const policy = {
-    minConfidence: options.minConfidence ?? 0.7,
-    minProbability: options.minProbability ?? 0.6,
+    // Referenced rather than restated: this value used to be literal here, in the
+    // context gate, in DEFAULT_CONFIG and in DEFAULT_POLICY — four copies of one
+    // number, so tuning any of them left the others enforcing something else.
+    minConfidence: options.minConfidence ?? DEFAULT_POLICY.minConfidence,
+    minProbability: options.minProbability ?? DEFAULT_POLICY.minProbability,
   }
 
   const decide = (verdicts: Readonly<Record<string, Verdict>>): GateDecision => {
