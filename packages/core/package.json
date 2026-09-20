@@ -37,6 +37,7 @@
   },
   "files": [
     "lib",
+    "scripts",
     "README.md",
     "LICENSE"
   ],

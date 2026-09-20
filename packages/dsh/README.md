@@ -310,8 +310,11 @@ that could be mistaken for a real judgment would be worse than no mock at all.
 Honest accounting of what has and has not been verified.
 
 **Verified**
-- 349 tests pass across three packages (257 core, 63 DSH, 29 MCP), with no network access and no
+- 360 tests pass across three packages (266 core, 65 DSH, 29 MCP), with no network access and no
   `TYPESAFE_API_KEY`. CI clears the variable and expects the suite to pass anyway.
+- **The OpenRouter route is verified against the real API.** `pnpm --filter @dsh-jev/core run
+  probe:live` and `pnpm --filter @dsh-jev/mcp run smoke:live` both answered against real System One
+  models. See the root README's status section for the recorded results.
 - **The plugin activates in a running harness and its tools work.** The plugin row reports `active`;
   `jev_ask` returned `urgent=true (0.8307)` and `team=billing (0.5027)` against the mock in 1 ms, and
   `jev_check` returned `verdict="insufficient"` with its three probabilities. Every result carried
@@ -326,9 +329,10 @@ Honest accounting of what has and has not been verified.
   runtime before use, and the payload types come from the installed declaration files.
 
 **Not verified, or known-broken**
-- **The live path has never been exercised against the real API.** No credential existed during
-  development, so `LiveProvider` is covered only against an injected stub SDK. Expect to validate it
-  on first live use.
+- **The TypeSafe route has never been exercised against the real API.** No TypeSafe credential was
+  available, so `LiveProvider` is covered against an injected stub and against the vendor's type
+  definitions — weaker than a real call. Both routes take the same primitives, so a TypeSafe key is
+  *expected* to work unchanged; that is an expectation, not an observation.
 - **`jev_ask`'s description carries a corrupted dash on the build that is currently running.** It
   reads `branches on —?routing` where an em dash followed by a space belongs. Cause: a UTF-8 round-trip
   early in development replaced the third byte of the em dash with `?`. It is fixed on disk — four

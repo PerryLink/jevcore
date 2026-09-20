@@ -89,13 +89,26 @@ unacceptable, do not set a key.
 Tools, provider selection, and egress enforcement are covered by tests, and the
 transport has been driven end to end by a real MCP client over stdio:
 
-`sh
-pnpm --filter @dsh-jev/mcp run smoke
-`
+```sh
+pnpm --filter @dsh-jev/mcp run smoke        # offline, mock provider, no credential
+pnpm --filter @dsh-jev/mcp run smoke:live   # real answers, needs OPENROUTER_API_KEY
+```
 
-That exercises the handshake, tool discovery, three successful calls, and the
-error path for an invalid batch. **The live provider has still only ever run
-against an injected stub** — no real TypeSafe API call has been made.
+The offline run exercises the handshake, tool discovery, three successful calls,
+and the error path for an invalid batch.
+
+The live run drives the same surface against real System One models through
+OpenRouter: all three tools answered, a three-primitive batch returned a `score`
+of `1.08` on a three-level rubric with its legend intact, `jev_rank` ordered a
+credential runbook above a billing guide, `jev_check` returned `contradicted`, and
+the startup egress report named the OpenRouter endpoint on stderr without
+disturbing the protocol channel.
+
+**The TypeSafe provider has never been exercised against the real API** — no
+TypeSafe credential was available, so it is covered against an injected stub and
+against the vendor's own type definitions. Both routes take the same primitives,
+so it is expected to work unchanged, but that is an expectation rather than an
+observation.
 
 ## License
 

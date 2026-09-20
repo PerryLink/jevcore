@@ -310,8 +310,22 @@ that could be mistaken for a real judgment would be worse than no mock at all.
 Honest accounting of what has and has not been verified.
 
 **Verified**
-- 349 tests pass across three packages (257 core, 63 DSH, 29 MCP), with no network access and no
+- 360 tests pass across three packages (266 core, 65 DSH, 29 MCP), with no network access and no
   `TYPESAFE_API_KEY`. CI clears the variable and expects the suite to pass anyway.
+- **The OpenRouter route is verified against the real API.** `pnpm --filter @dsh-jev/core run
+  probe:live` drives the provider and `pnpm --filter @dsh-jev/mcp run smoke:live` drives the whole MCP
+  surface — transport, tool schemas, service and provider — against real System One models
+  (`typesafe/jev-1.13-20260917`). A three-primitive batch returned a `noul` at 0.91, a `choice` at
+  0.97, and a `score` of `1.05` on a four-level rubric, with usage reported as
+  `{ inputTokens: 469, outputTokens: 68, costUsd: 0.000019698 }`. `jev_rank` ordered a credential
+  runbook above a billing guide; `jev_check` returned `contradicted`. Both scripts need
+  `OPENROUTER_API_KEY` and are excluded from CI.
+- **The payload shapes are checked against both vendors' own schemas.**
+  `pnpm --filter @dsh-jev/core run check:schemas` parses what this project actually builds against
+  OpenRouter's real zod schemas, and `test/vendor-conformance.test.ts` pins our question and answer
+  types to both SDKs' type definitions. This is what found `score.criteria` being sent as a keyed map
+  when both vendors require an ordered array — a defect the stubbed unit tests had passed over
+  throughout.
 - **The plugin activates in a running harness and its tools work.** The plugin row reports `active`;
   `jev_ask` returned `urgent=true (0.8307)` and `team=billing (0.5027)` against the mock in 1 ms, and
   `jev_check` returned `verdict="insufficient"` with its three probabilities. Every result carried
@@ -326,9 +340,11 @@ Honest accounting of what has and has not been verified.
   runtime before use, and the payload types come from the installed declaration files.
 
 **Not verified, or known-broken**
-- **The live path has never been exercised against the real API.** No credential existed during
-  development, so `LiveProvider` is covered only against an injected stub SDK. Expect to validate it
-  on first live use.
+- **The TypeSafe route has never been exercised against the real API.** No TypeSafe credential was
+  available, so `LiveProvider` is covered against an injected stub and against the vendor's type
+  definitions — weaker than a real call. The question shape is now known-correct and both routes take
+  the same primitives, so a TypeSafe key is *expected* to work unchanged; that is an expectation, not
+  an observation. Quota, rate-limit and entitlement behaviour on a real account is untested.
 - **`jev_ask`'s description carries a corrupted dash on the build that is currently running.** It
   reads `branches on —?routing` where an em dash followed by a space belongs. Cause: a UTF-8 round-trip
   early in development replaced the third byte of the em dash with `?`. It is fixed on disk — four
