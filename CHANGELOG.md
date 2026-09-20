@@ -4,7 +4,7 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.1.1
+## 0.1.1 — 2026-09-20
 
 ### Fixed
 
@@ -24,6 +24,16 @@ Notable changes, newest first. The format follows
   this does not affect installation — but it does mean explicitly asking npm to
   install `@deepseek-ai/dsh-tools` alongside the plugin fails, and that is npm's
   tag to fix, not this package's.
+
+### Notes for the next release
+
+- **A `publish` does not always land the moment it returns.** npm stages the
+  version first, and `GET /<pkg>` can still show only the previous version for
+  tens of seconds afterwards. During this release that delay looked exactly like
+  a failed publish, and a second attempt then failed with
+  `409 Cannot publish over previously staged version` — the version was already
+  there. Confirm a publish by re-reading the registry after a pause, and treat a
+  409 as "already published", not as an error to retry.
 
 ## 0.1.0 — 2026-09-20
 
