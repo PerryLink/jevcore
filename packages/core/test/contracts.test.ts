@@ -108,8 +108,13 @@ describe('gate question sets are declared and stable', () => {
     const names = Object.keys(HAZARD_QUESTIONS)
     expect(names.length).toBeGreaterThan(0)
     for (const name of names) {
-      expect(HAZARD_QUESTIONS[name]?.type).toBe('noul')
-      expect(HAZARD_QUESTIONS[name]?.instructions.length).toBeGreaterThan(20)
+      const question = HAZARD_QUESTIONS[name]
+      expect(question?.type).toBe('noul')
+      // Instructions are an EntryType, so this asserts the shape rather than
+      // assuming a string: the gate questions are written as prose today, and a
+      // hazard phrased as an empty object would be no question at all.
+      expect(typeof question?.instructions).toBe('string')
+      expect(String(question?.instructions).length).toBeGreaterThan(20)
     }
   })
 

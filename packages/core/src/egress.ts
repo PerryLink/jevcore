@@ -250,9 +250,20 @@ export class EgressContract {
     const stateLimit = limits.find((field) => field.field === 'state')?.maxChars ?? 16_000
     const questionsLimit = limits.find((field) => field.field === 'questions')?.maxChars ?? 4_000
 
+    // Redaction runs over **everything that leaves**, not just `state`.
+    //
+    // It used to cover `state` alone, which was a real leak: the ranking tool
+    // builds one question per candidate, and candidate text is model-authored, so
+    // a caller passing a record containing a credential had it transmitted
+    // verbatim from inside a question. Verified before the fix — the same string
+    // was redacted in `state` and left intact in `questions`. The contract's whole
+    // claim is that what leaves is the redacted content, and a question is content.
     const { value: safeState, summary } = input.redact(input.state)
+    const { value: safeQuestions, summary: questionSummary } = input.redact(
+      input.questions as unknown as JsonValue,
+    )
     const stateText = JSON.stringify(safeState) ?? 'null'
-    const questionsText = JSON.stringify(input.questions) ?? '{}'
+    const questionsText = JSON.stringify(safeQuestions) ?? '{}'
 
     // `state` is capped by truncation; `questions` is refused instead. The
     // difference is what truncation would cost: a shortened state is still a
@@ -271,12 +282,14 @@ export class EgressContract {
     return {
       feature: input.feature,
       state: cappedState.value,
-      questions: input.questions,
+      questions: safeQuestions as unknown as Readonly<Record<string, JevQuestion>>,
       stateChars: cappedState.text.length,
       questionsChars: questionsText.length,
       truncated: cappedState.truncated,
-      redactionRules: summary.rules,
-      redactions: summary.redactions,
+      // Both fields contribute, so the report reflects everything removed rather
+      // than only what was removed from the state.
+      redactionRules: [...new Set([...summary.rules, ...questionSummary.rules])],
+      redactions: summary.redactions + questionSummary.redactions,
     }
   }
 

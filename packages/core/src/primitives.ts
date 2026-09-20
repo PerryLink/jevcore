@@ -6,23 +6,47 @@
  * would reject, and so the batch shape is readable at the call site.
  */
 
-import type { ChoiceQuestion, JevQuestion, NoulQuestion, ScoreQuestion } from './types.js'
+import type {
+  ChoiceQuestion,
+  EntryType,
+  JevQuestion,
+  NoulCriteria,
+  NoulQuestion,
+  ScoreQuestion,
+} from './types.js'
 
-/** Ask a yes/no question. The answer carries the probability of `true`. */
-export const noul = (instructions: string): NoulQuestion => ({
+/**
+ * Ask a yes/no question. The answer carries the probability of `true`.
+ *
+ * @param instructions - the question. A string suffices for a short, unambiguous
+ *   one; use an object or array when definitions, contrasts or examples clarify
+ *   it, or when part of the question comes from your code and belongs in its own
+ *   named field rather than spliced into a template.
+ * @param criteria - optional description of what *yes* and what *no* mean.
+ *   Worth supplying whenever the boundary between them is not obvious: a noul
+ *   whose boundary is unstated is one whose 0.5 cannot be interpreted, and the
+ *   official guardrail recipe defines every hazard this way.
+ */
+export const noul = (instructions: EntryType, criteria?: NoulCriteria): NoulQuestion => ({
   type: 'noul',
   instructions,
+  // Omitted rather than set to undefined, so the wire payload carries only what
+  // the caller actually declared.
+  ...(criteria === undefined ? {} : { criteria }),
 })
 
 /**
  * Ask Jev to pick one of a fixed set.
  *
  * @param criteria - permitted answers mapped to an optional description.
- *   Keys are what Jev returns; values describe the key for the model.
+ *   Keys are what Jev returns; values describe the key for the model. A
+ *   description may be an object or array — the docs' example gives each option
+ *   the same shape (`what`, `not_for`, `examples`) so the model can compare them
+ *   directly. `null` means the option needs no explanation.
  */
 export const choice = (
-  instructions: string,
-  criteria: Readonly<Record<string, string | null>>,
+  instructions: EntryType,
+  criteria: Readonly<Record<string, EntryType>>,
 ): ChoiceQuestion => ({
   type: 'choice',
   instructions,
@@ -46,7 +70,7 @@ export const choice = (
  *   hold a position in the scale without describing it.
  */
 export const score = (
-  instructions: string,
+  instructions: EntryType,
   criteria: Readonly<Record<string, string | null | undefined>>,
 ): ScoreQuestion => ({
   type: 'score',
@@ -110,12 +134,43 @@ export const scoreCriteriaArray = (
   return keys.map((key) => levels[key] as string)
 }
 
+/**
+ * Whether guidance carries nothing to judge against.
+ *
+ * `instructions` is an {@link EntryType}, so "empty" is not one test. A question
+ * whose instruction is `{}` or `[]` asks the model nothing while looking
+ * syntactically fine, which is worth an error rather than a confusing answer.
+ */
+export const isEmptyEntry = (value: EntryType): boolean => {
+  if (value === null || value === undefined) return true
+  if (typeof value === 'string') return value.trim().length === 0
+  if (Array.isArray(value)) return value.length === 0
+  if (typeof value === 'object') return Object.keys(value).length === 0
+  return false
+}
+
 /** Reject a question whose criteria map would make an answer unverifiable. */
 export const assertValidQuestion = (id: string, question: JevQuestion): void => {
-  if (question.instructions.trim().length === 0) {
-    throw new Error(`question "${id}" has empty instructions`)
+  if (isEmptyEntry(question.instructions)) {
+    throw new Error(
+      `question "${id}" has empty instructions. A string, object or array is accepted, but it ` +
+        'has to say something: an empty one leaves the model nothing to judge.',
+    )
   }
-  if (question.type === 'noul') return
+  if (question.type === 'noul') {
+    // `criteria` is optional, but if given it must distinguish the two outcomes —
+    // a noul whose yes and no mean the same thing is not a question.
+    const criteria = question.criteria
+    if (criteria !== undefined && criteria !== null) {
+      if (isEmptyEntry(criteria.true ?? null) && isEmptyEntry(criteria.false ?? null)) {
+        throw new Error(
+          `question "${id}" declares noul criteria but describes neither outcome. Describe what ` +
+            'yes means, what no means, or both; with neither, the probability cannot be read.',
+        )
+      }
+    }
+    return
+  }
   if (question.type === 'score') {
     if (question.criteria.length < 2) {
       throw new Error(

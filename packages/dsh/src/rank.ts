@@ -112,19 +112,41 @@ export const jevRankTool = (service: JevService) =>
 
       const criterion =
         typed.criterion?.trim() ||
-        'Does this candidate help accomplish the query it is being ranked against?'
+        'Does the candidate hold information that would help answer the query?'
 
-      // One noul question per candidate, all against the same state.
+      // Every candidate travels in `state`, and each question refers to its own by
+      // a backticked path.
+      //
+      // This used to splice each candidate into the question text instead, which
+      // the docs name as an anti-pattern outright: "When a value comes from a
+      // database, put it in its own field instead of splicing it into a string
+      // template." It was also the reason a candidate's contents could reach the
+      // wire verbatim — see the redaction note in `EgressContract.measure`.
+      //
+      // Sending all candidates to every question costs tokens, and there is no way
+      // around it while every question shares one state: Jev evaluates a batch
+      // against a single state, so a question cannot be given only its own slice.
+      // The cost buys the documented shape and a question that names what it is
+      // judging rather than paraphrasing it.
+      const state = {
+        query: typed.query,
+        candidates: order.map(({ candidate, index }) => ({
+          index,
+          text: candidate,
+        })),
+      }
+
       const questions: Record<string, ReturnType<typeof noul>> = {}
-      for (const { candidate, index } of order) {
+      for (const { index } of order) {
         questions[candidateQuestionId(index)] = noul(
-          `Candidate: ${candidate}\n\nQuestion: ${criterion}`,
+          `Does \`candidates[${index}].text\` satisfy the criterion in \`query\`? ` +
+            `The criterion is: ${criterion}`,
         )
       }
 
       const result = await service.ask({
         feature: FEATURE,
-        state: { query: typed.query },
+        state,
         questions,
         ...(exec.signal === undefined ? {} : { signal: exec.signal }),
       })

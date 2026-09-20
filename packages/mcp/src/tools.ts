@@ -87,16 +87,28 @@ export const runRank = async (service: JevService, input: RankInput) => {
   }
   const criterion =
     input.criterion?.trim() ||
-    'Does this candidate help accomplish the query it is being ranked against?'
+    'Does the candidate hold information that would help answer the query?'
+
+  // Candidates travel in `state`, and each question refers to its own by a
+  // backticked path. Splicing them into the question text — which this did — is
+  // the anti-pattern the docs name outright, and it meant candidate contents
+  // reached the wire as question text. See `EgressContract.measure`.
+  const state = {
+    query: input.query,
+    candidates: input.candidates.map((candidate, index) => ({ index, text: candidate })),
+  }
 
   const questions: Record<string, JevQuestion> = {}
-  input.candidates.forEach((candidate, index) => {
-    questions[`candidate_${index}`] = noul(`Candidate: ${candidate}\n\nQuestion: ${criterion}`)
+  input.candidates.forEach((_candidate, index) => {
+    questions[`candidate_${index}`] = noul(
+      `Does \`candidates[${index}].text\` satisfy the criterion in \`query\`? ` +
+        `The criterion is: ${criterion}`,
+    )
   })
 
   const result = await service.ask({
     feature: 'tool:jev_rank',
-    state: { query: input.query },
+    state,
     questions,
   })
 

@@ -9,6 +9,35 @@
 /** A lossless-JSON value. The only thing that may cross the wire as `state`. */
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
 
+/**
+ * What the API accepts wherever guidance is written: `instructions`, a choice
+ * option's description, a score level's description, and a noul's `criteria`.
+ *
+ * Mirrors `EntryType` in the official SDK. Structure is not decoration here —
+ * the docs recommend it in three named situations, and two of them are about
+ * correctness rather than style:
+ *
+ *  - **A value that comes from your code belongs in its own field**, rather than
+ *    being spliced into a string template. "When a value comes from a database,
+ *    put it in its own field instead of splicing it into a string template."
+ *  - **Definitions, contrasts and examples** go in named fields so the model can
+ *    compare them directly; the docs' worked example uses the same key names
+ *    across options (`what`, `not_for`, `examples`) for exactly that reason.
+ *  - **Several questions share wording** but differ in their supporting data.
+ *
+ * A short, unambiguous question is fine as a plain string. Reach for structure
+ * when it separates guidance that would otherwise blur together.
+ *
+ * @see https://docs.typesafe.ai/primitives/advanced
+ */
+export type EntryType = string | JsonValue[] | { readonly [key: string]: JsonValue } | null
+
+/** A noul's optional description of what yes and no mean. New in API v1. */
+export interface NoulCriteria {
+  readonly true?: EntryType
+  readonly false?: EntryType
+}
+
 /** The shape of a thing that can serve a System One request. */
 export interface JevProvider {
   /**
@@ -33,17 +62,37 @@ export interface JevRequest {
   readonly model?: string
 }
 
-/** A yes/no question. */
+/**
+ * A yes/no question.
+ *
+ * `criteria` describes what yes and no each mean, which is new in API v1 and
+ * worth using: a noul whose boundary is unstated is a noul whose 0.5 is
+ * uninterpretable, and the docs' own guardrail cookbook defines every hazard with
+ * explicit true/false descriptions. The official guidance for a boundary that is
+ * subtle is to add them.
+ *
+ * This package previously dropped `criteria` on the floor for nouls — it accepted
+ * the field at the tool boundary and never forwarded it — so a caller could
+ * declare a boundary and have it silently ignored.
+ */
 export interface NoulQuestion {
   readonly type: 'noul'
-  readonly instructions: string
+  /** A string, or structured guidance when definitions or examples clarify it. */
+  readonly instructions: EntryType
+  readonly criteria?: NoulCriteria
 }
 
 /** A one-of-N question. Criteria keys are the permitted answers. */
 export interface ChoiceQuestion {
   readonly type: 'choice'
-  readonly instructions: string
-  readonly criteria: Readonly<Record<string, string | null>>
+  readonly instructions: EntryType
+  /**
+   * Option label to its description. `null` means the option needs no
+   * explanation, which the live API accepts.
+   *
+   * At most 255 options.
+   */
+  readonly criteria: Readonly<Record<string, EntryType>>
 }
 
 /**
@@ -64,7 +113,14 @@ export interface ChoiceQuestion {
  */
 export interface ScoreQuestion {
   readonly type: 'score'
-  readonly instructions: string
+  /** A string, or structured guidance when the levels need framing. */
+  readonly instructions: EntryType
+  /**
+   * The ordered rubric. Position is the score, so the array must be 2 to 10
+   * entries long and every entry must be described — `null` is refused because
+   * dropping one renumbers the rest, and the empty string is the way to hold a
+   * position without describing it. See {@link scoreCriteriaArray}.
+   */
   readonly criteria: readonly string[]
 }
 
