@@ -161,11 +161,22 @@ jobs:
         # actually install and load, which is the part that catches a manifest
         # mistake rather than a `files` mistake.
         run: |
-          mkdir -p /tmp/cleanroom && cd /tmp/cleanroom
+          rm -rf /tmp/cleanroom && mkdir -p /tmp/cleanroom && cd /tmp/cleanroom
           echo '{"name":"cleanroom","private":true,"version":"1.0.0"}' > package.json
-          pnpm --dir "$GITHUB_WORKSPACE" --filter jevkit pack --pack-destination .
-          pnpm --dir "$GITHUB_WORKSPACE" --filter jevkit-mcp pack --pack-destination .
-          npm install --no-audit --no-fund ./jevkit-*.tgz ./jevkit-mcp-*.tgz
+
+          # Pack from inside the workspace, with an absolute destination. The
+          # obvious form -- `pnpm --dir "$GITHUB_WORKSPACE" --filter X pack
+          # --pack-destination .` -- resolves that "." against the workspace
+          # root, not the current directory, so the tarballs landed in the
+          # repository instead of here and npm install failed with ENOENT on a
+          # literal './jevkit-*.tgz'.
+          cd "$GITHUB_WORKSPACE"
+          pnpm --filter jevkit pack --pack-destination /tmp/cleanroom
+          pnpm --filter jevkit-mcp pack --pack-destination /tmp/cleanroom
+          cd /tmp/cleanroom
+          ls -1 *.tgz
+
+          npm install --no-audit --no-fund ./jevkit-0.1.0.tgz ./jevkit-mcp-0.1.0.tgz
           node -e "
             const core = await import('jevkit');
             const mcp = await import('jevkit-mcp');
