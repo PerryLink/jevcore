@@ -202,6 +202,17 @@ export interface JevResult {
   /** Wall-clock duration of the provider call, in milliseconds. */
   readonly latencyMs: number
   /**
+   * A provider-supplied note about the answer, to be shown verbatim.
+   *
+   * The offline mock sets this on every result, and the adapters key their
+   * "synthetic" marker off its presence rather than off the provider name: a
+   * result labelled synthetic has to be shown as synthetic whichever provider
+   * produced it. Declared here rather than reached for by a local alias in the
+   * service, which is how it was carried before — a field the cache had to be
+   * careful to preserve, on a type that did not admit it exists.
+   */
+  readonly warning?: string
+  /**
    * Which provider produced this result. Always populated, so a caller can
    * never mistake a mock answer for a live one.
    */

@@ -199,17 +199,17 @@ export interface JevAskInput {
 }
 
 /**
- * A result as this service stores and returns it: the provider's own result plus
- * the synthetic marker a route may attach to it.
+ * The synthetic marker a route may attach to a result.
  *
- * `warning` is not declared on {@link JevResult}, and this alias is why the
- * cache-hit path can carry it without reaching for `any`. Nothing here is
- * inferred from the provider's name: `renderResult` derives the offline mock's
- * warning from `provider === 'mock'`, while a route that marks its own answers
- * synthetic sets the field directly — and a hit that dropped it would hand back a
- * synthetic answer wearing a real one's shape.
+ * This used to be a local alias, `JevResult & { warning?: string }`, because the
+ * field was carried without being declared — and an alias is a private treaty
+ * between two files that the type system cannot enforce. `warning` is on
+ * {@link JevResult} now, so the cache-hit path carries it by type rather than by
+ * agreement. Nothing here is inferred from the provider's name: `renderResult`
+ * derives the offline mock's warning from `provider === 'mock'`, while a route
+ * that marks its own answers synthetic sets the field directly — and a hit that
+ * dropped it would hand back a synthetic answer wearing a real one's shape.
  */
-type ResultWithWarning = JevResult & { readonly warning?: string }
 
 /**
  * Attach what egress did to the payload, without disturbing what the provider
@@ -320,7 +320,7 @@ export class JevService {
         // the measurement — both character counts, `truncated`, and the redacted
         // payload — so a hit is by construction a request identical to the one
         // that produced the value.
-        const stored = hit as unknown as ResultWithWarning
+        const stored = hit as unknown as JevResult
         // Rebuilt rather than spread, because three of the stored fields cannot be
         // carried over honestly: `latencyMs` measured the call that filled the
         // cache rather than this one, `usage` reports tokens this call did not
@@ -334,7 +334,7 @@ export class JevService {
         // themselves are synthetic, so dropping it would hand back a cached
         // synthetic answer looking exactly like a real judgment — the one
         // distinction this project does not blur.
-        const reused: ResultWithWarning = {
+        const reused: JevResult = {
           provider: stored.provider,
           model: stored.model,
           answers: stored.answers,
