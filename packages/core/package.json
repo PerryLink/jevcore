@@ -14,6 +14,14 @@
     "score"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dsh-jev/dsh-jev.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dsh-jev/dsh-jev/issues"
+  },
+  "homepage": "https://github.com/dsh-jev/dsh-jev#readme",
   "type": "module",
   "engines": {
     "node": ">=20"

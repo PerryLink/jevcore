@@ -19,9 +19,9 @@ Last updated: 2026-09-20 (round 2). Read this first when resuming.
 | 11. MCP transport verification | **Done** — real stdio client drives the server end to end (pnpm --filter @dsh-jev/mcp run smoke) |
 | 12. Actual publish + M4 | **Blocked** — needs your accounts and an API key |
 
-Two unverified claims remain, both stated in the README rather than glossed: the
-live provider has never made a real TypeSafe API call, and the DSH plugin has
-never reached ctive in a running harness (blocked on the restart below).
+One unverified claim remains, stated in the README rather than glossed: the live
+provider has never made a real TypeSafe API call. The plugin's activation is no
+longer in doubt; see the Verified live section below.
 
 **272 tests pass** (191 core, 60 dsh, 21 mcp) with no credential and no network
 access. `pnpm run check` is green. All three tarballs pack correctly.
@@ -37,9 +37,9 @@ dsh-jev/
 │                               then a job that asserts each tarball contains
 │                               what the package needs to load
 └── packages/
-    ├── core/   @dsh-jev/core   the decisions; no framework imports; 191 tests
-    ├── dsh/    dsh-jev         the DSH plugin; 4 source files; 43 tests
-    └── mcp/    @dsh-jev/mcp    the same tools over MCP; 21 tests
+    ├── core/   @dsh-jev/core    the decisions; no framework imports; 191 tests
+    ├── dsh/    @dsh-jev/plugin  the DSH plugin; 4 source files; 60 tests
+    └── mcp/    @dsh-jev/mcp     the same tools over MCP; 21 tests
 ```
 
 `packages/dsh` and `packages/mcp` are both thin: they declare schemas, translate

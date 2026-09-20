@@ -49,7 +49,7 @@ pnpm install
 pnpm run check          # typecheck + test + build across all three packages
 ```
 
-Expected: 255 tests pass (191 core, 43 dsh, 21 mcp), with no credential set.
+Expected: 272 tests pass (191 core, 60 dsh, 21 mcp), with no credential set.
 
 ```sh
 # Confirm nothing in the artifacts reaches the network on the default path.
@@ -57,7 +57,20 @@ node packages/mcp/lib/bin.js 2>&1 | head -1
 # expect: [dsh-jev] provider=mock  endpoint=none  egress=OFF  (no network calls will be made; ...)
 ```
 
-## 2. Version and log
+## 2. Set the repository URL
+
+All three manifests carry a placeholder `repository` field pointing at
+`https://github.com/dsh-jev/dsh-jev`. Replace it with the real URL before
+publishing: a wrong one sends bug reports, and npm's provenance link, to a
+repository that is not yours.
+
+```sh
+grep -rl 'github.com/dsh-jev/dsh-jev' packages/*/package.json
+```
+
+Change the URL in each file, then `pnpm install` so the lockfile records it.
+
+## 3. Version and log
 
 1. Set the same version in all three manifests:
    `package.json`, `packages/core/package.json`, `packages/dsh/package.json`,
@@ -65,7 +78,7 @@ node packages/mcp/lib/bin.js 2>&1 | head -1
 2. Move the `CHANGELOG.md` entry from `unreleased` to that version and date it.
 3. `pnpm install` so the lockfile records the workspace versions.
 
-## 3. Inspect the tarballs before publishing
+## 4. Inspect the tarballs before publishing
 
 ```sh
 pnpm --filter @dsh-jev/core pack --dry-run
@@ -78,7 +91,7 @@ no source maps, test files, or `node_modules` content leaked in. The DSH tarball
 must also contain `cordis.patch.yml` — without it the plugin installs and does
 nothing.
 
-## 4. Publish
+## 5. Publish
 
 Order matters: the two adapters depend on `@dsh-jev/core`.
 
@@ -94,20 +107,20 @@ Prefer publishing from CI with provenance over a laptop:
 npm publish --provenance --access public
 ```
 
-## 5. Tag and push
+## 6. Tag and push
 
 ```sh
 git tag -a v0.1.0 -m "0.1.0"
 git push origin main --follow-tags
 ```
 
-## 6. Verify from a clean directory
+## 7. Verify from a clean directory
 
 Do not trust the publish output; install what you actually shipped.
 
 ```sh
 mkdir /tmp/verify && cd /tmp/verify && npm init -y
-npm install @dsh-jev/core dsh-jev @dsh-jev/mcp
+npm install @dsh-jev/core @dsh-jev/plugin @dsh-jev/mcp
 node -e "const c = require('@dsh-jev/core'); console.log(Object.keys(c).length, 'core exports')"
 ```
 

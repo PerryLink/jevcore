@@ -258,27 +258,32 @@ Honest accounting of what has and has not been verified.
 **Verified**
 - 272 tests pass across three packages (191 core, 60 DSH, 21 MCP), with no network access and no
   `TYPESAFE_API_KEY`. CI clears the variable and expects the suite to pass anyway.
+- **The plugin activates in a running harness and its tools work.** The plugin row reports `active`;
+  `jev_ask` returned `urgent=true (0.8307)` and `team=billing (0.5027)` against the mock in 1 ms, and
+  `jev_check` returned `verdict="insufficient"` with its three probabilities. Every result carried
+  `provider: "mock"` and zero token usage, so the default path made no network call.
+- **The bundled skill registers.** `typesafe-ai-dsh` appears in the session skill catalog.
 - The default path makes no network call: asserted by spying on `globalThis.fetch` while mounting the
   plugin and answering through the service, and again while assembling the MCP runtime.
 - A disabled gate registers **no** event listener, and a denied egress never reaches the provider.
-- The plugin activates on a real Cordis `Context`, publishes `ctx.jev`, and registers exactly three
-  tools. `Config` satisfies the Standard Schema protocol Cordis requires before a plugin starts.
+- `Config` satisfies the Standard Schema protocol Cordis requires before a plugin starts.
 - Every DSH API used here (`ctx.provide`, `ctx.effect`, `tools.register`, `defineTool`,
   `tools/pre-execute`, `tools/post-execute`, `credentials.resolve`) was checked against the installed
   runtime before use, and the payload types come from the installed declaration files.
 
-**Not verified**
+**Not verified, or known-broken**
 - **The live path has never been exercised against the real API.** No credential existed during
   development, so `LiveProvider` is covered only against an injected stub SDK. Expect to validate it
   on first live use.
-- **The DSH plugin has never reached `active` in a running harness.** Its activation was verified
-  in-process on a fresh `Context`, and the module loads cleanly from the profile's own resolution
-  path, but the long-running server that has it configured is still holding an earlier module
-  instance in a registry cache and must be restarted to pick up the current build.
+- **`jev_ask`'s description carries a corrupted dash on the build that is currently running.** It
+  reads `branches on —?routing` where an em dash followed by a space belongs. Cause: a UTF-8 round-trip
+  early in development replaced the third byte of the em dash with `?`. It is fixed on disk — four
+  occurrences, zero remaining, confirmed in both source and build output — but the running process
+  loaded its module before the fix and cannot re-read it without a restart. Cosmetic only; it changes
+  no behaviour.
 - The MCP server has been driven end to end by a real MCP client over stdio
-  (pnpm --filter @dsh-jev/mcp run smoke): handshake, tool discovery, three successful calls, and an
-  error result for an invalid batch. It has not yet been driven by a third-party host other than that
-  client, and the live provider inside it has only ever run against a stub.
+  (`pnpm --filter @dsh-jev/mcp run smoke`): handshake, tool discovery, three successful calls, and an
+  error result for an invalid batch. It has not been driven by any other third-party host.
 - Gate behaviour on live traffic. The gates are tested against synthetic answers and real hook
   payload shapes, but no real tool call has been gated end to end.
 - The context gate cannot recover context already spent. It withholds a result from reaching the
