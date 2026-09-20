@@ -18,6 +18,10 @@ Status as of the 0.4.1 release:
   empty directory, rather than by trusting the publish output — the section below
   explains why that distinction is not pedantry. That check is what caught
   `jevcore-cli@0.4.0` being uninstallable;
+- **Tag the commit whose tree was staged, not `main`.** Staging captures whatever
+  was on disk at that moment, and a later commit makes the tag describe a build
+  nobody published. `v0.4.1` is `70077a4`; `main` moved one commit past it with a
+  type-only change that erases at compile time and ships in the next release;
 - the repository is public at <https://github.com/PerryLink/jevcore>, with CI
   green, and a mirror is pushed to Gitee at
   <https://gitee.com/perrylink/jevcore>;
