@@ -3,15 +3,18 @@ name: Publish
 # Publishing is tag-driven on purpose. A human decides the version, the tag
 # records who decided and when, and nothing reaches npm from a working branch.
 #
-# Requires one repository secret:
-#
-#   NPM_TOKEN — an npm automation token with publish rights for jevkit,
-#               jevkit-dsh and jevkit-mcp. Settings → Secrets and variables →
-#               Actions → New repository secret.
+# Requires one repository secret, named NPM_TOKEN: an npm automation token with
+# publish rights for jevkit, jevkit-dsh and jevkit-mcp. Add it under
+# Settings -> Secrets and variables -> Actions -> New repository secret.
 #
 # Until that secret exists this workflow fails at the first publish step. That is
 # deliberate: a silent no-op publish is worse than a loud failure, because a tag
 # that "succeeded" while publishing nothing is easy to mistake for a release.
+#
+# This file is deliberately ASCII-only. It previously carried typographic arrows
+# and dashes in these comments, and GitHub could not parse the workflow at all --
+# it registered, reported an empty name, and failed in 0s on every push. Whether
+# the characters or something else was at fault, plain ASCII costs nothing here.
 
 on:
   push:

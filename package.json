@@ -13,7 +13,8 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
     "legal": "node scripts/sync-legal-files.mjs --check",
-    "check": "pnpm run legal && pnpm run typecheck && pnpm run test && pnpm run build",
+    "//check": "Build runs BEFORE typecheck on purpose. Each adapter resolves the core through the `jevkit` workspace link, and the core's `types` entry is `lib/index.d.ts` — which does not exist until it is built. Typechecking first works on any machine that already has a `lib/` and fails on a clean checkout, which is exactly how CI caught it.",
+    "check": "pnpm run legal && pnpm run build && pnpm run typecheck && pnpm run test",
     "clean": "pnpm -r run clean"
   },
   "devDependencies": {
