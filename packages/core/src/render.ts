@@ -76,13 +76,23 @@ export const renderAnswer = (questionId: string, answer: JevAnswer | undefined):
     // presentation choice, and the caller may need the unrounded value.
     const level = topCriterion(answer.probabilities) ?? nearestLevel(answer.score, Object.keys(answer.legend).length)
     const probability = level === undefined ? undefined : answer.probabilities[level]
-    const label = level === undefined ? undefined : answer.legend[level]
+    const rawLabel = level === undefined ? undefined : answer.legend[level]
+    // A level may legally be undescribed — the empty string holds a position in
+    // the scale — so fall back to the level's index. Emitting `answer: ''` would
+    // be indistinguishable from "no answer" to a reader, and the `note` keeps the
+    // absence of a description explicit rather than silently substituting a
+    // number for one.
+    const described = typeof rawLabel === 'string' && rawLabel.trim().length > 0
+    const label = described ? rawLabel : level
     return {
       question: questionId,
       type: 'score',
       ...(label === undefined ? {} : { answer: label }),
       score: answer.score,
       ...(probability === undefined ? {} : { probability }),
+      ...(rawLabel !== undefined && !described
+        ? { note: `level ${level} has no description; "answer" is its index, not a label` }
+        : {}),
       legend: { ...answer.legend },
       probabilities: { ...answer.probabilities },
       ...(answer.confidence === undefined ? {} : { confidence: answer.confidence }),
