@@ -1,5 +1,5 @@
 /**
- * dsh-jev —?TypeSafe Jev for DeepSeek Harness.
+ * dsh-jev —TypeSafe Jev for DeepSeek Harness.
  *
  * Composition of this plugin:
  *

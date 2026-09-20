@@ -117,11 +117,11 @@ from `%DSH_HOME%\profiles\web`.
 ```json
 "dependencies": {
   "@dsh-jev/core": "link:D:/Projects/dsh-jev/packages/core",
-  "dsh-jev": "link:D:/Projects/dsh-jev/packages/dsh"
+  "@dsh-jev/plugin": "link:D:/Projects/dsh-jev/packages/dsh"
 }
 ```
 
-Both are required: `dsh-jev` imports `@dsh-jev/core` by name, so the dependency
+Both are required: `@dsh-jev/plugin` imports `@dsh-jev/core` by name, so the dependency
 must resolve from the profile's own `node_modules`.
 
 ## Next actions in order

@@ -1,6 +1,6 @@
 - insert:
     - id: jev
-      name: 'dsh-jev'
+      name: '@dsh-jev/plugin'
       config:
         # Offline by default. With `provider: mock` this plugin makes no network
         # call at all; every answer is synthetic. See the "Egress contract"

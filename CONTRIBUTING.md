@@ -10,7 +10,7 @@ Three packages over one decision layer:
 | Package | What it is |
 |---|---|
 | `@dsh-jev/core` | The decisions. No framework dependency — it imports nothing from DeepSeek Harness or Cordis. |
-| `dsh-jev` | The DeepSeek Harness plugin: three tools, one service, two opt-in gates. |
+| `@dsh-jev/plugin` | The DeepSeek Harness plugin: three tools, one service, two opt-in gates. |
 | `@dsh-jev/mcp` | The same three tools over MCP, for hosts that are not DSH. |
 
 Jev answers typed questions and returns calibrated probabilities. It does not

@@ -16,7 +16,7 @@ gives an agent exactly that surface, and nothing more.
 | Package | What it is | Use it when |
 |---|---|---|
 | [`@dsh-jev/core`](packages/core) | The decisions. Imports nothing from DeepSeek Harness or Cordis. | You want Jev in a plain script, a service, or your own harness |
-| [`dsh-jev`](packages/dsh) | The DSH plugin: one service, three tools, two opt-in gates | You are running DeepSeek Harness |
+| [`@dsh-jev/plugin`](packages/dsh) | The DSH plugin: one service, three tools, two opt-in gates | You are running DeepSeek Harness |
 | [`@dsh-jev/mcp`](packages/mcp) | The same three tools over MCP, with a stdio binary | Your host speaks MCP but is not DSH |
 
 The adapters are thin on purpose. `packages/dsh` is four files: it declares tool schemas and
@@ -99,7 +99,7 @@ not enable the live provider.
 ### As a DeepSeek Harness plugin
 
 ```sh
-dsh plugin --profile <profile> add dsh-jev
+dsh plugin --profile <profile> add @dsh-jev/plugin
 ```
 
 Or from a checkout:
@@ -151,7 +151,7 @@ is the protocol channel, and a stray line there would corrupt the stream.
 ```yml
 - insert:
     - id: jev
-      name: 'dsh-jev'
+      name: '@dsh-jev/plugin'
       config:
         provider: live
         apiKeyRef: TYPESAFE_API_KEY   # a reference, never the key

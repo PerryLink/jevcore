@@ -1,5 +1,5 @@
 /**
- * `jev_ask` —?the primitive tool.
+ * `jev_ask` —the primitive tool.
  *
  * This is the one tool that exposes Jev's raw surface: a batch of typed
  * questions over one state. The other two tools are conveniences built on the
@@ -68,7 +68,7 @@ export const jevAskTool = (service: JevService) =>
     description:
       'Ask TypeSafe Jev one or more typed questions about a single piece of state. Jev does not ' +
       'generate text: it returns a selected option and calibrated probabilities. Use it for ' +
-      'judgments the rest of the work branches on —?routing, classifying, scoring, deciding, ' +
+      'judgments the rest of the work branches on —routing, classifying, scoring, deciding, ' +
       'triaging. Do NOT use it to write prose, explain, summarize, or generate code.\n\n' +
       'Question types: "noul" is yes/no and returns the probability of true; "choice" picks one ' +
       'of the criteria keys you declare; "score" places the state on an ordered scale of criteria ' +
@@ -76,7 +76,7 @@ export const jevAskTool = (service: JevService) =>
       'round-trip, so batch what you need.\n\n' +
       'Put the evidence in "state" and the question in "instructions". Every key you declare in ' +
       'criteria is a value Jev may return, so declare exactly the outcomes you can act on. This ' +
-      'tool returns probabilities, not decisions —?apply your own confidence threshold before ' +
+      'tool returns probabilities, not decisions —apply your own confidence threshold before ' +
       'acting, and treat a low-confidence answer as "unknown" rather than picking for it.',
     parameters: {
       state: {

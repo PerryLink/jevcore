@@ -5,20 +5,42 @@ Everything here is a command you run. Nothing in this file has been executed —
 
 Run every step from the repository root.
 
-## 0. Decide the package names first
+## 0. Package names — decided
 
-`dsh-jev` **already exists on npm** at 0.2.0, published by `zhangxaochen`. It is a
-different project that happens to share the name. Three options:
+The three packages publish under the `@dsh-jev` scope:
 
-| Option | Command | Trade-off |
-|---|---|---|
-| Claim the unscoped name | `pnpm --filter dsh-jev publish --access public` | Name collision with an unrelated project; users may install the wrong one |
-| Publish under a scope | rename to `@<you>/dsh-jev` in `packages/dsh/package.json` | Unambiguous; slightly longer install command |
-| Keep it local | never publish | No collision, no distribution |
+| Directory | Package |
+|---|---|
+| `packages/core` | `@dsh-jev/core` |
+| `packages/dsh` | `@dsh-jev/plugin` |
+| `packages/mcp` | `@dsh-jev/mcp` |
 
-**Recommendation: publish under a scope.** Two packages with the same name and
-different behaviour is a support burden for both authors. If you keep the
-unscoped name, add a line to the README disambiguating the two.
+### Why not the bare name `dsh-jev`
+
+It is taken. `dsh-jev@0.2.0` belongs to `zhangxaochen`, was published 2026-09-18,
+has 123 downloads a month, and is still being published — so it is not going to
+free up. Two packages with the same name and different behaviour is a support
+burden for both authors, and the collision is worse than usual here because
+theirs targets the same framework and the same model.
+
+Verify the scope is still yours before publishing; an npm scope belongs to
+whoever publishes into it first:
+
+```sh
+npm view @dsh-jev/core version   # 404 means the scope is still unclaimed
+```
+
+### Why `plugin` rather than `dsh`
+
+`@dsh-jev/dsh` was the first choice and it reads badly: the same three letters
+appear twice with different meanings, so the scope and the package cannot be told
+apart at a glance. `@dsh-jev/plugin` names the thing rather than repeating the
+framework it targets, and it matches what the other two already do — scope for
+the project, leaf for the artifact.
+
+If the scope is ever lost, the fallback is your own npm scope
+(`@<username>/dsh-jev` for the plugin, and matching leaves for core and mcp),
+which is what most of the DSH plugin ecosystem does.
 
 ## 1. Pre-flight
 
@@ -47,7 +69,7 @@ node packages/mcp/lib/bin.js 2>&1 | head -1
 
 ```sh
 pnpm --filter @dsh-jev/core pack --dry-run
-pnpm --filter dsh-jev pack --dry-run
+pnpm --filter @dsh-jev/plugin pack --dry-run
 pnpm --filter @dsh-jev/mcp pack --dry-run
 ```
 
@@ -62,7 +84,7 @@ Order matters: the two adapters depend on `@dsh-jev/core`.
 
 ```sh
 pnpm --filter @dsh-jev/core publish --access public
-pnpm --filter dsh-jev publish --access public
+pnpm --filter @dsh-jev/plugin publish --access public
 pnpm --filter @dsh-jev/mcp publish --access public
 ```
 
@@ -93,7 +115,7 @@ Then, for the DSH plugin, install it into a **throwaway profile** and confirm th
 row reaches `active` and the egress report appears:
 
 ```sh
-dsh plugin --profile verify-jev add dsh-jev
+dsh plugin --profile verify-jev add @dsh-jev/plugin
 ```
 
 For the MCP server:

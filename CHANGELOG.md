@@ -25,7 +25,7 @@ Initial implementation. Pre-1.0, so the API may change between minor versions.
     trusted.
   - Two gates: a safety gate on `tools/pre-execute` and a context gate on
     `tools/post-execute`, both framework-agnostic and both off by default.
-- **`dsh-jev`** — the DeepSeek Harness plugin.
+- **`@dsh-jev/plugin`** — the DeepSeek Harness plugin.
   - `ctx.jev`, a first-class service other plugins can call with no model turn
     in between.
   - Three model-visible tools: `jev_ask`, `jev_rank`, `jev_check`.
