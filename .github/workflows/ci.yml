@@ -72,7 +72,7 @@ jobs:
 
             const required = {
               'packages/core': ['lib/index.js', 'lib/index.d.ts', 'README.md', 'LICENSE'],
-              'packages/dsh': ['lib/index.js', 'lib/index.d.ts', 'cordis.patch.yml', 'README.md', 'LICENSE'],
+              'packages/dsh': ['lib/index.js', 'lib/index.d.ts', 'cordis.patch.yml', 'skills/typesafe-ai-dsh/SKILL.md', 'README.md', 'LICENSE'],
               'packages/mcp': ['lib/index.js', 'lib/bin.js', 'lib/index.d.ts', 'README.md', 'LICENSE'],
             };
 

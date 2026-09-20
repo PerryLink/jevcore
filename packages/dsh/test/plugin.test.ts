@@ -22,7 +22,7 @@ interface RegisteredService {
   transmitting: boolean
 }
 
-/** Minimal stand-ins for the two services the plugin injects. */
+/** Minimal stand-ins for the services the plugin injects. */
 const fakeTools = () => {
   const registered: { name: string }[] = []
   return {
@@ -40,11 +40,33 @@ const fakeCredentials = () => ({
   resolve: async () => undefined,
 })
 
-const mountPlugin = (config?: unknown) => {
+const fakeSkills = () => {
+  const registered: { name?: string; description?: string; content?: string }[] = []
+  return {
+    registered,
+    service: {
+      register(registration: { name?: string; description?: string; content?: string }) {
+        registered.push(registration)
+        return () => undefined
+      },
+    },
+  }
+}
+
+const mountPlugin = (config?: unknown, options: { withSkills?: boolean } = {}) => {
   const ctx = new Context()
   const tools = fakeTools()
-  ;(ctx as unknown as { tools: unknown }).tools = tools.service
-  ;(ctx as unknown as { credentials: unknown }).credentials = fakeCredentials()
+  const skills = fakeSkills()
+  // `ctx.get('skills')` reads through Cordis's reflect registry, so the fake has
+  // to be registered the same way a real provider would be — a plain property
+  // assignment is invisible to `get`.
+  ctx.provide('tools', tools.service)
+  ctx.provide('credentials', fakeCredentials())
+  // Omitted by default so a test asserts the plugin still loads without the
+  // skill subsystem present — the whole point of declaring it optional.
+  if (options.withSkills === true) {
+    ctx.provide('skills', skills.service)
+  }
   const events: string[] = []
   // Record which events are subscribed so a gate that is off can be proven to
   // register nothing at all, rather than merely to behave passively.
@@ -55,7 +77,7 @@ const mountPlugin = (config?: unknown) => {
   }
   if (config === undefined) plugin.apply(ctx as never)
   else plugin.apply(ctx as never, config as never)
-  return { ctx, tools, events }
+  return { ctx, tools, skills, events }
 }
 
 describe('plugin module shape', () => {
@@ -63,6 +85,12 @@ describe('plugin module shape', () => {
     expect(plugin.name).toBe('dsh-jev')
     expect(plugin.inject).toContain('tools')
     expect(plugin.inject).toContain('credentials')
+  })
+
+  it('declares the skills registry as an optional dependency', () => {
+    // The registry only exists when a profile composes the skill subsystem, so
+    // a required injection would stop the plugin loading without it.
+    expect(plugin.inject).toContainEqual({ skills: false })
   })
 
   it('exports apply as a function', () => {
@@ -122,6 +150,26 @@ describe('activation on a real cordis context', () => {
       'jev_check',
       'jev_rank',
     ])
+  })
+
+  it('loads without the skills registry present', () => {
+    // The registry is optional; a profile without it must still get the tools.
+    expect(() => mountPlugin()).not.toThrow()
+    const { tools } = mountPlugin()
+    expect(tools.registered).toHaveLength(3)
+  })
+
+  it('registers the bundled skill when the registry is present', () => {
+    const { skills } = mountPlugin(undefined, { withSkills: true })
+    expect(skills.registered).toHaveLength(1)
+    expect(skills.registered[0]?.name).toBe('typesafe-ai-dsh')
+    expect(skills.registered[0]?.description?.length ?? 0).toBeGreaterThan(40)
+    expect(skills.registered[0]?.content?.length ?? 0).toBeGreaterThan(500)
+  })
+
+  it('registers no skill when the registry is absent', () => {
+    const { skills } = mountPlugin()
+    expect(skills.registered).toEqual([])
   })
 
   it('registers no event listeners while both gates are off', () => {

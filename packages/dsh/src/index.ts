@@ -34,6 +34,7 @@ import {
 import { jevAskTool } from './ask.js'
 import { jevCheckTool } from './check.js'
 import { jevRankTool } from './rank.js'
+import { skillRegistration } from './skill.js'
 
 /** Plugin name, also the service key this plugin publishes. */
 export const name = 'dsh-jev'
@@ -42,9 +43,12 @@ export const name = 'dsh-jev'
  * Host services this plugin consumes.
  *
  * `tools` and `credentials` are required — without them the plugin has nothing
- * to register and no way to resolve a key.
+ * to register and no way to resolve a key. `skills` is optional (`false` in the
+ * inject declaration): the registry only exists when a profile composes the
+ * skill subsystem, and the bundled skill is a convenience rather than a
+ * capability, so its absence must not stop the plugin from loading.
  */
-export const inject = ['tools', 'credentials']
+export const inject = ['tools', 'credentials', { skills: false }]
 
 /**
  * The configuration schema, as Cordis consumes it.
@@ -232,6 +236,34 @@ export function apply(ctx: Context, input?: JevConfigInput): void {
     jevCheckTool(runtime.service),
   ]) {
     ctx.effect(() => tools.register(definition))
+  }
+
+  // The bundled skill.
+  //
+  // Registered through the registry rather than shipped as a directory for a
+  // skill provider to discover: one registration, no dependency on where a
+  // profile keeps its skills, and it disappears cleanly with the plugin.
+  //
+  // A load failure is reported and skipped rather than thrown. The skill teaches
+  // an agent how to use the tools; losing it degrades the guidance but must not
+  // take the tools down with it. Failing loudly here would mean a packaging
+  // mistake disables the whole plugin.
+  const skills = ctx.get('skills') as
+    | { register: (registration: unknown) => () => void }
+    | undefined
+  if (skills === undefined) {
+    logger.warn(
+      '[dsh-jev] the skills registry is not available; the bundled skill will not be offered',
+    )
+  } else {
+    try {
+      const registration = skillRegistration()
+      ctx.effect(() => skills.register(registration))
+    } catch (error) {
+      logger.warn(
+        `[dsh-jev] could not load the bundled skill: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
   }
 
   // Gate: judge tool calls before dispatch. Off by default.

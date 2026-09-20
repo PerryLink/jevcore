@@ -226,6 +226,22 @@ Three tools, deliberately few and orthogonal:
   `conflicted`, `insufficient`, or `unknown`. Contradiction outranks support, because evidence that
   both supports and refutes is a conflict, not a weak yes.
 
+### A bundled skill
+
+The plugin registers a skill, `typesafe-ai-dsh`, teaching an agent when a Jev
+judgment is the right tool and when it is a category error. It is registered
+through the skill registry rather than shipped as a directory for a provider to
+scan, so it needs no dependency on where a profile keeps its skills and it
+disappears cleanly when the plugin is removed.
+
+The body lives in `skills/typesafe-ai-dsh/SKILL.md` and is read at load rather
+than embedded, so the file a human edits is the file that ships. A test asserts
+the two cannot drift.
+
+The registry is declared as an **optional** dependency: a profile that does not
+compose the skill subsystem still gets the service and the three tools, with a
+warning that the skill was skipped.
+
 ### The mock provider
 
 With `provider: mock`, every answer is derived from a hash of the question and state, so tests can
@@ -240,7 +256,7 @@ that could be mistaken for a real judgment would be worse than no mock at all.
 Honest accounting of what has and has not been verified.
 
 **Verified**
-- 255 tests pass across three packages (191 core, 43 DSH, 21 MCP), with no network access and no
+- 272 tests pass across three packages (191 core, 60 DSH, 21 MCP), with no network access and no
   `TYPESAFE_API_KEY`. CI clears the variable and expects the suite to pass anyway.
 - The default path makes no network call: asserted by spying on `globalThis.fetch` while mounting the
   plugin and answering through the service, and again while assembling the MCP runtime.
