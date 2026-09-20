@@ -19,7 +19,6 @@
 # whole point is that install-time egress should be a decision somebody made, and
 # the cheapest way to keep that true is to not run the script.
 allowBuilds:
-  '@openrouter/sdk': set this to true or false
   esbuild: true
 
 packages:

@@ -175,8 +175,8 @@ your state.
 
 **Through OpenRouter** — use this if a TypeSafe key is impractical and you
 already have an [OpenRouter](https://openrouter.ai) key. OpenRouter hosts the
-System One models behind its own Decisions route, so this is a real second route
-to Jev rather than an approximation:
+System One models at the same `POST /v1/systemone` path TypeSafe does, one level below
+its own API root, so this is the documented route to Jev rather than an approximation:
 
 ```yml
 - insert:
@@ -185,7 +185,7 @@ to Jev rather than an approximation:
       config:
         provider: openrouter
         openRouterApiKeyRef: OPENROUTER_API_KEY
-        model: typesafe/jev-1.13      # must keep the `typesafe/` prefix
+        model: jev-latest              # a bare `jev-*` id, or `typesafe/jev-1.13`
 ```
 
 Two things to know about the OpenRouter route:
@@ -194,10 +194,10 @@ Two things to know about the OpenRouter route:
   with different retention and logging. The startup report names the endpoint for
   exactly this reason — read it rather than inferring the destination from the
   provider's name.
-- **It is an `alpha` route.** OpenRouter's own SDK declares it as such, so treat
-  the shape as subject to change.
+- **It returns a cost**, which TypeSafe's own route does not, so `usage.costUsd` is
+  populated here and absent there.
 
-The model id must start with `typesafe/`. Any other id would be routed to a chat
+The model id must be a System One one: bare `jev-*`, or `typesafe/jev-*`. Any other id would be routed to a chat
 model, which answers with prose this plugin cannot interpret as a decision, so it
 is refused before the call rather than misread after it.
 
@@ -207,7 +207,7 @@ while the process is running is picked up. It is never logged, never returned
 from a tool, and never written to configuration. Each route has its own reference
 (`apiKeyRef` and `openRouterApiKeyRef`) so the two cannot accidentally share a key.
 
-`@typesafe-ai/sdk` and `@openrouter/sdk` are optional dependencies; the plugin
+`@typesafe-ai/sdk` is the only optional dependency; the plugin
 loads and runs offline without either, and only needs the one for the route you
 choose.
 
@@ -310,7 +310,7 @@ that could be mistaken for a real judgment would be worse than no mock at all.
 Honest accounting of what has and has not been verified.
 
 **Verified**
-- 360 tests pass across three packages (266 core, 65 DSH, 29 MCP), with no network access and no
+- 410 tests pass across three packages (314 core, 66 DSH, 30 MCP), with no network access and no
   `TYPESAFE_API_KEY`. CI clears the variable and expects the suite to pass anyway.
 - **The OpenRouter route is verified against the real API.** `pnpm --filter jevcore run
   probe:live` and `pnpm --filter jevcore-mcp run smoke:live` both answered against real System One
