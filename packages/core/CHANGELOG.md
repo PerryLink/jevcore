@@ -34,6 +34,16 @@ ships, and how much of it a gate checks.
 - `files[]` ships `src` and `CHANGELOG.md`, matching the sibling plugins, so a
   stack trace from a published package points at readable source.
 
+- **Releases authenticate with OIDC trusted publishing instead of a stored
+  token.** `publish.yml` becomes `release.yml` — the filename npm's trusted
+  publisher matches exactly, extension included, and the name 38 of the sibling
+  plugin repositories use. The workflow holds no credential, takes
+  `id-token: write`, and publishes with provenance. Hand-publishing is no longer
+  a fallback: with 2FA on the account it prints `✅ Published` and exits 0 while
+  only *staging* the version for approval, and the staged version then occupies
+  that version number while being invisible to `npm stage list` — which is how
+  0.2.2 was consumed without ever reaching the registry.
+
 ### Added
 
 - **`scripts/check-readme-sync.mjs`**, run by `check` and by `prepublishOnly`. It

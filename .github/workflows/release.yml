@@ -1,4 +1,4 @@
-name: Publish
+name: Release
 
 # Publishing is tag-driven on purpose: a human decides the version, the tag
 # records when, and nothing reaches npm from a working branch.
@@ -9,8 +9,14 @@ name: Publish
 #
 #   organization or user : PerryLink
 #   repository           : jevcore
-#   workflow filename    : publish.yml
+#   workflow filename    : release.yml
 #   environment          : (leave empty)
+#
+# The filename is matched exactly, extension included, so it is load-bearing:
+# renaming this file silently breaks the release, and a mismatch shows up as an
+# authentication failure rather than as a missing workflow. `release.yml` is also
+# what 38 of the sibling plugin repositories call theirs (`publish.yml` appears in
+# 7), which is why this file is not named after what it does.
 #
 # `id-token: write` below is what lets the runner mint the OIDC token that npm
 # exchanges for publish rights for these three packages.

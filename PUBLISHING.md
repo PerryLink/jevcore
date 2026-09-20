@@ -8,30 +8,55 @@ Status as of writing:
 - the repository is public at <https://github.com/PerryLink/jevcore>, with CI
   green, and a mirror is pushed to Gitee at
   <https://gitee.com/perrylink/jevcore>;
-- the `Publish` workflow is in place for future releases, but it needs an
-  `NPM_TOKEN` repository secret before a tag push can use it (below).
+- the `Release` workflow is in place, authenticated by OIDC trusted publishing:
+  there is no token to add and none to rotate (below).
 
 Run every step from the repository root.
 
-## Before the next release: add the NPM_TOKEN secret
+## Before the next release: configure trusted publishing, once per package
 
 The 0.1.0 release was published from a laptop, which works but produces no
-provenance attestation. To release the next version through the workflow:
+provenance attestation. Releases now go through the workflow, and the workflow
+holds no credential at all:
 
-1. Create an npm **automation** token with publish rights for `jevcore`,
-   `jevcore-dsh` and `jevcore-mcp` (npm → Access Tokens → Generate New Token →
-   Automation; automation tokens bypass 2FA, which CI needs).
-2. Add it to the repository: **Settings → Secrets and variables → Actions → New
-   repository secret**, named `NPM_TOKEN`.
-3. Bump the version in all four manifests and `pnpm install`, then push a `v*`
-   tag.
+1. On npmjs.com, open each package — `jevcore`, `jevcore-dsh`, `jevcore-mcp` —
+   and under **Settings → Trusted Publisher → GitHub Actions** set:
 
-Without that secret the workflow **fails** rather than skipping, deliberately: a
-tag that "passes" while publishing nothing is easy to mistake for a release.
+   | Field | Value |
+   |---|---|
+   | Organization or user | `PerryLink` |
+   | Repository | `jevcore` |
+   | Workflow filename | `release.yml` |
+   | Environment | *(leave empty)* |
 
-The token is never written to this repository or any of its files. It belongs in
-repository secrets, and locally only in the environment of the command that needs
-it.
+2. Bump the version in all four manifests and `pnpm install`, then push a `v*`
+   tag. The runner mints an OIDC token, npm exchanges it for publish rights on
+   exactly those three packages, and the release carries a provenance
+   attestation.
+
+**The workflow filename is matched exactly, extension included.** Renaming
+`.github/workflows/release.yml` breaks the release until the npm side is updated
+to match, and the symptom is an authentication failure, not a missing workflow.
+`release.yml` is also what 38 of the sibling plugin repositories call theirs
+(`publish.yml` appears in 7), so the name follows the ecosystem rather than the
+verb.
+
+Do not add an `NPM_TOKEN` back, and do not add `registry-url` to the
+`setup-node` step: both write `//registry.npmjs.org/:_authToken` into `.npmrc`,
+and pnpm treats a configured token as an instruction to publish with it and skips
+the OIDC exchange. A stale value there downgrades the release to token publishing
+and fails on auth, which is harder to diagnose than no token at all.
+
+### Why hand-publishing no longer works, recorded so it is not repeated
+
+With 2FA enabled on the account, an automation token can no longer publish
+directly. `pnpm publish` **prints `✅ Published` and exits 0 while only *staging*
+the version** for a later approval, and the staged version then occupies the
+version number: the registry does not list it, a re-publish fails with
+`409 Cannot publish over previously staged version`, and `npm stage list` reports
+`total: 0` for it, so the stage-id needed to approve or reject it cannot be
+obtained from the CLI. That is how 0.2.2 was consumed without ever being
+published.
 
 ### Why the first attempt failed, recorded so it is not repeated
 
@@ -233,33 +258,30 @@ For the next release: bump the version in all four manifests, move the
 then push the matching tag:
 
 ```sh
-git tag -a v0.1.1 -m "0.1.1"
+git tag -a v0.2.3 -m "0.2.3"
 git push origin main --follow-tags
-gh run watch                    # follow the Publish run
+gh run watch                    # follow the Release run
 ```
 
-The `Publish` workflow (`.github/workflows/publish.yml`) triggers on a `v*` tag.
-It verifies that every manifest agrees with the tag, re-runs the full check and
-the vendor schema cross-check, then publishes the three packages **in dependency
-order** with provenance. Order matters: both adapters depend on `jevcore`.
+The `Release` workflow (`.github/workflows/release.yml`) triggers on a `v*` tag.
+It verifies that every manifest agrees with the tag, re-runs the full check, then
+publishes the three packages **in dependency order** with provenance. Order
+matters twice over: both adapters depend on `jevcore`, and pnpm rewrites that
+`workspace:*` dependency into the released version number, so publishing an
+adapter before the core would point it at a version that does not exist yet.
 
-Requires the `NPM_TOKEN` repository secret described at the top of this file. If
-that secret is missing the run fails rather than skipping — deliberately, because
-a tag that "passes" while publishing nothing is easy to mistake for a release.
+Authentication is the trusted publisher configured at the top of this file. There
+is no secret to be missing, so the failure mode that secret had — a tag that
+"passes" while publishing nothing — cannot recur here.
 
-You can rehearse without publishing: **Actions → Publish → Run workflow** with
-`dry-run` left checked. It packs and verifies, and stops.
+You can rehearse without publishing: **Actions → Release → Run workflow**. The
+publish step is gated on `github.event_name == 'push'`, so a manual run verifies
+everything and stops before touching the registry.
 
-Publishing by hand is possible but second best, because it has no provenance
-attestation — and it is how 0.1.0 went out:
-
-```sh
-# Needs a token in the environment. `pnpm`, never `npm`, so the `workspace:*`
-# dependency is rewritten to a real version.
-pnpm --filter jevcore publish --access public --no-git-checks
-pnpm --filter jevcore-dsh publish --access public --no-git-checks
-pnpm --filter jevcore-mcp publish --access public --no-git-checks
-```
+Publishing by hand is now **not** a fallback — see "Why hand-publishing no longer
+works" above. It reports success while only staging the version, which then
+blocks that version number permanently until someone approves or rejects it on
+the npm website. If the workflow cannot publish, fix the workflow.
 
 Then verify by installing from the registry into an empty directory, not by
 reading the publish output:
