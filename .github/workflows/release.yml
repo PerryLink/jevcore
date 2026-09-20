@@ -133,8 +133,16 @@ jobs:
           " "$token"
 
           echo "--- npm's answer per package ---"
+          # The path comes from npm's own CLI (lib/utils/oidc.js) and matches
+          # pnpm's (releasing/commands/lib/publish/oidc/authToken.js), both of
+          # which POST to `/-/npm/v1/oidc/token/exchange/package/<name>`. A path
+          # that is merely close -- `token-exchange/<name>`, say -- answers
+          # `ResourceNotFound: ... does not exist`, which reads like a missing
+          # trusted publisher and is not.
           for pkg in jevcore jevcore-dsh jevcore-mcp; do
-            code="$(curl -sS -o exchange.json -w '%{http_code}' -X POST -H "Authorization: bearer $token" "https://registry.npmjs.org/-/npm/v1/oidc/token-exchange/$pkg")"
+            code="$(curl -sS -o exchange.json -w '%{http_code}' -X POST \
+              -H "Authorization: bearer $token" -H 'Accept: application/json' --data '' \
+              "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$pkg")"
             echo "$pkg -> HTTP $code $(head -c 400 exchange.json)"
           done
 
