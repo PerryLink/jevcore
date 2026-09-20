@@ -72,9 +72,14 @@ not in this repository:
 
 Tracked upstream as [npm/cli#9969](https://github.com/npm/cli/issues/9969), open
 with the same symptoms and the same conclusion ("all claims match the trusted
-publisher configuration except the `sub` format"). Until it is fixed, releases
-take the staged path below, and `release.yml` keeps the OIDC configuration so it
-starts working the day the registry does.
+publisher configuration except the `sub` format"). This repository's own
+reproduction is
+[the first comment on it](https://github.com/npm/cli/issues/9969#issuecomment-5749565836),
+which adds the two details that were not in the original report: `pnpm publish`
+fails the same way (so it is not CLI-specific), and the immutable-subject switch
+answers `422` rather than 201 here. Until it is fixed, releases take the staged
+path below, and `release.yml` keeps the OIDC configuration so it starts working
+the day the registry does.
 
 ### The fallback that does work: publish, then approve on the website
 

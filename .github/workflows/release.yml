@@ -34,7 +34,9 @@ name: Release
 # 2026-09-20, so GitHub issues its OIDC tokens with an immutable subject claim
 # (`repo:PerryLink@255665900/jevcore@1377893932:ref:...`) and npm's registry
 # cannot match that format yet: the exchange is rejected and the step ends at
-# "Skipped OIDC". Tracked upstream as https://github.com/npm/cli/issues/9969, and
+# "Skipped OIDC". Tracked upstream as https://github.com/npm/cli/issues/9969,
+# with this repository's reproduction in the first comment
+# (https://github.com/npm/cli/issues/9969#issuecomment-5749565836), and
 # it cannot be switched off on this side -- PUT to
 # /repos/PerryLink/jevcore/actions/oidc/customization/sub with
 # {"use_immutable_subject":false} answers 422 and the setting stays true.
