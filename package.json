@@ -12,7 +12,8 @@
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
-    "check": "pnpm run typecheck && pnpm run test && pnpm run build",
+    "legal": "node scripts/sync-legal-files.mjs --check",
+    "check": "pnpm run legal && pnpm run typecheck && pnpm run test && pnpm run build",
     "clean": "pnpm -r run clean"
   },
   "devDependencies": {

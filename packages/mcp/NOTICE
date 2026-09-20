@@ -1,0 +1,55 @@
+# NOTICE
+
+dsh-jev — TypeSafe Jev for DeepSeek Harness
+Copyright (c) 2026 dsh-jev contributors
+Licensed under the MIT License. See [LICENSE](./LICENSE).
+
+## Not affiliated with TypeSafe AI
+
+This is an **independent, unofficial** integration. It is not produced,
+endorsed, sponsored, or supported by TypeSafe AI, OpenRouter, or the DeepSeek
+Harness maintainers.
+
+"TypeSafe", "Jev", and "System One" are used only to identify the service and
+model this software talks to. All trademarks belong to their respective owners.
+No trademark licence is granted or implied by this repository.
+
+## Runtime dependencies
+
+This repository's packages declare the following as dependencies but **do not
+vendor, bundle, or modify** any of them. They are installed by the consumer and
+remain under their own licences:
+
+| Package | Role | Declared as |
+|---|---|---|
+| `@typesafe-ai/sdk` | Official TypeSafe client, used by the `live` provider | optional dependency of `@dsh-jev/core` |
+| `@openrouter/sdk` | Official OpenRouter client, used by the `openrouter` provider | optional dependency of `@dsh-jev/core` and `@dsh-jev/mcp` |
+| `@modelcontextprotocol/sdk` | MCP server and stdio transport | dependency of `@dsh-jev/mcp` |
+| `zod` | Wire-schema validation for the MCP surface | dependency of `@dsh-jev/mcp` |
+| `@deepseek-ai/dsh-tools` | DeepSeek Harness tool registry | peer dependency of `@dsh-jev/plugin`, supplied by the harness at runtime |
+
+The optional dependencies are loaded lazily. An install that omits them still
+runs, on the offline mock provider.
+
+## Development dependencies
+
+`typescript`, `vitest`, `@types/node`, and the `@typesafe-ai/sdk` /
+`@openrouter/sdk` type definitions are used to build and test this project. They
+are not redistributed in the published packages.
+
+## Verification scripts and vendor schemas
+
+`packages/core/scripts/check-openrouter-schemas.mjs` and the conformance test in
+`packages/core/test/vendor-conformance.test.ts` **import** type declarations and
+runtime schemas from the vendors' published SDKs in order to check this project's
+payloads against them. Those schemas are the vendors' work, are not copied into
+this repository, and are read from the installed package at build and test time.
+
+## No warranty of fitness for decisions
+
+The MIT License disclaims all warranties. Said plainly and separately, because
+this software is used to make decisions: Jev returns calibrated probabilities,
+not permissions. Thresholds, consequences, and whether to act are the caller's
+responsibility. Answers from the `mock` provider are synthetic — derived from a
+hash of the input, carrying no judgment at all — and every such result is
+labelled as synthetic.

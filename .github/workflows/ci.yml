@@ -80,9 +80,9 @@ jobs:
             const { execSync } = require('node:child_process');
 
             const required = {
-              'packages/core': ['lib/index.js', 'lib/index.d.ts', 'README.md', 'LICENSE', 'scripts/check-openrouter-schemas.mjs', 'scripts/probe-openrouter-live.mjs'],
-              'packages/dsh': ['lib/index.js', 'lib/index.d.ts', 'cordis.patch.yml', 'skills/typesafe-ai-dsh/SKILL.md', 'README.md', 'LICENSE'],
-              'packages/mcp': ['lib/index.js', 'lib/bin.js', 'lib/index.d.ts', 'README.md', 'LICENSE', 'scripts/mcp-smoke.mjs', 'scripts/mcp-smoke-live.mjs'],
+              'packages/core': ['lib/index.js', 'lib/index.d.ts', 'README.md', 'LICENSE', 'NOTICE', 'scripts/check-openrouter-schemas.mjs', 'scripts/probe-openrouter-live.mjs'],
+              'packages/dsh': ['lib/index.js', 'lib/index.d.ts', 'cordis.patch.yml', 'skills/typesafe-ai-dsh/SKILL.md', 'README.md', 'LICENSE', 'NOTICE'],
+              'packages/mcp': ['lib/index.js', 'lib/bin.js', 'lib/index.d.ts', 'README.md', 'LICENSE', 'NOTICE', 'scripts/mcp-smoke.mjs', 'scripts/mcp-smoke-live.mjs'],
             };
 
             let failed = false;

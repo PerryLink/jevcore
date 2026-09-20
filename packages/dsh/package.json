@@ -39,7 +39,8 @@
     "skills",
     "cordis.patch.yml",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "dsh": {
     "bundle": {

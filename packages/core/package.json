@@ -39,7 +39,8 @@
     "lib",
     "scripts",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
