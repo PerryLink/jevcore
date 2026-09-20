@@ -4,6 +4,27 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.1
+
+### Fixed
+
+- **`jevcore-dsh` declared its `@deepseek-ai/dsh-tools` peer dependency without
+  an upper bound** (`>=0.1.0`). A future `0.2.0` would therefore have been
+  accepted even though it is free to break the plugin API. It now uses the range
+  the rest of this author's DSH plugins were verified against:
+  `>=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0`.
+
+  `@deepseek-ai/cordis` was raised from `^4.0.0` to `^4.0.2` to match the version
+  the plugin is actually compiled and tested against.
+
+  Worth knowing when reading that range: it deliberately excludes `0.0.1-rc.1`.
+  npm's `latest` tag for `@deepseek-ai/dsh-tools` points at that version, which is
+  older than everything the plugin needs, while the versions in use carry the
+  `next` and `alpha` tags. The peer is optional and DSH supplies it at runtime, so
+  this does not affect installation — but it does mean explicitly asking npm to
+  install `@deepseek-ai/dsh-tools` alongside the plugin fails, and that is npm's
+  tag to fix, not this package's.
+
 ## 0.1.0 — 2026-09-20
 
 Initial release. Pre-1.0, so the API may change between minor versions.
@@ -14,9 +35,9 @@ Published to npm as `jevcore`, `jevcore-dsh` and `jevcore-mcp`. Repository at
 
 ### Changed
 
-- **Renamed the packages and the brand from the `@dsh-jev` scope to the `jevcore`
-  family**, before any publish, because two of the three packages are not
-  DSH-specific and the scope said otherwise:
+- **Renamed the packages and the brand twice before the first publish**, settling
+  on the `jevcore` family. Only the final state is usable, but the intermediate
+  step is recorded because it is the more useful lesson:
 
   | Was | Now | Role |
   |---|---|---|
@@ -24,20 +45,35 @@ Published to npm as `jevcore`, `jevcore-dsh` and `jevcore-mcp`. Repository at
   | `@dsh-jev/plugin` | `jevcore-dsh` | the DeepSeek Harness plugin |
   | `@dsh-jev/mcp` | `jevcore-mcp` | the MCP server |
 
-  A Claude Desktop user looking for a Jev MCP server would have read
-  `@dsh-jev/mcp` as "not for me", and the same went for anyone writing a plain
-  script against `@dsh-jev/core`. Only the DSH adapter is DSH-specific, and now
-  only its name says so. Both adapters depend on the root name, so the
+  The `@dsh-jev` scope was dropped first, because two of the three packages are
+  **not** DSH-specific: a Claude Desktop user looking for a Jev MCP server would
+  have read `@dsh-jev/mcp` as "not for me", and the same went for anyone writing
+  a plain script against `@dsh-jev/core`. Only the DSH adapter is DSH-specific,
+  and now only its name says so. Both adapters depend on the root name, so the
   dependency direction is readable from the names alone.
 
-  The rename also reached the runtime identifiers a user or host can see: the
-  Cordis plugin name (`jevcore`), the MCP server name and `bin` command
-  (`jevcore-mcp`), the `Config` Standard Schema `vendor` field, the startup egress
-  prefix (`[jevcore]`), and the config/gate error messages.
+  The intended unscoped name was `jevkit`, and npm refused it outright:
 
-  Unscoped family names have to be claimed individually — npm registers
-  ownership of a scope, not a name prefix — so `jevcore`, `jevcore-dsh` and
-  `jevcore-mcp` were each confirmed free before the rename.
+  ```
+  403 Forbidden - Package name too similar to existing package jev-kit
+  ```
+
+  `npm view jevkit` returned 404 right up to that moment, which is the trap: a
+  free name is not a publishable one, and npm's similarity rule is
+  [undocumented and cannot be queried in advance](https://github.com/orgs/community/discussions/205030).
+  `jevkit` also turned out to collide on GitHub (`ariel-frischer/jevkit`). The
+  replacement `jevcore` was verified free on npm, GitHub and Gitee before it was
+  attempted, and as an unhyphenated word it sits further from any hyphenated
+  neighbour than `jevkit` sat from `jev-kit`.
+
+  The rename reached the runtime identifiers a user or host can see, not just the
+  manifests: the Cordis plugin name (`jevcore`), the MCP server name and `bin`
+  command (`jevcore-mcp`), the `Config` Standard Schema `vendor` field, the
+  startup egress prefix (`[jevcore]`), and the config and gate error messages.
+
+  Unscoped family names have to be claimed individually — npm registers ownership
+  of a scope, not a name prefix — so all three names were confirmed free before
+  the rename.
 
 ### Added
 
