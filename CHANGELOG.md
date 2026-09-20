@@ -4,7 +4,7 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.2.1 — 2026-09-20
 
 Findings from a full audit against the official TypeSafe documentation, each
 confirmed against the live API before and after the change. The architecture was

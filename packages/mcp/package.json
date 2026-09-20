@@ -1,6 +1,6 @@
 {
   "name": "jevcore-mcp",
-  "version": "0.1.1",
+  "version": "0.2.1",
   "description": "TypeSafe Jev over the Model Context Protocol: typed judgments (ask, rank, check) that return calibrated probabilities instead of prose.",
   "keywords": [
     "mcp",
