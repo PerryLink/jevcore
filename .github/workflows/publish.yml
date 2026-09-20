@@ -61,9 +61,6 @@ jobs:
       - name: Verify before publishing
         run: pnpm run check
 
-      - name: Cross-check payloads against the vendor schemas
-        run: pnpm --filter jevcore run check:schemas
-
       - name: Publish
         # Core first: both adapters depend on `jevcore`. `pnpm publish`, never
         # `npm publish`, so the workspace dependency becomes a real version.

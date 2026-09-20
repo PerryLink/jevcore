@@ -118,7 +118,6 @@ export {
   OpenRouterProvider,
   assertSystemOneModel,
   assertUsableOpenRouterEndpoint,
-  loadOpenRouterSdk,
   type OpenRouterProviderOptions,
 } from './provider/openrouter.js'
 

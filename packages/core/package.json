@@ -48,12 +48,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:schemas": "node scripts/check-openrouter-schemas.mjs",
     "probe:live": "node scripts/probe-openrouter-live.mjs"
   },
   "optionalDependencies": {
-    "@typesafe-ai/sdk": "^0.6.0",
-    "@openrouter/sdk": "^1.3.6"
+    "@typesafe-ai/sdk": "^0.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

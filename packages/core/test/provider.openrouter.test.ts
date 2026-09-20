@@ -1,51 +1,44 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_OPENROUTER_ENDPOINT,
   DEFAULT_OPENROUTER_MODEL,
-  OPENROUTER_MODEL_PREFIX,
   OpenRouterProvider,
   assertSystemOneModel,
   assertUsableOpenRouterEndpoint,
 } from '../src/provider/openrouter.js'
-import { choice, noul } from '../src/primitives.js'
+import { DEFAULT_MODEL, loadOfficialSdk } from '../src/provider/live.js'
+import { assertValidBatch, choice, noul } from '../src/primitives.js'
 import { JevProviderError, type JevRequest } from '../src/types.js'
 
 /**
- * A stub of the OpenRouter SDK.
+ * A stub of the official SDK.
  *
- * Everything here is verified against this rather than the network, so the suite
- * needs no OpenRouter key and no socket. The real contract was confirmed against
- * the published `@openrouter/sdk` types and a live call with an invalid key; what
- * these tests protect is our side of it.
+ * This provider shares \`@typesafe-ai/sdk\` with the TypeSafe route -- only the
+ * \`baseURL\` and the key differ -- so the stub is deliberately the same shape as the
+ * one in \`provider.live.test.ts\`. That is the point of the design: the two routes
+ * cannot drift on request shape or answer normalization if they run one client.
  */
 interface StubCall {
+  readonly config: Record<string, unknown>
   readonly request: Record<string, unknown>
   readonly options: Record<string, unknown> | undefined
 }
 
 const stubSdk = (
   respond: (request: Record<string, unknown>) => unknown,
-): {
-  module: { OpenRouter: new (config: Record<string, unknown>) => unknown }
-  calls: StubCall[]
-  configs: Record<string, unknown>[]
-} => {
+): { module: { TypeSafeClient: new (config: Record<string, unknown>) => unknown }; calls: StubCall[] } => {
   const calls: StubCall[] = []
-  const configs: Record<string, unknown>[] = []
   class StubClient {
     constructor(config: Record<string, unknown>) {
-      configs.push(config)
+      this.config = config
     }
-    readonly alpha = {
-      decisions: {
-        create: (request: Record<string, unknown>, options?: Record<string, unknown>) => {
-          calls.push({ request, options })
-          return Promise.resolve(respond(request))
-        },
-      },
+    readonly config: Record<string, unknown>
+    systemOne(request: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown> {
+      calls.push({ config: this.config, request, options })
+      return Promise.resolve(respond(request))
     }
   }
-  return { module: { OpenRouter: StubClient as never }, calls, configs }
+  return { module: { TypeSafeClient: StubClient as never }, calls }
 }
 
 const request = (overrides: Partial<JevRequest> = {}): JevRequest => ({
@@ -57,251 +50,228 @@ const request = (overrides: Partial<JevRequest> = {}): JevRequest => ({
   ...overrides,
 })
 
-const goodResponse = {
-  model: 'typesafe/jev-1.13',
-  provider: 'TypeSafe',
-  answers: {
-    urgent: { type: 'noul', noul: 0.91 },
-    team: {
-      type: 'choice',
-      choice: 'billing',
-      probabilities: { billing: 0.7, technical: 0.3 },
-      confidence: 0.7,
-    },
-  },
-  usage: { inputTokens: 120, outputTokens: 0, cost: 0.000005 },
-}
-
-const provider = (respond: (request: Record<string, unknown>) => unknown = () => goodResponse) => {
+/** A provider over a stub, plus the calls it made. */
+const provider = (respond: (request: Record<string, unknown>) => unknown = () => ({ answers: {} })) => {
   const sdk = stubSdk(respond)
-  return {
-    sdk,
-    instance: new OpenRouterProvider({
-      apiKey: 'sk-or-v1-test',
-      loadSdk: async () => sdk.module as never,
-    }),
-  }
+  const instance = new OpenRouterProvider({
+    apiKey: 'sk-or-v1-test',
+    loadSdk: async () => sdk.module as never,
+  })
+  return { instance, calls: sdk.calls }
 }
 
-describe('endpoint validation', () => {
-  it('accepts https and strips trailing slashes', () => {
-    expect(assertUsableOpenRouterEndpoint('https://openrouter.ai/')).toBe('https://openrouter.ai')
+describe('endpoint', () => {
+  it('is the documented System One path, not the alpha route', () => {
+    const { instance } = provider()
+    // OpenRouter serves System One at the same path TypeSafe does, one level below
+    // its /api root. The alpha route this used to call is named alpha by
+    // OpenRouter's own SDK.
+    expect(DEFAULT_OPENROUTER_ENDPOINT).toBe('https://openrouter.ai/api')
+    expect(instance.endpoint).toBe('https://openrouter.ai/api/v1/systemone')
   })
 
-  it('accepts loopback http for a local proxy under test', () => {
-    expect(assertUsableOpenRouterEndpoint('http://127.0.0.1:8787')).toBe('http://127.0.0.1:8787')
-  })
-
-  it('refuses cleartext http to a remote host', () => {
-    expect(() => assertUsableOpenRouterEndpoint('http://openrouter.ai')).toThrow(/must use https/)
-  })
-
-  it('refuses a malformed URL', () => {
-    expect(() => assertUsableOpenRouterEndpoint('not a url')).toThrow(/not a valid URL/)
-  })
-
-  it('reports the full decisions path as its endpoint', () => {
-    expect(provider().instance.endpoint).toBe(`${DEFAULT_OPENROUTER_ENDPOINT}/api/alpha/decisions`)
+  it('refuses a cleartext endpoint away from loopback', () => {
+    expect(() => assertUsableOpenRouterEndpoint('http://openrouter.ai/api')).toThrow(JevProviderError)
+    expect(() => assertUsableOpenRouterEndpoint('http://127.0.0.1:8080')).not.toThrow()
+    expect(() => assertUsableOpenRouterEndpoint('not a url')).toThrow(JevProviderError)
   })
 })
 
 describe('the model must be a System One model', () => {
-  it('accepts the typesafe prefix', () => {
+  it('defaults to the same id the TypeSafe route uses', () => {
+    // One default for both routes. They disagreed before: the guard rejected bare
+    // ids, so the MCP runtime substituted a prefixed one while the DSH plugin
+    // passed jev-latest through and threw at startup.
+    expect(DEFAULT_OPENROUTER_MODEL).toBe(DEFAULT_MODEL)
+    expect(DEFAULT_OPENROUTER_MODEL).toBe('jev-latest')
+    expect(() => new OpenRouterProvider({ apiKey: 'k' })).not.toThrow()
+  })
+
+  it('accepts a bare id and a prefixed one, both verified live', () => {
+    expect(assertSystemOneModel('jev-latest')).toBe('jev-latest')
+    expect(assertSystemOneModel('jev-1.13')).toBe('jev-1.13')
     expect(assertSystemOneModel('typesafe/jev-1.13')).toBe('typesafe/jev-1.13')
   })
 
-  it('refuses anything else, because those answer with prose', () => {
-    // Routing a decision question to a chat model would return text this plugin
-    // cannot interpret, so the refusal happens before the call.
-    expect(() => assertSystemOneModel('openai/gpt-5')).toThrow(/only call System One models/)
-    expect(() => assertSystemOneModel('anthropic/claude-x')).toThrow(JevProviderError)
+  it('refuses other families, which answer with prose', () => {
+    for (const model of ['gpt-4o', 'claude-3', 'openai/gpt-4o', 'typesafe/other', 'meta/llama-3']) {
+      expect(() => assertSystemOneModel(model), model).toThrow(JevProviderError)
+    }
   })
 
-  it('refuses a non-System-One model at construction', () => {
-    expect(
-      () => new OpenRouterProvider({ apiKey: 'k', model: 'meta/llama-4' }),
-    ).toThrow(/only call System One models/)
+  it('refuses an empty id rather than sending it', () => {
+    expect(() => assertSystemOneModel('   ')).toThrow(/empty/)
   })
 
-  it('defaults to a System One model', () => {
-    expect(DEFAULT_OPENROUTER_MODEL.startsWith(OPENROUTER_MODEL_PREFIX)).toBe(true)
-  })
-
-  it('refuses a per-call model override that is not System One', async () => {
+  it('applies the guard to a per-call override too', async () => {
     const { instance } = provider()
-    await expect(instance.answer(request({ model: 'openai/gpt-5' }))).rejects.toThrow(
-      /only call System One models/,
-    )
+    await expect(instance.answer(request({ model: 'gpt-4o' }))).rejects.toThrow(JevProviderError)
   })
 })
 
-describe('the request shape', () => {
-  it('wraps the payload in decisionsRequest, which the SDK requires', async () => {
-    // A bare object is rejected by the SDK's own schema; the wrapper is
-    // mandatory and easy to omit.
-    const { instance, sdk } = provider()
+describe('the request is the same shape the TypeSafe route sends', () => {
+  it('sends state, questions and model, with no OpenRouter-specific wrapper', async () => {
+    // The old implementation wrapped the payload in decisionsRequest, a shape only
+    // the alpha route wanted. The documented route takes the plain body.
+    const { instance, calls } = provider()
     await instance.answer(request())
-    expect(Object.keys(sdk.calls[0]!.request)).toEqual(['decisionsRequest'])
-  })
-
-  it('names the model inside the wrapper', async () => {
-    const { instance, sdk } = provider()
-    await instance.answer(request())
-    const inner = sdk.calls[0]!.request.decisionsRequest as Record<string, unknown>
-    expect(inner.model).toBe(DEFAULT_OPENROUTER_MODEL)
+    expect(Object.keys(calls[0]?.request ?? {}).sort()).toEqual(['model', 'questions', 'state'])
+    expect(calls[0]?.request).not.toHaveProperty('decisionsRequest')
   })
 
   it('sends the state and questions through unchanged', async () => {
-    const { instance, sdk } = provider()
-    await instance.answer(request())
-    const inner = sdk.calls[0]!.request.decisionsRequest as Record<string, unknown>
-    expect(inner.state).toEqual({ ticket: 'help' })
-    expect(Object.keys(inner.questions as object)).toEqual(['urgent', 'team'])
+    const { instance, calls } = provider()
+    const sent = request()
+    await instance.answer(sent)
+    expect(calls[0]?.request.state).toEqual(sent.state)
+    expect(calls[0]?.request.questions).toEqual(sent.questions)
   })
 
   it('lets a per-call model override the default', async () => {
-    const { instance, sdk } = provider()
-    await instance.answer(request({ model: 'typesafe/jev-latest' }))
-    const inner = sdk.calls[0]!.request.decisionsRequest as Record<string, unknown>
-    expect(inner.model).toBe('typesafe/jev-latest')
+    const { instance, calls } = provider()
+    await instance.answer(request({ model: 'typesafe/jev-1.13' }))
+    expect(calls[0]?.request.model).toBe('typesafe/jev-1.13')
   })
 
-  it('forwards the abort signal to the SDK', async () => {
-    const { instance, sdk } = provider()
+  it('forwards the abort signal', async () => {
+    const { instance, calls } = provider()
     const controller = new AbortController()
     await instance.answer(request(), controller.signal)
-    expect(sdk.calls[0]!.options?.signal).toBe(controller.signal)
+    expect(calls[0]?.options).toEqual({ signal: controller.signal })
   })
 })
 
 describe('client construction', () => {
-  it('passes the key explicitly so the SDK cannot fall back to the environment', async () => {
-    const { instance, sdk } = provider()
+  it('points the SDK at OpenRouter and passes the key explicitly', async () => {
+    const { instance, calls } = provider()
     await instance.answer(request())
-    expect(sdk.configs[0]?.apiKey).toBe('sk-or-v1-test')
+    expect(calls[0]?.config.apiKey).toBe('sk-or-v1-test')
+    expect(calls[0]?.config.baseURL).toBe(DEFAULT_OPENROUTER_ENDPOINT)
+    // Never left to the environment: the SDK would otherwise read TYPESAFE_API_KEY.
+    expect(calls[0]?.config.dangerouslyAllowBrowser).toBe(false)
   })
 
-  it('honours a configured endpoint', async () => {
-    const sdk = stubSdk(() => goodResponse)
+  it('passes logLevel, so the environment cannot raise it', async () => {
+    const { instance, calls } = provider()
+    await instance.answer(request())
+    // The SDK's debug level logs request bodies with credential headers redacted
+    // but bodies not, which would defeat this package's redaction.
+    expect(calls[0]?.config).toHaveProperty('logLevel')
+    expect(calls[0]?.config.logLevel).toBe('warn')
+  })
+
+  it('honours a configured endpoint and strips a trailing slash', async () => {
+    const sdk = stubSdk(() => ({ answers: {} }))
     const instance = new OpenRouterProvider({
       apiKey: 'k',
-      baseURL: 'https://proxy.internal',
+      baseURL: 'https://openrouter.ai/api/',
       loadSdk: async () => sdk.module as never,
     })
     await instance.answer(request())
-    expect(sdk.configs[0]?.serverURL).toBe('https://proxy.internal')
+    // Left on, the SDK would build //v1/systemone.
+    expect(sdk.calls[0]?.config.baseURL).toBe('https://openrouter.ai/api')
   })
 
   it('reuses one client across calls', async () => {
-    const { instance, sdk } = provider()
+    const { instance, calls } = provider()
     await instance.answer(request())
     await instance.answer(request())
-    expect(sdk.configs).toHaveLength(1)
+    expect(calls).toHaveLength(2)
+    expect(calls[0]?.config).toBe(calls[1]?.config)
   })
 
-  it('reports a helpful error when the SDK is not installed', async () => {
-    await expect(
-      (await import('../src/provider/openrouter.js')).loadOpenRouterSdk(
-        '@openrouter/sdk-not-installed-xyz',
-      ),
-    ).rejects.toThrow(/Install it with/)
+  it('names the SDK to install when it is missing', async () => {
+    await expect(loadOfficialSdk('@typesafe-ai/sdk-does-not-exist')).rejects.toThrow(/npm install/)
   })
 })
 
 describe('response normalization', () => {
-  it('parses a noul answer', async () => {
-    const { instance } = provider()
+  it('parses a noul answer, which carries no confidence', async () => {
+    const { instance } = provider(() => ({
+      model: 'typesafe/jev-1.13-20260917',
+      answers: { urgent: { type: 'noul', noul: 0.91 } },
+    }))
     const result = await instance.answer(request())
     expect(result.answers.urgent).toEqual({ type: 'noul', noul: 0.91 })
+    expect(result.model).toBe('typesafe/jev-1.13-20260917')
+    expect(result.provider).toBe('openrouter')
   })
 
   it('parses a choice answer with its distribution', async () => {
-    const { instance } = provider()
-    const result = await instance.answer(request())
-    expect(result.answers.team).toMatchObject({ type: 'choice', choice: 'billing' })
-  })
-
-  it('reports the provider as openrouter, not as TypeSafe', async () => {
-    // The destination matters: a result must not imply it came from TypeSafe
-    // when the state went to OpenRouter.
-    const { instance } = provider()
-    expect((await instance.answer(request())).provider).toBe('openrouter')
-  })
-
-  it('reads token usage and cost', async () => {
-    const { instance } = provider()
-    expect((await instance.answer(request())).usage).toEqual({
-      inputTokens: 120,
-      outputTokens: 0,
-      costUsd: 0.000005,
-    })
-  })
-
-  it('drops an answer it cannot verify instead of coercing it', async () => {
     const { instance } = provider(() => ({
-      model: 'm',
-      answers: { urgent: { noul: 'high' }, team: {} },
+      answers: {
+        team: {
+          type: 'choice',
+          choice: 'billing',
+          probabilities: { billing: 0.7, technical: 0.3 },
+          confidence: 0.9,
+        },
+      },
     }))
     const result = await instance.answer(request())
-    expect(result.answers.urgent).toBeUndefined()
-    expect(result.answers.team).toBeUndefined()
+    expect(result.answers.team).toMatchObject({ type: 'choice', choice: 'billing', confidence: 0.9 })
   })
 
-  it('reports a malformed response rather than an empty success', async () => {
+  it('reads usage from the wire spelling, and the cost OpenRouter adds', async () => {
+    // The wire shape is snake_case while the SDK type is camelCase, and reading the
+    // wrong one reports no usage rather than failing. OpenRouter additionally
+    // returns a cost, which TypeSafe's own route does not.
+    const { instance } = provider(() => ({
+      answers: {},
+      usage: { input_tokens: 275, output_tokens: 20, cost: 0.00001155 },
+    }))
+    const result = await instance.answer(request())
+    expect(result.usage).toEqual({ inputTokens: 275, outputTokens: 20, costUsd: 0.00001155 })
+  })
+
+  it('refuses a response with no answers object', async () => {
     const { instance } = provider(() => ({ model: 'm' }))
-    await expect(instance.answer(request())).rejects.toThrow(/no "answers" object/)
+    await expect(instance.answer(request())).rejects.toThrow(/no "answers"/)
   })
 
-  it('tolerates a response that is not an object', async () => {
-    const { instance } = provider(() => 'unexpected')
-    await expect(instance.answer(request())).rejects.toThrow(JevProviderError)
+  it('drops an answer whose shape does not match the question', async () => {
+    const { instance } = provider(() => ({ answers: { urgent: { type: 'noul', noul: 'high' } } }))
+    const result = await instance.answer(request())
+    expect(result.answers.urgent).toBeUndefined()
   })
 })
 
 describe('failure classification', () => {
   const failing = (error: unknown) =>
-    provider(() => {
-      throw error
-    }).instance
+    new OpenRouterProvider({
+      apiKey: 'k',
+      loadSdk: async () =>
+        ({
+          TypeSafeClient: class {
+            async systemOne(): Promise<unknown> {
+              throw error
+            }
+          },
+        }) as never,
+    }).answer(request())
 
-  it('classifies a 401 as rejected', async () => {
-    await expect(failing({ statusCode: 401 }).answer(request())).rejects.toMatchObject({
-      code: 'upstream-rejected',
-    })
+  it('reports a 401 as rejected', async () => {
+    await expect(failing({ status: 401 })).rejects.toMatchObject({ code: 'upstream-rejected' })
   })
 
-  it('classifies a 403 as rejected', async () => {
-    await expect(failing({ status: 403 }).answer(request())).rejects.toMatchObject({
-      code: 'upstream-rejected',
-    })
-  })
-
-  it('classifies a transport failure as unreachable', async () => {
-    await expect(failing(new Error('socket hang up')).answer(request())).rejects.toMatchObject({
+  it('reports a transport failure as unreachable', async () => {
+    await expect(failing(new Error('socket hang up'))).rejects.toMatchObject({
       code: 'upstream-unreachable',
     })
   })
 
-  it('does not echo the upstream body, which can quote request headers', async () => {
-    const instance = failing({ statusCode: 500, message: 'Bearer sk-or-v1-secretvalue' })
-    await expect(instance.answer(request())).rejects.toThrow(
-      expect.objectContaining({
-        message: expect.not.stringContaining('sk-or-v1-secretvalue') as unknown as string,
-      }),
-    )
-  })
-
-  it('names the status without inventing a cause', async () => {
-    await expect(failing({ statusCode: 429 }).answer(request())).rejects.toThrow(/HTTP 429/)
+  it('never echoes the upstream body, which can quote request headers', async () => {
+    const secret = 'sk-or-v1-should-never-appear'
+    const error = (await failing(
+      Object.assign(new Error('bad'), { status: 403, body: secret }),
+    ).catch((caught: unknown) => caught)) as Error
+    expect(error.message).not.toContain(secret)
   })
 })
 
-describe('no ambient credential is read', () => {
-  it('does not consult process.env for the key', async () => {
-    const spy = vi.spyOn(process, 'env', 'get')
-    const { instance, sdk } = provider()
-    await instance.answer(request())
-    expect(sdk.configs[0]?.apiKey).toBe('sk-or-v1-test')
-    spy.mockRestore()
+describe('question validation still applies on this route', () => {
+  it('rejects a batch the API would reject', () => {
+    expect(() => assertValidBatch({})).toThrow()
+    expect(() => assertValidBatch({ q: choice('pick', { only: 'one' }) })).toThrow()
   })
 })

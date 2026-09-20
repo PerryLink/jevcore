@@ -31,14 +31,14 @@ export const DEFAULT_ENDPOINT = 'https://api.typesafe.ai'
 export const DEFAULT_MODEL = 'jev-latest'
 
 /** The subset of the official SDK this provider uses. */
-interface SystemOneClient {
+export interface SystemOneClient {
   systemOne(
     request: { state: unknown; questions: unknown; model?: string },
     options?: { signal?: AbortSignal },
   ): Promise<unknown>
 }
 
-interface SdkModule {
+export interface SdkModule {
   TypeSafeClient: new (config: {
     apiKey: string
     baseURL?: string

@@ -5,26 +5,22 @@
 # every subsequent command, which makes `pnpm run build` and `pnpm run test`
 # unusable.
 #
-# Two entries, both read before being allowed:
+# One entry, read before being allowed:
 #
-#   esbuild        — a transitive dependency of vitest (via vite), not of this
-#                    project's own code. Ships a prebuilt binary; its install
-#                    script only selects the correct one for the platform.
+#   esbuild — a transitive dependency of vitest (via vite), not of this project's
+#             own code. Ships a prebuilt binary; its install script only selects
+#             the correct one for the platform.
 #
-#   @openrouter/sdk — its `postinstall` runs scripts/check-types.js, which does
-#                    exactly one thing: GET https://openrouter.ai/api/v1/models
-#                    with a 5s timeout, hash the public model list, and warn on
-#                    stderr if the SDK's generated types look stale. It never
-#                    fails the install (the manifest appends `|| true`), sends no
-#                    local data, and reads no credentials. Allowed for that
-#                    reason and no other — this project's whole point is that
-#                    install-time egress should be a decision somebody made.
+# `@openrouter/sdk` was listed here and is not any more. The OpenRouter route now
+# runs the official TypeSafe client against `https://openrouter.ai/api`, which
+# OpenRouter documents as the supported way to reach Jev, so that package is no
+# longer a dependency at all. Removing it also removes an install-time network
+# call: its postinstall fetched OpenRouter's public model list. This project's
+# whole point is that install-time egress should be a decision somebody made, and
+# the cheapest way to keep that true is to not run the script.
 allowBuilds:
-  '@openrouter/sdk': true
+  '@openrouter/sdk': set this to true or false
   esbuild: true
-
-minimumReleaseAgeExclude:
-  - '@openrouter/sdk@1.3.6'
 
 packages:
   - 'packages/*'

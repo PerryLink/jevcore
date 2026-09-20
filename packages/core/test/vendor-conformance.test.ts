@@ -128,19 +128,31 @@ describe('conformance with the TypeSafe SDK', () => {
   })
 })
 
-describe('conformance with the OpenRouter SDK', () => {
-  it('a score question is sent as an array of descriptions', async () => {
-    const { DecisionsRequest$outboundSchema } = await import('@openrouter/sdk/models')
-    const parsed = DecisionsRequest$outboundSchema.safeParse({
-      model: 'typesafe/jev-1.13',
+describe('conformance with the OpenRouter route', () => {
+  it('builds the plain System One body, with no OpenRouter-specific wrapper', () => {
+    // This block used to parse our payload against `@openrouter/sdk`'s zod
+    // schemas for `POST /api/alpha/decisions`. That route is no longer used: the
+    // OpenRouter provider runs the official TypeSafe client against
+    // `https://openrouter.ai/api`, which serves the same `/v1/systemone` the
+    // TypeSafe route does. So the contract to conform to is the documented System
+    // One one, and the request is the plain body — the old shape wrapped
+    // everything in `decisionsRequest` because only the alpha route wanted that.
+    const body = {
+      model: 'jev-latest',
       state: 'x',
       questions: {
         urgent: noul('Is this urgent?'),
         team: choice('Which team?', { billing: 'Payments', technical: 'Bugs' }),
         risk: score('How risky?', { low: 'none', high: 'severe' }),
       },
-    })
-    // A keyed score map fails here, which is what this test exists to catch.
-    expect(parsed.success ? [] : parsed.error.issues).toEqual([])
+    }
+    expect(Object.keys(body).sort()).toEqual(['model', 'questions', 'state'])
+    // A score question sends an ordered array of descriptions: a level's position
+    // is its score, and a keyed map is rejected by the live API.
+    expect(body.questions.risk.criteria).toEqual(['none', 'severe'])
+    expect(Array.isArray(body.questions.risk.criteria)).toBe(true)
+    expect(body.questions.risk.type).toBe('score')
+    expect(body.questions.urgent.type).toBe('noul')
+    expect(body.questions.team.type).toBe('choice')
   })
 })
