@@ -8,6 +8,7 @@
  */
 
 import {
+  DEFAULT_CONFIG,
   EgressContract,
   JevProviderError,
   JevService,
@@ -68,25 +69,24 @@ export const buildRuntime = async (
 
   const apiKeyRef = 'TYPESAFE_API_KEY'
   const openRouterApiKeyRef = 'OPENROUTER_API_KEY'
+  // One default for both routes. OpenRouter maps a bare `jev-*` id onto its own
+  // namespace, so `jev-latest` is valid there too. This used to substitute a
+  // prefixed id for OpenRouter because the provider rejected bare ones, which is
+  // why the MCP server worked while the DSH plugin threw at startup.
   const model =
-    env(isOpenRouter ? 'OPENROUTER_MODEL' : 'TYPESAFE_MODEL')?.trim() ||
-    (isOpenRouter ? 'typesafe/jev-1.13' : 'jev-latest')
+    env(isOpenRouter ? 'OPENROUTER_MODEL' : 'TYPESAFE_MODEL')?.trim() || DEFAULT_CONFIG.model
 
   const config: JevConfig = {
+    // Spread the shared defaults rather than restating them: the thresholds and
+    // transport settings used to be duplicated here, so tuning one entry point
+    // silently left the other unchanged.
+    ...DEFAULT_CONFIG,
     provider: kind,
     apiKeyRef,
     openRouterApiKeyRef,
     baseURL: undefined,
     openRouterBaseURL: undefined,
     model,
-    logLevel: 'warn',
-    minConfidence: 0.7,
-    minProbability: 0.6,
-    maxStateChars: undefined,
-    gates: {
-      safety: { enabled: false, onUndecided: 'ask' },
-      context: { enabled: false, onUndecided: 'ask' },
-    },
   }
 
   const egress = new EgressContract(
@@ -115,9 +115,21 @@ export const buildRuntime = async (
         'no-credential',
       )
     }
+    // Transport settings go to the TypeSafe provider only. They exist to defeat
+    // the TypeSafe SDK's environment fallbacks: its `logLevel` defaults to
+    // TYPESAFE_LOG_LEVEL and `debug` writes request bodies with credential
+    // headers redacted but bodies not, which would log exactly what this
+    // package redacts before sending. OpenRouter's own SDK reads no such
+    // variable, so it needs none of this.
     provider = isOpenRouter
       ? new OpenRouterProvider({ apiKey: resolved.value, model })
-      : new LiveProvider({ apiKey: resolved.value, model })
+      : new LiveProvider({
+          apiKey: resolved.value,
+          model,
+          logLevel: config.logLevel === 'silent' ? 'off' : config.logLevel,
+          timeout: config.requestTimeoutMs,
+          retry: { maxRetries: config.requestMaxRetries },
+        })
   }
 
   const service = new JevService({

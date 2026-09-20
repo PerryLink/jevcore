@@ -66,6 +66,22 @@ export interface JevConfigInput {
   readonly model?: string
   /** Log level for this plugin's own diagnostics. */
   readonly logLevel?: 'silent' | 'warn' | 'info' | 'debug'
+  /**
+   * Milliseconds allowed per provider attempt. `0` disables the timeout.
+   *
+   * The TypeSafe SDK's own default is 10_000ms **per attempt with no total
+   * budget**, so with its default retry policy one call can occupy ~30s. A tool
+   * gate that blocks a tool call for 30 seconds is usually worse than failing;
+   * this bounds it.
+   */
+  readonly requestTimeoutMs?: number
+  /**
+   * Retries after the first attempt, `0` to disable. Defaults to `2`.
+   *
+   * Worth lowering inside a gate: every retry multiplies the worst-case latency
+   * above, and most gate decisions can afford to fall back to `ask`.
+   */
+  readonly requestMaxRetries?: number
   /** Minimum Jev `confidence` before an answer is acted upon. */
   readonly minConfidence?: number
   /** Minimum probability of the selected criterion. */
@@ -87,6 +103,8 @@ export interface JevConfig {
   readonly openRouterBaseURL: string | undefined
   readonly model: string
   readonly logLevel: 'silent' | 'warn' | 'info' | 'debug'
+  readonly requestTimeoutMs: number
+  readonly requestMaxRetries: number
   readonly minConfidence: number
   readonly minProbability: number
   readonly maxStateChars: number | undefined
@@ -96,6 +114,18 @@ export interface JevConfig {
   }
 }
 
+/**
+ * Per-attempt timeout handed to the provider.
+ *
+ * 30s, chosen to bound the SDK's worst case rather than to match its default:
+ * 10s per attempt across 3 attempts is ~30s of blocking, which is the number
+ * this setting exists to stop being unbounded in practice.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
+
+/** Retries after the first attempt. The SDK's own default, restated explicitly. */
+export const DEFAULT_REQUEST_MAX_RETRIES = 2
+
 export const DEFAULT_CONFIG: JevConfig = {
   provider: 'mock',
   apiKeyRef: 'TYPESAFE_API_KEY',
@@ -104,6 +134,8 @@ export const DEFAULT_CONFIG: JevConfig = {
   openRouterBaseURL: undefined,
   model: 'jev-latest',
   logLevel: 'warn',
+  requestTimeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
+  requestMaxRetries: DEFAULT_REQUEST_MAX_RETRIES,
   minConfidence: 0.7,
   minProbability: 0.6,
   maxStateChars: undefined,
@@ -178,6 +210,24 @@ const readLogLevel = (value: unknown): JevConfig['logLevel'] => {
   return fail(`"logLevel" must be silent, warn, info, or debug, got ${String(value)}`)
 }
 
+/** Read a non-negative integer, or fail with the field name. */
+const readPositiveInt = (name: string, value: unknown, fallback: number): number => {
+  if (value === undefined) return fallback
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    return fail(`"${name}" must be a non-negative integer`)
+  }
+  return value
+}
+
+const readRequestTimeoutMs = (value: unknown): number => {
+  // 0 is a deliberate "no timeout", which is distinct from "unset": the SDK
+  // treats 0 as no timeout too, so passing it through is the honest mapping.
+  return readPositiveInt('requestTimeoutMs', value, DEFAULT_CONFIG.requestTimeoutMs)
+}
+
+const readRequestMaxRetries = (value: unknown): number =>
+  readPositiveInt('requestMaxRetries', value, DEFAULT_CONFIG.requestMaxRetries)
+
 const readMaxStateChars = (value: unknown): number | undefined => {
   if (value === undefined) return undefined
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
@@ -213,6 +263,8 @@ export const resolveConfig = (input: JevConfigInput | undefined): JevConfig => {
         ? raw.model.trim()
         : DEFAULT_CONFIG.model,
     logLevel: readLogLevel(raw.logLevel),
+    requestTimeoutMs: readRequestTimeoutMs(raw.requestTimeoutMs),
+    requestMaxRetries: readRequestMaxRetries(raw.requestMaxRetries),
     minConfidence: readFraction('minConfidence', raw.minConfidence, DEFAULT_CONFIG.minConfidence),
     minProbability: readFraction('minProbability', raw.minProbability, DEFAULT_CONFIG.minProbability),
     maxStateChars: readMaxStateChars(raw.maxStateChars),

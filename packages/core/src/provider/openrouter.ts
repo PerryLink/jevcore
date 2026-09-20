@@ -111,17 +111,50 @@ export const assertUsableOpenRouterEndpoint = (baseURL: string): string => {
   return baseURL.replace(/\/+$/, '')
 }
 
-/** Throw unless the model is one of TypeSafe's. */
+/**
+ * Throw unless the model is one TypeSafe serves.
+ *
+ * Two shapes are valid, and both were verified against the live route:
+ *
+ *  - a bare System One id, e.g. `jev-1.13` or `jev-latest`. OpenRouter's
+ *    documented behaviour is to map these onto its own namespace
+ *    (`jev-1.13` -> `typesafe/jev-1.13`, `jev-latest` -> `~typesafe/jev-latest`).
+ *  - a `typesafe/jev-*` id, passed through as-is. Note that the prefix alone
+ *    proves nothing: live, `typesafe/jev-1.13` resolves and `typesafe/jev-latest`
+ *    does *not*. Only the `jev-` family is accepted either way.
+ *
+ * Accepting only the prefixed form was a real defect, not a preference: the
+ * package default is `jev-latest`, so `provider: openrouter` with default
+ * configuration threw at startup, and the DSH plugin and the MCP server
+ * disagreed about whether it worked (the MCP runtime silently substituted its
+ * own default). The guard still earns its place — a model from another family
+ * answers with prose this package cannot read as a decision — so it now rejects
+ * anything that is not the `jev-` family, bare or prefixed.
+ *
+ * @see https://openrouter.ai/docs/guides/community/typesafe-sdk
+ */
 export const assertSystemOneModel = (model: string): string => {
-  if (!model.startsWith(OPENROUTER_MODEL_PREFIX)) {
+  const trimmed = model.trim()
+  if (trimmed.length === 0) {
     throw new JevProviderError(
-      `provider "openrouter" can only call System One models, whose ids start with ` +
-        `"${OPENROUTER_MODEL_PREFIX}". Got "${model}". Other models answer with prose, which this ` +
-        `plugin cannot interpret as a decision.`,
+      'provider "openrouter" needs a model id; got an empty string.',
       'provider-unavailable',
     )
   }
-  return model
+  // `jev-` family only, whether bare or behind the author prefix. Checking the
+  // prefix alone would admit `typesafe/anything`, which is not a System One id.
+  const jevFamily = /^jev-[a-z0-9][a-z0-9.-]*$/i
+  const bare = jevFamily.test(trimmed)
+  const prefixed = trimmed.startsWith(OPENROUTER_MODEL_PREFIX)
+    ? trimmed.slice(OPENROUTER_MODEL_PREFIX.length)
+    : undefined
+  if (bare || (prefixed !== undefined && jevFamily.test(prefixed))) return trimmed
+  throw new JevProviderError(
+    `provider "openrouter" can only call System One models: a bare id such as "jev-1.13", or ` +
+      `one carrying the "${OPENROUTER_MODEL_PREFIX}" prefix. Got "${trimmed}". Other models ` +
+      `answer with prose, which this plugin cannot interpret as a decision.`,
+    'provider-unavailable',
+  )
 }
 
 export const loadOpenRouterSdk = async (

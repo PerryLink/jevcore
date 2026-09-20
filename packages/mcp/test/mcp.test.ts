@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { EGRESS_FEATURES, EgressContract, JevService, MockProvider, type EgressFeature } from 'jevcore'
+import {
+  DEFAULT_CONFIG,
+  EGRESS_FEATURES,
+  EgressContract,
+  JevService,
+  MockProvider,
+  type EgressFeature,
+} from 'jevcore'
 import { buildRuntime, chooseProvider } from '../src/runtime.js'
 import { SYNTHETIC_WARNING, runAsk, runCheck, runRank, toQuestions } from '../src/tools.js'
 
@@ -86,11 +93,21 @@ describe('runtime assembly', () => {
     expect(runtime.service.transmitting).toBe(true)
   })
 
-  it('defaults the OpenRouter model to a System One id', async () => {
+  it('defaults both routes to the same System One model id', async () => {
     const runtime = await buildRuntime((name) =>
       name === 'OPENROUTER_API_KEY' ? 'sk-or-v1-test' : undefined,
     )
-    expect(runtime.config.model.startsWith('typesafe/')).toBe(true)
+    // One default for both routes: OpenRouter maps a bare `jev-*` id onto its
+    // own namespace, so no per-route substitution is needed.
+    //
+    // This test used to assert the OpenRouter default *started with*
+    // `typesafe/`. That encoded a workaround rather than a requirement — the
+    // provider rejected bare ids, so this runtime quietly substituted a prefixed
+    // one while the DSH plugin passed the bare default straight through and threw
+    // at startup. The regression worth guarding is that divergence between the
+    // two entry points, so it is asserted as equality against the shared default.
+    expect(runtime.config.model).toBe(DEFAULT_CONFIG.model)
+    expect(runtime.config.model).toBe('jev-latest')
   })
 
   it('starts live when a credential is present', async () => {

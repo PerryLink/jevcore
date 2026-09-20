@@ -42,9 +42,30 @@ interface SdkModule {
   TypeSafeClient: new (config: {
     apiKey: string
     baseURL?: string
+    /**
+     * Passed explicitly, always. The SDK falls back to `TYPESAFE_LOG_LEVEL`
+     * otherwise, and `debug` prints request bodies **unredacted** — which would
+     * defeat this package's whole egress contract from the environment.
+     */
+    logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'off'
+    /** Milliseconds per attempt. The SDK default is 10_000 with no total budget. */
+    timeout?: number
+    /** Retry overrides; omitted fields use the SDK's own defaults. */
+    retry?: Readonly<Record<string, unknown>>
     dangerouslyAllowBrowser?: boolean
   }) => SystemOneClient
 }
+
+/**
+ * The log level this provider always passes to the SDK.
+ *
+ * Defaults to `warn`, matching the SDK's own default but supplied explicitly so
+ * the environment cannot raise it. See {@link LiveProviderOptions.logLevel}.
+ */
+export const DEFAULT_LOG_LEVEL = 'warn' as const
+
+/** Log levels the SDK accepts. Re-exported so callers need no SDK import. */
+export type ProviderLogLevel = 'debug' | 'info' | 'warn' | 'error' | 'off'
 
 export interface LiveProviderOptions {
   /** Resolved API key. Never sourced from the environment by this class. */
@@ -53,6 +74,30 @@ export interface LiveProviderOptions {
   readonly baseURL?: string
   /** Model name. Defaults to {@link DEFAULT_MODEL}. */
   readonly model?: string
+  /**
+   * SDK log level, passed explicitly so `TYPESAFE_LOG_LEVEL` cannot raise it.
+   *
+   * This matters more than it looks. The SDK documents that `debug` "adds
+   * headers and bodies. Known credential headers are redacted; **bodies are
+   * not**." A stray `TYPESAFE_LOG_LEVEL=debug` in the host environment would
+   * therefore write unredacted request bodies — including the very state this
+   * package redacts before sending — to the log. Passing the level explicitly
+   * is what makes the redaction guarantee hold against the environment, the
+   * same reason `apiKey` is never left to the SDK's own fallback.
+   *
+   * Defaults to {@link DEFAULT_LOG_LEVEL}.
+   */
+  readonly logLevel?: ProviderLogLevel
+  /**
+   * Milliseconds per attempt, or the SDK default (10_000) when omitted.
+   *
+   * The SDK has no total retry budget in JavaScript, so with its default retry
+   * policy a single call can occupy roughly 30s. That is longer than a tool
+   * gate should ever block, which is why this is worth setting.
+   */
+  readonly timeout?: number
+  /** Retry overrides, e.g. `{ maxRetries: 0 }` to fail fast inside a gate. */
+  readonly retry?: Readonly<Record<string, unknown>>
   /** Injectable for tests, so no test needs a real key or a real socket. */
   readonly loadSdk?: () => Promise<SdkModule>
 }
@@ -141,10 +186,20 @@ export class LiveProvider implements JevProvider {
     if (this.client !== undefined) return this.client
     const load = this.options.loadSdk ?? defaultLoadSdk
     const sdk = await load()
-    // apiKey is always passed, so the SDK never falls back to the environment.
     this.client = new sdk.TypeSafeClient({
+      // Every field the SDK would otherwise take from the environment is
+      // supplied explicitly. `apiKey` was always passed; `logLevel` was the gap,
+      // and it is the one that can defeat redaction rather than merely
+      // redirect a request: `debug` writes bodies unredacted, so an ambient
+      // TYPESAFE_LOG_LEVEL=debug would log exactly what this package strips
+      // before sending. `timeout` and `retry` are passed for a different
+      // reason — the SDK's defaults let one call occupy ~30s, which is longer
+      // than a tool gate should ever block.
       apiKey: this.options.apiKey,
       baseURL: this.baseURL,
+      logLevel: this.options.logLevel ?? DEFAULT_LOG_LEVEL,
+      ...(this.options.timeout === undefined ? {} : { timeout: this.options.timeout }),
+      ...(this.options.retry === undefined ? {} : { retry: this.options.retry }),
       // This runs inside a DSH host process, never a browser page.
       dangerouslyAllowBrowser: false,
     })

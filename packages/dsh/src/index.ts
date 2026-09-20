@@ -173,19 +173,34 @@ export const buildRuntime = (
   // it and refuses rather than sending an unauthenticated request.
   const needsCredential = config.provider === 'live' || config.provider === 'openrouter'
 
-  const provider: JevProvider = !needsCredential
-    ? new MockProvider()
-    : config.provider === 'live'
-      ? new LiveProvider({
-          apiKey: '',
-          ...(config.baseURL === undefined ? {} : { baseURL: config.baseURL }),
-          model: config.model,
-        })
-      : new OpenRouterProvider({
-          apiKey: '',
+  /**
+   * Build the provider for the configured route.
+   *
+   * One function rather than two inline literals: the startup path and the
+   * per-call rebuild had drifted apart, and only one of them carried the
+   * transport settings. The TypeSafe route gets them because the SDK otherwise
+   * reads `TYPESAFE_LOG_LEVEL` from the environment, and its `debug` level logs
+   * request bodies with credential headers redacted but **bodies not** — which
+   * would write exactly the state this package redacts before sending. The
+   * OpenRouter SDK reads no such variable, so it needs none of it.
+   */
+  const buildProvider = (apiKey: string): JevProvider =>
+    config.provider === 'openrouter'
+      ? new OpenRouterProvider({
+          apiKey,
           ...(config.openRouterBaseURL === undefined ? {} : { baseURL: config.openRouterBaseURL }),
           model: config.model,
         })
+      : new LiveProvider({
+          apiKey,
+          ...(config.baseURL === undefined ? {} : { baseURL: config.baseURL }),
+          model: config.model,
+          logLevel: config.logLevel === 'silent' ? 'off' : config.logLevel,
+          timeout: config.requestTimeoutMs,
+          retry: { maxRetries: config.requestMaxRetries },
+        })
+
+  const provider: JevProvider = needsCredential ? buildProvider('') : new MockProvider()
 
   const keyedProvider: JevProvider = !needsCredential
     ? provider
@@ -203,20 +218,7 @@ export const buildRuntime = (
             )
           }
           // Rebuilt per call so a rotated key is picked up without a restart.
-          const live = isOpenRouter
-            ? new OpenRouterProvider({
-                apiKey: resolved.value,
-                ...(config.openRouterBaseURL === undefined
-                  ? {}
-                  : { baseURL: config.openRouterBaseURL }),
-                model: config.model,
-              })
-            : new LiveProvider({
-                apiKey: resolved.value,
-                ...(config.baseURL === undefined ? {} : { baseURL: config.baseURL }),
-                model: config.model,
-              })
-          return live.answer(request, signal)
+          return buildProvider(resolved.value).answer(request, signal)
         },
       }
 

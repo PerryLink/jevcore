@@ -102,11 +102,13 @@ export {
 export { MOCK_CONFIDENCE, MOCK_MODEL, MockProvider, fnv1a } from './provider/mock.js'
 export {
   DEFAULT_ENDPOINT,
+  DEFAULT_LOG_LEVEL,
   DEFAULT_MODEL,
   LiveProvider,
   assertUsableEndpoint,
   loadOfficialSdk,
   type LiveProviderOptions,
+  type ProviderLogLevel,
 } from './provider/live.js'
 export {
   DEFAULT_OPENROUTER_ENDPOINT,
