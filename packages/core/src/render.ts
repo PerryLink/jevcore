@@ -99,7 +99,14 @@ export const renderResult = (result: JevResult, questionIds: readonly string[]):
  */
 export const asRendered = (value: unknown): RenderedResult => value as RenderedResult
 
-/** A short human-readable line for a Native tool card. */
+/**
+ * A short human-readable line for a Native tool card.
+ *
+ * The synthetic marker keys off the `warning` field rather than the provider
+ * name, so a result labelled as synthetic is shown as synthetic. Keying off
+ * `provider === 'mock'` meant any other provider that set a warning would have
+ * been presented as if its answers carried real judgment.
+ */
 export const summarize = (value: RenderedResult, headline: string): string => {
   const parts = value.answers.map((answer) => {
     if (answer.note !== undefined) return `${answer.question}=?`
@@ -107,12 +114,20 @@ export const summarize = (value: RenderedResult, headline: string): string => {
       answer.probability === undefined ? '' : ` (${Math.round(answer.probability * 100)}%)`
     return `${answer.question}=${answer.answer ?? '?'}${probability}`
   })
-  const synthetic = value.provider === 'mock' ? ' [synthetic]' : ''
+  const synthetic = value.warning === undefined ? '' : ' [synthetic]'
   return `${headline}${synthetic} - ${parts.join(' ')} - ${value.latencyMs}ms`
 }
 
-/** How many candidates a rank payload carries, defensively. */
+/**
+ * How many candidates a rank payload carries.
+ *
+ * Total: any input at all yields a number. This runs from a presentation
+ * callback, where an exception would break the card rather than merely look
+ * wrong — so `undefined` and other non-payload values have to return 0 instead
+ * of throwing.
+ */
 export const rankingSize = (value: unknown): number => {
+  if (typeof value !== 'object' || value === null) return 0
   const ranking = (value as { ranking?: unknown }).ranking
   return Array.isArray(ranking) ? ranking.length : 0
 }

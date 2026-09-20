@@ -23,7 +23,7 @@ One unverified claim remains, stated in the README rather than glossed: the live
 provider has never made a real TypeSafe API call. The plugin's activation is no
 longer in doubt; see the Verified live section below.
 
-**272 tests pass** (191 core, 60 dsh, 21 mcp) with no credential and no network
+**292 tests pass** (211 core, 60 dsh, 21 mcp) with no credential and no network
 access. `pnpm run check` is green. All three tarballs pack correctly.
 
 ## Repository layout

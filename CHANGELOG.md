@@ -35,6 +35,26 @@ Initial implementation. Pre-1.0, so the API may change between minor versions.
 - **`@dsh-jev/mcp`** — the same three tools over MCP, with a stdio binary that
   writes its egress report to stderr so the protocol channel stays clean.
 
+### Fixed
+
+- `rankingSize` threw on `undefined` and other non-object input, from a
+  presentation callback where an exception breaks the tool card rather than
+  merely displaying a wrong number. It now returns `0` for anything that is not
+  a rank payload.
+- `summarize` decided whether to mark a result as synthetic from the provider
+  name (`provider === 'mock'`). It now keys off the `warning` field the provider
+  actually set, so a result labelled synthetic is displayed as synthetic
+  regardless of which provider produced it.
+
+### Tests
+
+- Added `packages/core/test/contracts.test.ts` — 20 tests pinning the public
+  identifiers that bind the pieces together: the egress feature constants, the
+  verdict question ids, the gate question sets, and the render helpers. A wrong
+  feature constant (for example `SAFETY_FEATURE` naming a tool switch) compiles
+  cleanly and would silently disable a tool whenever the gate was enabled;
+  nothing caught that before.
+
 ### Notes
 
 - Nothing is verified against the live TypeSafe API yet. `LiveProvider` is
