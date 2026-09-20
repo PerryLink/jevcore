@@ -16,10 +16,10 @@
  */
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { EgressFeature } from 'jevkit'
-import { noul } from 'jevkit'
-import type { JevService } from 'jevkit'
-import { asRendered, rankingSize, renderResult, summarize } from 'jevkit'
+import type { EgressFeature } from 'jevcore'
+import { noul } from 'jevcore'
+import type { JevService } from 'jevcore'
+import { asRendered, rankingSize, renderResult, summarize } from 'jevcore'
 
 const FEATURE: EgressFeature = 'tool:jev_rank'
 

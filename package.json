@@ -1,5 +1,5 @@
 {
-  "name": "jevkit-workspace",
+  "name": "jevcore-workspace",
   "version": "0.1.0",
   "private": true,
   "description": "TypeSafe Jev for DeepSeek Harness: a framework-agnostic decision core and the DSH plugin built on it.",
@@ -13,7 +13,7 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
     "legal": "node scripts/sync-legal-files.mjs --check",
-    "//check": "Build runs BEFORE typecheck on purpose. Each adapter resolves the core through the `jevkit` workspace link, and the core's `types` entry is `lib/index.d.ts` — which does not exist until it is built. Typechecking first works on any machine that already has a `lib/` and fails on a clean checkout, which is exactly how CI caught it.",
+    "//check": "Build runs BEFORE typecheck on purpose. Each adapter resolves the core through the `jevcore` workspace link, and the core's `types` entry is `lib/index.d.ts` — which does not exist until it is built. Typechecking first works on any machine that already has a `lib/` and fails on a clean checkout, which is exactly how CI caught it.",
     "check": "pnpm run legal && pnpm run build && pnpm run typecheck && pnpm run test",
     "clean": "pnpm -r run clean"
   },

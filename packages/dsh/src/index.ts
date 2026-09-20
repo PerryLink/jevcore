@@ -1,5 +1,5 @@
 /**
- * jevkit — TypeSafe Jev for DeepSeek Harness.
+ * jevcore — TypeSafe Jev for DeepSeek Harness.
  *
  * Composition of this plugin:
  *
@@ -31,14 +31,14 @@ import {
   resolveConfig,
   type JevConfigInput,
   type JevProvider,
-} from 'jevkit'
+} from 'jevcore'
 import { jevAskTool } from './ask.js'
 import { jevCheckTool } from './check.js'
 import { jevRankTool } from './rank.js'
 import { skillRegistration } from './skill.js'
 
 /** Plugin name, also the service key this plugin publishes. */
-export const name = 'jevkit'
+export const name = 'jevcore'
 
 /**
  * Host services this plugin consumes.
@@ -67,7 +67,7 @@ export const inject = ['tools', 'credentials']
  * It delegates to the same `resolveConfig` the plugin uses at runtime, so the
  * Loader's validation and the plugin's own can never disagree.
  */
-export { Config } from 'jevkit'
+export { Config } from 'jevcore'
 
 /**
  * A description of the config shape, for documentation and the patch file.
@@ -278,7 +278,7 @@ export function apply(ctx: Context, input?: JevConfigInput): void {
     | undefined
   if (skills === undefined) {
     logger.warn(
-      '[jevkit] the skills registry is not available; the bundled skill will not be offered',
+      '[jevcore] the skills registry is not available; the bundled skill will not be offered',
     )
   } else {
     try {
@@ -286,7 +286,7 @@ export function apply(ctx: Context, input?: JevConfigInput): void {
       ctx.effect(() => skills.register(registration))
     } catch (error) {
       logger.warn(
-        `[jevkit] could not load the bundled skill: ${error instanceof Error ? error.message : String(error)}`,
+        `[jevcore] could not load the bundled skill: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
   }
@@ -316,7 +316,7 @@ export function apply(ctx: Context, input?: JevConfigInput): void {
         })
         if (decision.kind === 'allow') return (next as () => Promise<unknown>)()
         if (decision.kind === 'deny') {
-          return { kind: 'deny', reason: decision.reason ?? 'denied by the jevkit safety gate' }
+          return { kind: 'deny', reason: decision.reason ?? 'denied by the jevcore safety gate' }
         }
         return { kind: 'ask', ...(decision.reason === undefined ? {} : { reason: decision.reason }) }
       }),
@@ -344,14 +344,14 @@ export function apply(ctx: Context, input?: JevConfigInput): void {
         if (!decision.block) return (next as () => Promise<unknown>)()
         return {
           kind: 'block',
-          feedback: [{ type: 'text', text: decision.feedback ?? 'result withheld by jevkit' }],
+          feedback: [{ type: 'text', text: decision.feedback ?? 'result withheld by jevcore' }],
         }
       }),
     )
   }
 
   logger.info(
-    `[jevkit] ready · provider=${config.provider} · gates: safety=${
+    `[jevcore] ready · provider=${config.provider} · gates: safety=${
       config.gates.safety.enabled ? 'on' : 'off'
     } context=${config.gates.context.enabled ? 'on' : 'off'}`,
   )
@@ -360,7 +360,7 @@ export function apply(ctx: Context, input?: JevConfigInput): void {
 /**
  * The core is re-exported so a consumer of the plugin can reach the primitives,
  * the service, and the egress contract without adding a second dependency.
- * Everything importable here is also importable from `jevkit` directly.
+ * Everything importable here is also importable from `jevcore` directly.
  */
 export {
   EGRESS_FEATURES,
@@ -376,7 +376,7 @@ export {
   noul,
   resolveConfig,
   score,
-} from 'jevkit'
+} from 'jevcore'
 export type {
   EgressFeature,
   JevAnswer,
@@ -386,4 +386,4 @@ export type {
   JevQuestion,
   JevResult,
   JsonValue,
-} from 'jevkit'
+} from 'jevcore'

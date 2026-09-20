@@ -27,10 +27,10 @@ const main = async (): Promise<void> => {
   const server = createServer(runtime.service)
   await server.connect(new StdioServerTransport())
 
-  note(`[jevkit-mcp] ready · provider=${runtime.config.provider} · model=${runtime.config.model}`)
+  note(`[jevcore-mcp] ready · provider=${runtime.config.provider} · model=${runtime.config.model}`)
 }
 
 main().catch((error: unknown) => {
-  note(`[jevkit-mcp] failed to start: ${error instanceof Error ? error.message : String(error)}`)
+  note(`[jevcore-mcp] failed to start: ${error instanceof Error ? error.message : String(error)}`)
   process.exitCode = 1
 })

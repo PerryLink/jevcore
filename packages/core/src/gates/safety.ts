@@ -160,7 +160,7 @@ export const createSafetyGate = (options: SafetyGateOptions) => {
       return {
         kind: 'ask',
         reason:
-          `jevkit safety gate: Jev flagged ${raised.join(', ')} for this call. ` +
+          `jevcore safety gate: Jev flagged ${raised.join(', ')} for this call. ` +
           `Approve to proceed.`,
         raised,
       }
@@ -170,12 +170,12 @@ export const createSafetyGate = (options: SafetyGateOptions) => {
       if (options.onUndecided === 'deny') {
         return {
           kind: 'deny',
-          reason: `jevkit safety gate: could not judge ${undecided} (onUndecided=deny).`,
+          reason: `jevcore safety gate: could not judge ${undecided} (onUndecided=deny).`,
         }
       }
       return {
         kind: 'ask',
-        reason: `jevkit safety gate: could not judge ${undecided}. Approve to proceed.`,
+        reason: `jevcore safety gate: could not judge ${undecided}. Approve to proceed.`,
       }
     }
     return { kind: 'allow' }
@@ -215,7 +215,7 @@ export const createSafetyGate = (options: SafetyGateOptions) => {
       if (options.onUndecided === 'allow') return { kind: 'allow' }
       return {
         kind: options.onUndecided === 'deny' ? 'deny' : 'ask',
-        reason: `jevkit safety gate could not reach Jev (${detail}).`,
+        reason: `jevcore safety gate could not reach Jev (${detail}).`,
       }
     }
 

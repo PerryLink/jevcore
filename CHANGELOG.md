@@ -10,15 +10,15 @@ Initial implementation. Pre-1.0, so the API may change between minor versions.
 
 ### Changed
 
-- **Renamed the packages and the brand from the `@dsh-jev` scope to the `jevkit`
+- **Renamed the packages and the brand from the `@dsh-jev` scope to the `jevcore`
   family**, before any publish, because two of the three packages are not
   DSH-specific and the scope said otherwise:
 
   | Was | Now | Role |
   |---|---|---|
-  | `@dsh-jev/core` | `jevkit` | framework-agnostic core |
-  | `@dsh-jev/plugin` | `jevkit-dsh` | the DeepSeek Harness plugin |
-  | `@dsh-jev/mcp` | `jevkit-mcp` | the MCP server |
+  | `@dsh-jev/core` | `jevcore` | framework-agnostic core |
+  | `@dsh-jev/plugin` | `jevcore-dsh` | the DeepSeek Harness plugin |
+  | `@dsh-jev/mcp` | `jevcore-mcp` | the MCP server |
 
   A Claude Desktop user looking for a Jev MCP server would have read
   `@dsh-jev/mcp` as "not for me", and the same went for anyone writing a plain
@@ -27,13 +27,13 @@ Initial implementation. Pre-1.0, so the API may change between minor versions.
   dependency direction is readable from the names alone.
 
   The rename also reached the runtime identifiers a user or host can see: the
-  Cordis plugin name (`jevkit`), the MCP server name and `bin` command
-  (`jevkit-mcp`), the `Config` Standard Schema `vendor` field, the startup egress
-  prefix (`[jevkit]`), and the config/gate error messages.
+  Cordis plugin name (`jevcore`), the MCP server name and `bin` command
+  (`jevcore-mcp`), the `Config` Standard Schema `vendor` field, the startup egress
+  prefix (`[jevcore]`), and the config/gate error messages.
 
   Unscoped family names have to be claimed individually — npm registers
-  ownership of a scope, not a name prefix — so `jevkit`, `jevkit-dsh` and
-  `jevkit-mcp` were each confirmed free before the rename.
+  ownership of a scope, not a name prefix — so `jevcore`, `jevcore-dsh` and
+  `jevcore-mcp` were each confirmed free before the rename.
 
 ### Added
 
@@ -50,7 +50,7 @@ Initial implementation. Pre-1.0, so the API may change between minor versions.
   `typesafe/` prefix is refused before the call, because any other model answers
   with prose this plugin cannot interpret as a decision.
 
-- **`jevkit`** — framework-agnostic decision layer.
+- **`jevcore`** — framework-agnostic decision layer.
   - The three System One primitives (`noul`, `choice`, `score`) with validation.
   - `MockProvider`, deterministic and offline, which labels every answer as
     synthetic in three places so it cannot be mistaken for a real judgment.
@@ -65,14 +65,14 @@ Initial implementation. Pre-1.0, so the API may change between minor versions.
     trusted.
   - Two gates: a safety gate on `tools/pre-execute` and a context gate on
     `tools/post-execute`, both framework-agnostic and both off by default.
-- **`jevkit-dsh`** — the DeepSeek Harness plugin.
+- **`jevcore-dsh`** — the DeepSeek Harness plugin.
   - `ctx.jev`, a first-class service other plugins can call with no model turn
     in between.
   - Three model-visible tools: `jev_ask`, `jev_rank`, `jev_check`.
   - `Config` implemented as a Standard Schema, which Cordis requires before a
     plugin starts.
   - Startup egress report on one line per feature.
-- **`jevkit-mcp`** — the same three tools over MCP, with a stdio binary that
+- **`jevcore-mcp`** — the same three tools over MCP, with a stdio binary that
   writes its egress report to stderr so the protocol channel stays clean.
 
 ### Fixed

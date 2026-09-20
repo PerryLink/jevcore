@@ -39,7 +39,7 @@ importers:
 
   packages/dsh:
     dependencies:
-      'jevkit':
+      'jevcore':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -61,7 +61,7 @@ importers:
 
   packages/mcp:
     dependencies:
-      'jevkit':
+      'jevcore':
         specifier: workspace:*
         version: link:../core
       '@modelcontextprotocol/sdk':

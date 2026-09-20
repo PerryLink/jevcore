@@ -253,7 +253,7 @@ export class EgressContract {
     const lines: string[] = []
     if (!this.settings.transmitting) {
       lines.push(
-        `[jevkit] provider=mock  endpoint=none  egress=OFF  ` +
+        `[jevcore] provider=mock  endpoint=none  egress=OFF  ` +
           `(no network calls will be made; every answer is synthetic)`,
       )
       // Features may still be switched on in configuration. Saying so keeps
@@ -261,7 +261,7 @@ export class EgressContract {
       for (const line of this.lines()) {
         if (line.enabled) {
           lines.push(
-            `[jevkit]   armed  ${line.feature}  ` +
+            `[jevcore]   armed  ${line.feature}  ` +
               `(runs against the offline mock; would transmit if the provider became "live" or "openrouter")`,
           )
         }
@@ -269,17 +269,17 @@ export class EgressContract {
       return lines
     }
 
-    lines.push(`[jevkit] provider=live  endpoint=${this.endpoint}  egress=ON`)
+    lines.push(`[jevcore] provider=live  endpoint=${this.endpoint}  egress=ON`)
     for (const line of this.lines()) {
       if (!line.enabled) {
-        lines.push(`[jevkit]   off    ${line.feature}`)
+        lines.push(`[jevcore]   off    ${line.feature}`)
         continue
       }
       const fields = line.fields.map((field) => `${field.field}<=${field.maxChars}c`).join(' ')
-      lines.push(`[jevkit]   SENDS  ${line.feature}  { ${fields} }`)
+      lines.push(`[jevcore]   SENDS  ${line.feature}  { ${fields} }`)
     }
     lines.push(
-      `[jevkit]   redaction is best-effort; it removes named fields and known secret ` +
+      `[jevcore]   redaction is best-effort; it removes named fields and known secret ` +
         `shapes, and cannot recognise an unrecognised secret in free text`,
     )
     return lines

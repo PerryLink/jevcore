@@ -4,7 +4,7 @@ name: Publish
 # records when, and nothing reaches npm from a working branch.
 #
 # Requires a repository secret named NPM_TOKEN (npm automation token with publish
-# rights for jevkit, jevkit-dsh and jevkit-mcp):
+# rights for jevcore, jevcore-dsh and jevcore-mcp):
 #   Settings -> Secrets and variables -> Actions -> New repository secret
 
 on:
@@ -62,15 +62,15 @@ jobs:
         run: pnpm run check
 
       - name: Cross-check payloads against the vendor schemas
-        run: pnpm --filter jevkit run check:schemas
+        run: pnpm --filter jevcore run check:schemas
 
       - name: Publish
-        # Core first: both adapters depend on `jevkit`. `pnpm publish`, never
+        # Core first: both adapters depend on `jevcore`. `pnpm publish`, never
         # `npm publish`, so the workspace dependency becomes a real version.
         if: github.event_name == 'push'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          pnpm --filter jevkit publish --access public --provenance --no-git-checks
-          pnpm --filter jevkit-dsh publish --access public --provenance --no-git-checks
-          pnpm --filter jevkit-mcp publish --access public --provenance --no-git-checks
+          pnpm --filter jevcore publish --access public --provenance --no-git-checks
+          pnpm --filter jevcore-dsh publish --access public --provenance --no-git-checks
+          pnpm --filter jevcore-mcp publish --access public --provenance --no-git-checks

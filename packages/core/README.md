@@ -1,4 +1,4 @@
-# jevkit
+# jevcore
 
 TypeSafe [Jev](https://typesafe.ai) decisions, with no framework attached.
 
@@ -15,7 +15,7 @@ Jev is not a chat model. It answers typed questions — `noul` (yes/no), `choice
 ## Install
 
 ```sh
-npm install jevkit
+npm install jevcore
 ```
 
 `@typesafe-ai/sdk` is an optional dependency. Without it the package still works
@@ -33,10 +33,10 @@ No feature transmits unless it is switched on. Nothing reaches a provider withou
 passing through it, and the contract can describe itself:
 
 ```ts
-import { EgressContract } from 'jevkit'
+import { EgressContract } from 'jevcore'
 
 for (const line of contract.reportLines()) console.log(line)
-// [jevkit] provider=mock  endpoint=none  egress=OFF  (no network calls will be made; ...)
+// [jevcore] provider=mock  endpoint=none  egress=OFF  (no network calls will be made; ...)
 ```
 
 Redaction runs before the measurement, so the sizes reported are the sizes that
@@ -50,7 +50,7 @@ under recognisable field names and strings matching known secret shapes, and it
 that live in your configuration, never in model output.
 
 ```ts
-import { applyPolicy, DEFAULT_POLICY } from 'jevkit'
+import { applyPolicy, DEFAULT_POLICY } from 'jevcore'
 
 const verdict = applyPolicy(answer, ['low', 'medium', 'high'], {
   ...DEFAULT_POLICY,

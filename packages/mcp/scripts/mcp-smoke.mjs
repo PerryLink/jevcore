@@ -24,7 +24,7 @@ const transport = new StdioClientTransport({
   stderr: 'pipe',
 })
 
-const client = new Client({ name: 'jevkit-smoke', version: '0.1.0' })
+const client = new Client({ name: 'jevcore-smoke', version: '0.1.0' })
 
 const fail = (message) => {
   console.error(`FAIL: ${message}`)

@@ -49,7 +49,7 @@ jobs:
         # handshake, discovery, calls, and the error path.
         env:
           TYPESAFE_API_KEY: ''
-        run: pnpm --filter jevkit-mcp run smoke
+        run: pnpm --filter jevcore-mcp run smoke
 
       - name: Cross-check our payloads against the vendor's own schemas
         # The unit tests stub the SDKs, so they prove our side of the contract
@@ -57,7 +57,7 @@ jobs:
         # schemas and parses what this project actually builds. Offline and
         # credential-free by design. It is what caught `score.criteria` being
         # sent as a keyed map when both vendors require an ordered array.
-        run: pnpm --filter jevkit run check:schemas
+        run: pnpm --filter jevcore run check:schemas
 
   package:
     runs-on: ubuntu-latest
@@ -169,17 +169,17 @@ jobs:
           # --pack-destination .` -- resolves that "." against the workspace
           # root, not the current directory, so the tarballs landed in the
           # repository instead of here and npm install failed with ENOENT on a
-          # literal './jevkit-*.tgz'.
+          # literal './jevcore-*.tgz'.
           cd "$GITHUB_WORKSPACE"
-          pnpm --filter jevkit pack --pack-destination /tmp/cleanroom
-          pnpm --filter jevkit-mcp pack --pack-destination /tmp/cleanroom
+          pnpm --filter jevcore pack --pack-destination /tmp/cleanroom
+          pnpm --filter jevcore-mcp pack --pack-destination /tmp/cleanroom
           cd /tmp/cleanroom
           ls -1 *.tgz
 
-          npm install --no-audit --no-fund ./jevkit-0.1.0.tgz ./jevkit-mcp-0.1.0.tgz
+          npm install --no-audit --no-fund ./jevcore-0.1.0.tgz ./jevcore-mcp-0.1.0.tgz
           node -e "
-            const core = await import('jevkit');
-            const mcp = await import('jevkit-mcp');
+            const core = await import('jevcore');
+            const mcp = await import('jevcore-mcp');
             if (typeof core.JevService !== 'function') throw new Error('core did not load');
             if (typeof mcp.createServer !== 'function') throw new Error('mcp did not load');
             const runtime = await mcp.buildRuntime(() => undefined);

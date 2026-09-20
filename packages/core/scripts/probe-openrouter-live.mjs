@@ -12,7 +12,7 @@
  * Run: node scripts/probe-openrouter-live.mjs
  */
 
-import { OpenRouterProvider, choice, noul, renderResult, score } from 'jevkit'
+import { OpenRouterProvider, choice, noul, renderResult, score } from 'jevcore'
 
 const apiKey = process.env.OPENROUTER_API_KEY
 if (apiKey === undefined || apiKey === '') {

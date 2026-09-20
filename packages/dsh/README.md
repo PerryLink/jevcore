@@ -1,4 +1,4 @@
-# jevkit
+# jevcore
 
 TypeSafe [Jev](https://typesafe.ai) for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 and any other MCP host.
@@ -15,9 +15,9 @@ gives an agent exactly that surface, and nothing more.
 
 | Package | What it is | Use it when |
 |---|---|---|
-| [`jevkit`](packages/core) | The decisions. Imports nothing from DeepSeek Harness or Cordis. | You want Jev in a plain script, a service, or your own harness |
-| [`jevkit-dsh`](packages/dsh) | The DSH plugin: one service, three tools, two opt-in gates | You are running DeepSeek Harness |
-| [`jevkit-mcp`](packages/mcp) | The same three tools over MCP, with a stdio binary | Your host speaks MCP but is not DSH |
+| [`jevcore`](packages/core) | The decisions. Imports nothing from DeepSeek Harness or Cordis. | You want Jev in a plain script, a service, or your own harness |
+| [`jevcore-dsh`](packages/dsh) | The DSH plugin: one service, three tools, two opt-in gates | You are running DeepSeek Harness |
+| [`jevcore-mcp`](packages/mcp) | The same three tools over MCP, with a stdio binary | Your host speaks MCP but is not DSH |
 
 The adapters are thin on purpose. `packages/dsh` is four files: it declares tool schemas and
 translates hook payloads. Everything decision-shaped — the primitives, the providers, the egress
@@ -53,20 +53,20 @@ Transmission is decided per feature, and every feature defaults to off. The plug
 contract at load:
 
 ```
-[jevkit] provider=mock  endpoint=none  egress=OFF  (no network calls will be made; every answer is synthetic)
-[jevkit] ready - provider=mock - gates: safety=off context=off
+[jevcore] provider=mock  endpoint=none  egress=OFF  (no network calls will be made; every answer is synthetic)
+[jevcore] ready - provider=mock - gates: safety=off context=off
 ```
 
 With `provider: live` and every feature enabled, the same report becomes explicit about what leaves:
 
 ```
-[jevkit] provider=live  endpoint=https://api.typesafe.ai  egress=ON
-[jevkit]   SENDS  tool:jev_ask  { state<=16000c questions<=4000c }
-[jevkit]   SENDS  tool:jev_rank  { state<=16000c questions<=4000c }
-[jevkit]   SENDS  tool:jev_check  { state<=16000c questions<=4000c }
-[jevkit]   SENDS  gate:safety  { state<=8000c questions<=2000c }
-[jevkit]   SENDS  gate:context  { state<=6000c questions<=2000c }
-[jevkit]   redaction is best-effort; it removes named fields and known secret shapes, and cannot
+[jevcore] provider=live  endpoint=https://api.typesafe.ai  egress=ON
+[jevcore]   SENDS  tool:jev_ask  { state<=16000c questions<=4000c }
+[jevcore]   SENDS  tool:jev_rank  { state<=16000c questions<=4000c }
+[jevcore]   SENDS  tool:jev_check  { state<=16000c questions<=4000c }
+[jevcore]   SENDS  gate:safety  { state<=8000c questions<=2000c }
+[jevcore]   SENDS  gate:context  { state<=6000c questions<=2000c }
+[jevcore]   redaction is best-effort; it removes named fields and known secret shapes, and cannot
              recognise an unrecognised secret in free text
 ```
 
@@ -99,17 +99,17 @@ not enable the live provider.
 ### As a DeepSeek Harness plugin
 
 ```sh
-dsh plugin --profile <profile> add jevkit-dsh
+dsh plugin --profile <profile> add jevcore-dsh
 ```
 
 Or from a checkout:
 
 ```sh
-dsh plugin --profile <profile> add /absolute/path/to/jevkit/packages/dsh
+dsh plugin --profile <profile> add /absolute/path/to/jevcore/packages/dsh
 ```
 
-`packages/dsh` imports `jevkit` by name, so a checkout also needs core
-resolvable from the profile (`add /absolute/path/to/jevkit/packages/core`).
+`packages/dsh` imports `jevcore` by name, so a checkout also needs core
+resolvable from the profile (`add /absolute/path/to/jevcore/packages/core`).
 
 Then confirm the row activated — the plugin list should show `jev` as `active`,
 not `failed` — and check the startup report in the log.
@@ -119,7 +119,7 @@ not `failed` — and check the startup report in the log.
 For a host that speaks MCP, the same three tools are available over stdio:
 
 ```sh
-npx -y jevkit-mcp
+npx -y jevcore-mcp
 ```
 
 To wire it into DeepSeek Harness specifically, install a configuration-only bundle
@@ -133,7 +133,7 @@ whose patch inserts the harness's own MCP client:
         serverName: jev
         transport: stdio
         command: npx
-        args: ['-y', 'jevkit-mcp']
+        args: ['-y', 'jevcore-mcp']
         failOnStartupError: true
 ```
 
@@ -166,7 +166,7 @@ your state.
 ```yml
 - insert:
     - id: jev
-      name: 'jevkit-dsh'
+      name: 'jevcore-dsh'
       config:
         provider: live
         apiKeyRef: TYPESAFE_API_KEY   # a reference, never the key
@@ -181,7 +181,7 @@ to Jev rather than an approximation:
 ```yml
 - insert:
     - id: jev
-      name: 'jevkit-dsh'
+      name: 'jevcore-dsh'
       config:
         provider: openrouter
         openRouterApiKeyRef: OPENROUTER_API_KEY
@@ -312,8 +312,8 @@ Honest accounting of what has and has not been verified.
 **Verified**
 - 360 tests pass across three packages (266 core, 65 DSH, 29 MCP), with no network access and no
   `TYPESAFE_API_KEY`. CI clears the variable and expects the suite to pass anyway.
-- **The OpenRouter route is verified against the real API.** `pnpm --filter jevkit run
-  probe:live` and `pnpm --filter jevkit-mcp run smoke:live` both answered against real System One
+- **The OpenRouter route is verified against the real API.** `pnpm --filter jevcore run
+  probe:live` and `pnpm --filter jevcore-mcp run smoke:live` both answered against real System One
   models. See the root README's status section for the recorded results.
 - **The plugin activates in a running harness and its tools work.** The plugin row reports `active`;
   `jev_ask` returned `urgent=true (0.8307)` and `team=billing (0.5027)` against the mock in 1 ms, and
@@ -340,7 +340,7 @@ Honest accounting of what has and has not been verified.
   loaded its module before the fix and cannot re-read it without a restart. Cosmetic only; it changes
   no behaviour.
 - The MCP server has been driven end to end by a real MCP client over stdio
-  (`pnpm --filter jevkit-mcp run smoke`): handshake, tool discovery, three successful calls, and an
+  (`pnpm --filter jevcore-mcp run smoke`): handshake, tool discovery, three successful calls, and an
   error result for an invalid batch. It has not been driven by any other third-party host.
 - Gate behaviour on live traffic. The gates are tested against synthetic answers and real hook
   payload shapes, but no real tool call has been gated end to end.

@@ -16,7 +16,7 @@ import {
   type JevQuestion,
   type JevService,
   type JsonValue,
-} from 'jevkit'
+} from 'jevcore'
 
 export interface QuestionInput {
   readonly type: 'noul' | 'choice' | 'score'

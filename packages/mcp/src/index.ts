@@ -1,5 +1,5 @@
 /**
- * `jevkit-mcp` — TypeSafe Jev over the Model Context Protocol.
+ * `jevcore-mcp` — TypeSafe Jev over the Model Context Protocol.
  *
  * A second entry point over the same core as the DSH plugin: one decision
  * layer, two transports. Nothing here re-implements a judgment.

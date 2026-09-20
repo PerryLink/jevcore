@@ -125,7 +125,7 @@ export class ConfigError extends Error {
  * carrying `unknown` past their guards.
  */
 function fail(message: string): never {
-  throw new ConfigError(`jevkit config: ${message}`)
+  throw new ConfigError(`jevcore config: ${message}`)
 }
 
 const readFraction = (name: string, value: unknown, fallback: number): number => {

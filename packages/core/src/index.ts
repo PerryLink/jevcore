@@ -1,5 +1,5 @@
 /**
- * `jevkit` — TypeSafe Jev decisions, with no framework attached.
+ * `jevcore` — TypeSafe Jev decisions, with no framework attached.
  *
  * Nothing here imports DeepSeek Harness, Cordis, or any plugin runtime. The
  * package is usable from a plain Node script, an MCP server, a CLI, or an
