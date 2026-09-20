@@ -174,9 +174,10 @@ your state.
 ```
 
 **Through OpenRouter** — use this if a TypeSafe key is impractical and you
-already have an [OpenRouter](https://openrouter.ai) key. OpenRouter hosts the
-System One models behind its own Decisions route, so this is a real second route
-to Jev rather than an approximation:
+already have an [OpenRouter](https://openrouter.ai) key. OpenRouter serves the
+System One models at the same `POST /v1/systemone` path TypeSafe does, one level
+below its own API root, so this is the documented route to Jev rather than an
+approximation of it:
 
 ```yml
 - insert:
@@ -185,8 +186,12 @@ to Jev rather than an approximation:
       config:
         provider: openrouter
         openRouterApiKeyRef: OPENROUTER_API_KEY
-        model: typesafe/jev-1.13      # must keep the `typesafe/` prefix
+        model: jev-latest              # a bare `jev-*` id, or `typesafe/jev-1.13`
 ```
+
+The route is reached by pointing the official `@typesafe-ai/sdk` at
+`https://openrouter.ai/api` with your OpenRouter key — OpenRouter's own
+documented integration, so there is no second client to keep in step.
 
 Two things to know about the OpenRouter route:
 
@@ -194,12 +199,13 @@ Two things to know about the OpenRouter route:
   with different retention and logging. The startup report names the endpoint for
   exactly this reason — read it rather than inferring the destination from the
   provider's name.
-- **It is an `alpha` route.** OpenRouter's own SDK declares it as such, so treat
-  the shape as subject to change.
+- **It returns a cost**, which TypeSafe's own route does not, so `usage.costUsd`
+  is populated here and absent there.
 
-The model id must start with `typesafe/`. Any other id would be routed to a chat
-model, which answers with prose this plugin cannot interpret as a decision, so it
-is refused before the call rather than misread after it.
+The model id must be a System One one: a bare `jev-*` id, or a `typesafe/jev-*`
+one. Any other id would be routed to a chat model, which answers with prose this
+plugin cannot interpret as a decision, so it is refused before the call rather
+than misread after it.
 
 Either way the credential is resolved through DSH's credential service first,
 then the environment variable of that name. It is read per call, so a key added
@@ -207,7 +213,7 @@ while the process is running is picked up. It is never logged, never returned
 from a tool, and never written to configuration. Each route has its own reference
 (`apiKeyRef` and `openRouterApiKeyRef`) so the two cannot accidentally share a key.
 
-`@typesafe-ai/sdk` and `@openrouter/sdk` are optional dependencies; the plugin
+`@typesafe-ai/sdk` is the only optional dependency; the plugin
 loads and runs offline without either, and only needs the one for the route you
 choose.
 
@@ -310,7 +316,7 @@ that could be mistaken for a real judgment would be worse than no mock at all.
 Honest accounting of what has and has not been verified.
 
 **Verified**
-- 360 tests pass across three packages (266 core, 65 DSH, 29 MCP), with no network access and no
+- 392 tests pass across three packages (296 core, 66 DSH, 30 MCP), with no network access and no
   `TYPESAFE_API_KEY`. CI clears the variable and expects the suite to pass anyway.
 - **The OpenRouter route is verified against the real API.** `pnpm --filter jevcore run
   probe:live` drives the provider and `pnpm --filter jevcore-mcp run smoke:live` drives the whole MCP
@@ -320,12 +326,15 @@ Honest accounting of what has and has not been verified.
   `{ inputTokens: 469, outputTokens: 68, costUsd: 0.000019698 }`. `jev_rank` ordered a credential
   runbook above a billing guide; `jev_check` returned `contradicted`. Both scripts need
   `OPENROUTER_API_KEY` and are excluded from CI.
-- **The payload shapes are checked against both vendors' own schemas.**
-  `pnpm --filter jevcore run check:schemas` parses what this project actually builds against
-  OpenRouter's real zod schemas, and `test/vendor-conformance.test.ts` pins our question and answer
-  types to both SDKs' type definitions. This is what found `score.criteria` being sent as a keyed map
-  when both vendors require an ordered array — a defect the stubbed unit tests had passed over
-  throughout.
+- **The payload shapes are checked against the vendors' own type definitions.**
+  `test/vendor-conformance.test.ts` pins this project's question and answer types to both SDKs, so a
+  drift in either direction is a compile error rather than a malformed request on the one route that
+  costs money and transmits data. That check is what found `score.criteria` being sent as a keyed map
+  when the API requires an ordered array — a defect the stubbed unit tests had passed over
+  throughout. There is also a script that parsed our payloads against OpenRouter's published zod
+  schemas for the `alpha/decisions` route; both the script and that route are gone, because the
+  OpenRouter provider now uses the documented `/v1/systemone` path through the same client TypeSafe
+  uses, which the conformance test already covers.
 - **The plugin activates in a running harness and its tools work.** The plugin row reports `active`;
   `jev_ask` returned `urgent=true (0.8307)` and `team=billing (0.5027)` against the mock in 1 ms, and
   `jev_check` returned `verdict="insufficient"` with its three probabilities. Every result carried

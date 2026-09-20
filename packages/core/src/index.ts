@@ -131,6 +131,7 @@ export {
   applyPolicy,
   verdictToAction,
   type PolicyOptions,
+  type ThresholdPair,
   type Verdict,
 } from './policy.js'
 
@@ -143,6 +144,14 @@ export {
   type CheckThresholds,
   type CheckVerdict,
 } from './check.js'
+
+// Composite scoring (pure: answers in, numbers out)
+export {
+  compositeScore,
+  normalizeScore,
+  type CompositeScore,
+  type Contribution,
+} from './compose.js'
 
 // Rendering helpers (framework-agnostic: they produce plain objects)
 export {

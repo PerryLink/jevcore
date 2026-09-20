@@ -88,6 +88,26 @@ egress contract has no upstream equivalent. What follows are the defects.
 
 ### Added
 
+- **Per-criterion thresholds.** The docs are emphatic that "a confidence threshold
+  is not one number. Different actions within the same system should be gated at
+  different levels depending on the consequences of getting it wrong", and their
+  worked example gates two actions in one system at 0.6 and 0.85. `accept` could
+  say *whether* a criterion was actionable but not how sure the answer had to be,
+  so the risk-scaled half of that guidance was inexpressible: every criterion
+  shared one floor. `PolicyOptions.thresholds` supplies per-criterion overrides,
+  and a key with none falls back to the policy's own floors.
+
+- **Composite scoring.** The official pattern has two steps and this package had
+  only the first — ask one `score` question per dimension, then normalise and
+  combine with weights the caller controls. The combining half did not exist, so
+  every integration hand-rolled the level-to-fraction arithmetic.
+  `normalizeScore` maps an answer onto 0–1 using the rubric it actually returned,
+  and `compositeScore` weights several into one number while reporting the
+  arithmetic per dimension, which is the docs' stated payoff: "visibility into how
+  exactly the final score is being calculated". A dimension with no answer is
+  reported in `missing` rather than counted as zero — absent evidence and a
+  genuine lowest score are different findings.
+
 - **`EntryType` support for `instructions` and criteria.** The API accepts a
   string, object, array or null wherever guidance is written, and the docs spend a
   section on when structure helps — a code-sourced value in its own field,
@@ -100,9 +120,10 @@ egress contract has no upstream equivalent. What follows are the defects.
   The official self-consistency cookbook's band — `no` below 0.30, `uncertain`
   0.30 through 0.70 inclusive, `yes` above — is now reported alongside the binary
   reading, which is left unchanged for compatibility.
-- `DEFAULT_REQUEST_TIMEOUT_MS`, `DEFAULT_REQUEST_MAX_RETRIES`, `MAX_SCORE_LEVELS`,
+- `normalizeScore`, `compositeScore`, `PolicyOptions.thresholds`, `ThresholdPair`,
+  `DEFAULT_REQUEST_TIMEOUT_MS`, `DEFAULT_REQUEST_MAX_RETRIES`, `MAX_SCORE_LEVELS`,
   `MAX_CHOICE_OPTIONS`, `EgressTooLargeError`, `isEmptyEntry`, `NoulCriteria`,
-  `NoulBand`, `NoulBandBounds`.
+  `NoulBand`, `NoulBandBounds`, `EntryType`.
 
 ### Changed
 

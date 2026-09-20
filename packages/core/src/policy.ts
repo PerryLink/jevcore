@@ -28,14 +28,20 @@ export type Verdict =
 
 export interface PolicyOptions {
   /**
-   * Minimum `confidence` for an answer to be acted upon. Jev's own calibration
-   * is the point of the model, so this is a floor on trusting it, not a
-   * substitute for it.
+   * Minimum `confidence` for an answer to be acted upon, when the answer has a
+   * confidence at all.
+   *
+   * Note what `confidence` is: a *concentration* statistic over the answer's own
+   * distribution, not a measure of whether the answer is true. The calibrated
+   * quantity is `probabilities`, and calibration is measured across a group of
+   * predictions rather than guaranteed for any single one. So this is a floor on
+   * acting, not a trust score — and a noul, which has no confidence, is judged on
+   * its probability alone.
    */
   readonly minConfidence: number
   /**
-   * Minimum probability of the selected criterion. Guards the case where Jev
-   * is confident but the distribution is nearly flat.
+   * Minimum probability of the selected criterion. Guards the case where the
+   * distribution is nearly flat.
    */
   readonly minProbability: number
   /**
@@ -43,6 +49,39 @@ export interface PolicyOptions {
    * should act. Keys absent from the map yield `undecided`.
    */
   readonly accept?: Readonly<Record<string, boolean>>
+  /**
+   * Per-criterion threshold overrides, for the thing the docs are most emphatic
+   * about: **"A confidence threshold is not one number. Different actions within
+   * the same system should be gated at different levels depending on the
+   * consequences of getting it wrong."**
+   *
+   * The official worked example gates two actions in one system at 0.6 and 0.85.
+   * `accept` can already say *whether* a criterion is actionable, but not how sure
+   * the answer must be, so the risk-scaled part of that guidance was previously
+   * inexpressible: every criterion shared one floor.
+   *
+   * Keys are criterion values, matching `accept`. A key that is absent falls back
+   * to the two floors above.
+   */
+  readonly thresholds?: Readonly<Record<string, ThresholdPair>>
+}
+
+/** A floor pair for one criterion. Omitted fields inherit the policy's own. */
+export interface ThresholdPair {
+  readonly minConfidence?: number
+  readonly minProbability?: number
+}
+
+/** The floors that apply to one criterion, after any override. */
+const floorsFor = (
+  selected: string | undefined,
+  options: PolicyOptions,
+): { minConfidence: number; minProbability: number } => {
+  const override = selected === undefined ? undefined : options.thresholds?.[selected]
+  return {
+    minConfidence: override?.minConfidence ?? options.minConfidence,
+    minProbability: override?.minProbability ?? options.minProbability,
+  }
 }
 
 export const DEFAULT_POLICY: PolicyOptions = {
@@ -72,14 +111,18 @@ export const applyPolicy = (
     // routes the field is absent so the floor never applied, while the mock
     // attached its own `MOCK_CONFIDENCE` of 0.5, below the 0.7 default, so every
     // hazard resolved `undecided` and the safety gate could never decide at all.
-    // The answer's strength is the only signal: `max(noul, 1 - noul)`.
+    // The answer's strength is the only signal: `max(noul, 1 - noul)`. A noul is
+    // also the case the per-criterion override matters most for, since a hazard is
+    // keyed by its question id and a caller may well want "is this destructive?"
+    // gated harder than "is this relevant?".
     const probability = answer.noul
     const key = probability >= 0.5 ? 'true' : 'false'
     const strength = Math.max(probability, 1 - probability)
-    if (strength < options.minProbability) return { kind: 'undecided', reason: 'below-confidence' }
     if (criteria.length > 0 && !criteria.includes(key)) {
       return { kind: 'invalid', reason: `noul resolved to "${key}", which is not a declared criterion` }
     }
+    const floors = floorsFor(key, options)
+    if (strength < floors.minProbability) return { kind: 'undecided', reason: 'below-confidence' }
     return { kind: 'decided', answer: key, probability: strength }
   }
 
@@ -122,11 +165,14 @@ const selectFrom = (
   if (selected === undefined) return { kind: 'undecided', reason: 'no-answer' }
   const probability = probabilities[selected] ?? reportedProbability ?? 0
 
+  // The floors are resolved once the selected criterion is known, so a caller can
+  // gate a risky action harder than a cheap one. See `PolicyOptions.thresholds`.
+  const floors = floorsFor(selected, options)
   const confidence = answer.confidence
-  if (confidence !== undefined && confidence < options.minConfidence) {
+  if (confidence !== undefined && confidence < floors.minConfidence) {
     return { kind: 'undecided', reason: 'below-confidence' }
   }
-  if (probability < options.minProbability) return { kind: 'undecided', reason: 'below-confidence' }
+  if (probability < floors.minProbability) return { kind: 'undecided', reason: 'below-confidence' }
   return { kind: 'decided', answer: selected, probability }
 }
 
