@@ -16,7 +16,12 @@ Last updated: 2026-09-20 (round 2). Read this first when resuming.
 | 8. MCP entry | **Done** — `packages/mcp`, 21 tests, stdio binary verified offline |
 | 9. DSH skill proposal | **Done** — `../typesafe-dsh-skill-proposal.md` |
 | 10. Repo hygiene for publishing | **Done** — CONTRIBUTING, SECURITY, CHANGELOG, PUBLISHING, CI over all three packages |
-| 11. Actual publish + M4 | **Blocked** — needs your accounts and an API key |
+| 11. MCP transport verification | **Done** — real stdio client drives the server end to end (pnpm --filter @dsh-jev/mcp run smoke) |
+| 12. Actual publish + M4 | **Blocked** — needs your accounts and an API key |
+
+Two unverified claims remain, both stated in the README rather than glossed: the
+live provider has never made a real TypeSafe API call, and the DSH plugin has
+never reached ctive in a running harness (blocked on the restart below).
 
 **255 tests pass** (191 core, 43 dsh, 21 mcp) with no credential and no network
 access. `pnpm run check` is green. All three tarballs pack correctly.
@@ -102,8 +107,7 @@ must resolve from the profile's own `node_modules`.
 4. **M4** once the key exists: run the MCP server with `JEV_PROVIDER=live` and one
    `jev_ask`, and record real latency, cost, and transmitted fields. `LiveProvider`
    has never talked to the real API — only an injected stub.
-5. **MCP transport check** — drive `packages/mcp` from a real MCP host once. Tools
-   and egress are tested; the handshake is not.
+
 6. **Publish** — follow `PUBLISHING.md`. Decide the package name first:
    `dsh-jev` already exists on npm at 0.2.0 as an unrelated project.
 
