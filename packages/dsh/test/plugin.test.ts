@@ -13,6 +13,7 @@
  */
 
 import { Context } from '@deepseek-ai/cordis'
+import { EGRESS_FEATURES, EgressContract } from '@dsh-jev/core'
 import { describe, expect, it, vi } from 'vitest'
 import * as plugin from '../src/index.js'
 
@@ -152,6 +153,39 @@ describe('activation on a real cordis context', () => {
       'jev_check',
       'jev_rank',
     ])
+  })
+
+  it('enables exactly the five egress switches, and no feature goes unwired', () => {
+    // A feature added to EGRESS_FEATURES but not wired here would silently keep
+    // its own default, and the plugin's posture would stop matching what the
+    // README says it is. This is the invariant that catches that.
+    const { ctx } = mountPlugin()
+    const jev = ctx.get('jev') as { egress: EgressContract }
+    const wired = EGRESS_FEATURES.filter((feature) => jev.egress.lines().some((l) => l.feature === feature))
+    expect(wired.sort()).toEqual([...EGRESS_FEATURES].sort())
+    expect(wired).toHaveLength(5)
+  })
+
+  it('keeps the three tools reachable and both gates off under the default config', () => {
+    const { ctx } = mountPlugin()
+    const jev = ctx.get('jev') as { egress: EgressContract }
+    const enabled = Object.fromEntries(jev.egress.lines().map((l) => [l.feature, l.enabled]))
+    expect(enabled).toEqual({
+      'tool:jev_ask': true,
+      'tool:jev_rank': true,
+      'tool:jev_check': true,
+      'gate:safety': false,
+      'gate:context': false,
+    })
+  })
+
+  it('enables only the gate that configuration turns on', () => {
+    const { ctx } = mountPlugin({ gates: { safety: { enabled: true } } })
+    const jev = ctx.get('jev') as { egress: EgressContract }
+    const enabled = Object.fromEntries(jev.egress.lines().map((l) => [l.feature, l.enabled]))
+    expect(enabled['gate:safety']).toBe(true)
+    // The other gate must not come along for the ride.
+    expect(enabled['gate:context']).toBe(false)
   })
 
   it('loads without the skills registry present', () => {

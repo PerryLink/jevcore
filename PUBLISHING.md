@@ -49,7 +49,7 @@ pnpm install
 pnpm run check          # typecheck + test + build across all three packages
 ```
 
-Expected: 303 tests pass (220 core, 60 dsh, 23 mcp), with no credential set.
+Expected: 306 tests pass (220 core, 63 dsh, 23 mcp), with no credential set.
 
 ```sh
 # Confirm nothing in the artifacts reaches the network on the default path.
