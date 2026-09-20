@@ -33,10 +33,18 @@ configuration-only bundle whose patch inserts the harness's MCP client:
 
 | Variable | Effect |
 |---|---|
-| `TYPESAFE_API_KEY` | Presence selects the live provider; absence keeps it offline |
-| `JEV_PROVIDER` | `mock` or `live`, overriding the heuristic above |
-| `TYPESAFE_MODEL` | Model name; defaults to `jev-latest` |
-| `TYPESAFE_BASE_URL` | API root; defaults to `https://api.typesafe.ai` |
+| `TYPESAFE_API_KEY` | Selects the TypeSafe route when present |
+| `OPENROUTER_API_KEY` | Selects the OpenRouter route when present and no TypeSafe key is |
+| `JEV_PROVIDER` | `mock`, `live`, or `openrouter` — overrides the heuristic above |
+| `TYPESAFE_MODEL` / `OPENROUTER_MODEL` | Model id for the selected route |
+| `TYPESAFE_BASE_URL` / `OPENROUTER_BASE_URL` | API root for the selected route |
+
+Two routes reach the same models. TypeSafe serves them directly; OpenRouter hosts
+them behind its own Decisions route, which is the way in when a TypeSafe key is
+impractical. They differ in whose servers see your state, so the startup report
+names the endpoint rather than leaving it implied by the provider's name. On the
+OpenRouter route the model id must start with `typesafe/`; anything else answers
+with prose this server cannot interpret as a decision.
 
 Unlike a per-call adapter, this server resolves its credential **once at
 startup** — it is a long-lived process and its credential does not change

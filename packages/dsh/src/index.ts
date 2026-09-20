@@ -24,6 +24,7 @@ import {
   JevService,
   LiveProvider,
   MockProvider,
+  OpenRouterProvider,
   createContextGate,
   createSafetyGate,
   resolveApiKey,
@@ -146,7 +147,10 @@ export const buildRuntime = (
   const credentials = readCredentials(ctx)
   const egress = new EgressContract(
     {
-      transmitting: config.provider === 'live',
+      // Any provider other than the mock can reach the network. `openrouter`
+      // routes to OpenRouter rather than TypeSafe, which the report's endpoint
+      // line names — the destination is not implied by the provider's name.
+      transmitting: config.provider !== 'mock',
       enabled: {
         'tool:jev_ask': true,
         'tool:jev_rank': true,
@@ -164,50 +168,64 @@ export const buildRuntime = (
     config.maxStateChars,
   )
 
-  const provider: JevProvider =
-    config.provider === 'live'
+  // The live providers are constructed with an empty key because the credential
+  // may not exist yet, or may change while the process runs. Each call resolves
+  // it and refuses rather than sending an unauthenticated request.
+  const needsCredential = config.provider === 'live' || config.provider === 'openrouter'
+
+  const provider: JevProvider = !needsCredential
+    ? new MockProvider()
+    : config.provider === 'live'
       ? new LiveProvider({
-          // Resolved lazily per call by the Proxy below; the constructor needs
-          // a value, and an empty one surfaces the missing-key error at the
-          // first call rather than at load.
           apiKey: '',
           ...(config.baseURL === undefined ? {} : { baseURL: config.baseURL }),
           model: config.model,
         })
-      : new MockProvider()
+      : new OpenRouterProvider({
+          apiKey: '',
+          ...(config.openRouterBaseURL === undefined ? {} : { baseURL: config.openRouterBaseURL }),
+          model: config.model,
+        })
 
-  // The live provider is constructed with an empty key because the credential
-  // may not exist yet, or may change while the process runs. Resolve per call,
-  // and refuse rather than sending an unauthenticated request.
-  const keyedProvider: JevProvider =
-    config.provider === 'live'
-      ? {
-          id: provider.id,
-          async answer(request, signal) {
-            const resolved = await resolveApiKey({
-              ref: config.apiKeyRef,
-              credentials,
-            })
-            if (resolved === undefined) {
-              throw new JevProviderError(
-                `no credential found for "${config.apiKeyRef}". Store it in the DSH credential ` +
-                  `service or set the environment variable, or switch provider back to "mock".`,
-                'no-credential',
-              )
-            }
-            const live = new LiveProvider({
-              apiKey: resolved.value,
-              ...(config.baseURL === undefined ? {} : { baseURL: config.baseURL }),
-              model: config.model,
-            })
-            return live.answer(request, signal)
-          },
-        }
-      : provider
+  const keyedProvider: JevProvider = !needsCredential
+    ? provider
+    : {
+        id: provider.id,
+        async answer(request, signal) {
+          const isOpenRouter = config.provider === 'openrouter'
+          const ref = isOpenRouter ? config.openRouterApiKeyRef : config.apiKeyRef
+          const resolved = await resolveApiKey({ ref, credentials })
+          if (resolved === undefined) {
+            throw new JevProviderError(
+              `no credential found for "${ref}". Store it in the DSH credential service or set ` +
+                `the environment variable, or switch provider back to "mock".`,
+              'no-credential',
+            )
+          }
+          // Rebuilt per call so a rotated key is picked up without a restart.
+          const live = isOpenRouter
+            ? new OpenRouterProvider({
+                apiKey: resolved.value,
+                ...(config.openRouterBaseURL === undefined
+                  ? {}
+                  : { baseURL: config.openRouterBaseURL }),
+                model: config.model,
+              })
+            : new LiveProvider({
+                apiKey: resolved.value,
+                ...(config.baseURL === undefined ? {} : { baseURL: config.baseURL }),
+                model: config.model,
+              })
+          return live.answer(request, signal)
+        },
+      }
 
   const service = new JevService({
     provider: keyedProvider,
     egress,
+    // A fact about the provider, so a status surface cannot imply the mock is
+    // reaching the network when it is not.
+    transmitting: needsCredential,
     model: config.model,
   })
 
@@ -353,6 +371,7 @@ export {
   JevService,
   LiveProvider,
   MockProvider,
+  OpenRouterProvider,
   choice,
   noul,
   resolveConfig,

@@ -61,14 +61,15 @@ jobs:
 
       - name: Verify each published package contains what it needs
         # `files` in each manifest must cover the artifacts the package needs to
-        # load. A missing entry here is a broken publish that `npm install`
-        # would not catch, because the tarball installs fine — it just does not
-        # work.
+        # load. A missing entry is a broken publish that a plain install would not
+        # catch, because the tarball installs fine — it just does not work.
+        #
+        # `pnpm pack`, never `npm pack`: only pnpm rewrites the `workspace:*`
+        # dependency into a real version. An npm-packed tarball is not installable
+        # at all, which is the failure this step exists to catch.
         run: |
           node -e "
             const { execSync } = require('node:child_process');
-            const fsp = require('node:fs');
-            const path = require('node:path');
 
             const required = {
               'packages/core': ['lib/index.js', 'lib/index.d.ts', 'README.md', 'LICENSE'],
@@ -78,7 +79,7 @@ jobs:
 
             let failed = false;
             for (const [dir, wanted] of Object.entries(required)) {
-              const out = execSync('npm pack --dry-run --json', { cwd: dir, encoding: 'utf8' });
+              const out = execSync('pnpm pack --dry-run --json', { cwd: dir, encoding: 'utf8' });
               const files = JSON.parse(out)[0].files.map((f) => f.path);
               const missing = wanted.filter((w) => !files.includes(w));
               if (missing.length) {
@@ -90,3 +91,23 @@ jobs:
             }
             if (failed) process.exit(1);
           "
+
+      - name: Install the packed tarballs as a consumer would
+        # The check above proves the file list is right. This proves the tarballs
+        # actually install and load, which is the part that catches a manifest
+        # mistake rather than a `files` mistake.
+        run: |
+          mkdir -p /tmp/cleanroom && cd /tmp/cleanroom
+          echo '{"name":"cleanroom","private":true,"version":"1.0.0"}' > package.json
+          pnpm --dir "$GITHUB_WORKSPACE" --filter @dsh-jev/core pack --pack-destination .
+          pnpm --dir "$GITHUB_WORKSPACE" --filter @dsh-jev/mcp pack --pack-destination .
+          npm install --no-audit --no-fund ./dsh-jev-core-*.tgz ./dsh-jev-mcp-*.tgz
+          node -e "
+            const core = await import('@dsh-jev/core');
+            const mcp = await import('@dsh-jev/mcp');
+            if (typeof core.JevService !== 'function') throw new Error('core did not load');
+            if (typeof mcp.createServer !== 'function') throw new Error('mcp did not load');
+            const runtime = await mcp.buildRuntime(() => undefined);
+            if (runtime.config.provider !== 'mock') throw new Error('mcp default is not offline');
+            console.log('clean-room install loads:', Object.keys(core).length, 'core exports');
+          " --input-type=module

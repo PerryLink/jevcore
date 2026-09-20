@@ -5,11 +5,26 @@
 # every subsequent command, which makes `pnpm run build` and `pnpm run test`
 # unusable.
 #
-# esbuild is the only entry. It is a transitive dependency of vitest (via vite),
-# not of this project's own code; it ships a prebuilt binary and its install
-# script only selects the correct one for the platform.
+# Two entries, both read before being allowed:
+#
+#   esbuild        — a transitive dependency of vitest (via vite), not of this
+#                    project's own code. Ships a prebuilt binary; its install
+#                    script only selects the correct one for the platform.
+#
+#   @openrouter/sdk — its `postinstall` runs scripts/check-types.js, which does
+#                    exactly one thing: GET https://openrouter.ai/api/v1/models
+#                    with a 5s timeout, hash the public model list, and warn on
+#                    stderr if the SDK's generated types look stale. It never
+#                    fails the install (the manifest appends `|| true`), sends no
+#                    local data, and reads no credentials. Allowed for that
+#                    reason and no other — this project's whole point is that
+#                    install-time egress should be a decision somebody made.
 allowBuilds:
+  '@openrouter/sdk': true
   esbuild: true
+
+minimumReleaseAgeExclude:
+  - '@openrouter/sdk@1.3.6'
 
 packages:
   - 'packages/*'

@@ -96,6 +96,16 @@ export {
   loadOfficialSdk,
   type LiveProviderOptions,
 } from './provider/live.js'
+export {
+  DEFAULT_OPENROUTER_ENDPOINT,
+  DEFAULT_OPENROUTER_MODEL,
+  OPENROUTER_MODEL_PREFIX,
+  OpenRouterProvider,
+  assertSystemOneModel,
+  assertUsableOpenRouterEndpoint,
+  loadOpenRouterSdk,
+  type OpenRouterProviderOptions,
+} from './provider/openrouter.js'
 
 // Service
 export { JevService, type JevAskInput, type JevCallRecord, type JevServiceOptions, type JevStats } from './service.js'

@@ -137,16 +137,31 @@ whose patch inserts the harness's own MCP client:
         failOnStartupError: true
 ```
 
-The provider is chosen from the environment: `TYPESAFE_API_KEY` present means
-live, absent means the offline mock. `JEV_PROVIDER=mock|live` overrides that.
-Unlike the plugin, the MCP server resolves its credential once at startup, so a
-missing key with `JEV_PROVIDER=live` is a startup error rather than a per-call
-surprise.
+The provider is chosen from the environment:
+
+| Variable | Effect |
+|---|---|
+| `TYPESAFE_API_KEY` | Selects the TypeSafe route when present |
+| `OPENROUTER_API_KEY` | Selects the OpenRouter route when present and no TypeSafe key is |
+| `JEV_PROVIDER` | `mock`, `live`, or `openrouter` — overrides the heuristic above |
+| `TYPESAFE_MODEL` / `OPENROUTER_MODEL` | Model id for the selected route |
+| `TYPESAFE_BASE_URL` / `OPENROUTER_BASE_URL` | API root for the selected route |
+
+With neither key it stays on the offline mock. Unlike the plugin, the MCP server
+resolves its credential once at startup, so a missing key with
+`JEV_PROVIDER=live` is a startup error rather than a per-call surprise.
 
 Its egress report goes to **stderr**, never stdout — on a stdio transport stdout
 is the protocol channel, and a stray line there would corrupt the stream.
 
 ### Going live
+
+There are two routes to Jev. Both call the same models and both return the same
+typed answers; they differ in who holds your credential and whose servers see
+your state.
+
+**TypeSafe directly** — use this if you have a key from
+[console.typesafe.ai](https://console.typesafe.ai/settings/keys):
 
 ```yml
 - insert:
@@ -158,11 +173,43 @@ is the protocol channel, and a stray line there would corrupt the stream.
         model: jev-latest
 ```
 
-The credential is resolved through DSH's credential service first, then the environment variable of
-that name. It is read per call, so a key added while the process is running is picked up. It is never
-logged, never returned from a tool, and never written to configuration.
+**Through OpenRouter** — use this if a TypeSafe key is impractical and you
+already have an [OpenRouter](https://openrouter.ai) key. OpenRouter hosts the
+System One models behind its own Decisions route, so this is a real second route
+to Jev rather than an approximation:
 
-`@typesafe-ai/sdk` is an optional dependency; the plugin loads and runs offline without it.
+```yml
+- insert:
+    - id: jev
+      name: '@dsh-jev/plugin'
+      config:
+        provider: openrouter
+        openRouterApiKeyRef: OPENROUTER_API_KEY
+        model: typesafe/jev-1.13      # must keep the `typesafe/` prefix
+```
+
+Two things to know about the OpenRouter route:
+
+- **Your state goes to OpenRouter, not to TypeSafe.** A different third party
+  with different retention and logging. The startup report names the endpoint for
+  exactly this reason — read it rather than inferring the destination from the
+  provider's name.
+- **It is an `alpha` route.** OpenRouter's own SDK declares it as such, so treat
+  the shape as subject to change.
+
+The model id must start with `typesafe/`. Any other id would be routed to a chat
+model, which answers with prose this plugin cannot interpret as a decision, so it
+is refused before the call rather than misread after it.
+
+Either way the credential is resolved through DSH's credential service first,
+then the environment variable of that name. It is read per call, so a key added
+while the process is running is picked up. It is never logged, never returned
+from a tool, and never written to configuration. Each route has its own reference
+(`apiKeyRef` and `openRouterApiKeyRef`) so the two cannot accidentally share a key.
+
+`@typesafe-ai/sdk` and `@openrouter/sdk` are optional dependencies; the plugin
+loads and runs offline without either, and only needs the one for the route you
+choose.
 
 ---
 
@@ -170,15 +217,22 @@ logged, never returned from a tool, and never written to configuration.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `provider` | `mock` | `mock` (offline, deterministic, synthetic) or `live` |
-| `apiKeyRef` | `TYPESAFE_API_KEY` | Credential reference resolved via `ctx.credentials` |
-| `baseURL` | `https://api.typesafe.ai` | API root. Non-HTTPS is refused except on loopback |
-| `model` | `jev-latest` | Sent with every request |
+| `provider` | `mock` | `mock` (offline, deterministic, synthetic), `live` (TypeSafe), or `openrouter` |
+| `apiKeyRef` | `TYPESAFE_API_KEY` | Credential reference for the `live` route |
+| `openRouterApiKeyRef` | `OPENROUTER_API_KEY` | Credential reference for the `openrouter` route |
+| `baseURL` | `https://api.typesafe.ai` | API root for the `live` route. Non-HTTPS is refused except on loopback |
+| `openRouterBaseURL` | `https://openrouter.ai` | API root for the `openrouter` route. Same rule |
+| `model` | `jev-latest` | Sent with every request. On the OpenRouter route it must start with `typesafe/` |
 | `logLevel` | `warn` | `silent` \| `warn` \| `info` \| `debug` |
 | `minConfidence` | `0.7` | Below this, an answer is not acted on |
 | `minProbability` | `0.6` | Below this, a decision is not acted on |
+| `maxStateChars` | per feature | Replaces the `state` cap for every feature. `0` means "keep the declared cap" |
 | `gates.safety` | `false` | Judge tool calls before dispatch |
 | `gates.context` | `false` | Withhold large, uninformative tool results |
+
+The declared `state` caps are 16,000 characters for the three tools and 8,000 / 6,000 for the safety
+and context gates. `maxStateChars` replaces all of them, and the startup report shows the effective
+value rather than the declared one, so what it prints is what is enforced.
 
 Gates accept a bare boolean (`safety: false`) or an object with `onUndecided`: `ask` (default),
 `allow`, or `deny`.
@@ -256,7 +310,7 @@ that could be mistaken for a real judgment would be worse than no mock at all.
 Honest accounting of what has and has not been verified.
 
 **Verified**
-- 309 tests pass across three packages (223 core, 63 DSH, 23 MCP), with no network access and no
+- 349 tests pass across three packages (257 core, 63 DSH, 29 MCP), with no network access and no
   `TYPESAFE_API_KEY`. CI clears the variable and expects the suite to pass anyway.
 - **The plugin activates in a running harness and its tools work.** The plugin row reports `active`;
   `jev_ask` returned `urgent=true (0.8307)` and `team=billing (0.5027)` against the mock in 1 ms, and

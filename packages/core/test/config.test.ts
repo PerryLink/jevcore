@@ -51,7 +51,30 @@ describe('validation', () => {
 
   it('rejects an unknown provider', () => {
     expect(() => resolveConfig({ provider: 'openai' as never })).toThrow(ConfigError)
-    expect(() => resolveConfig({ provider: 'openai' as never })).toThrow(/must be "mock" or "live"/)
+    expect(() => resolveConfig({ provider: 'openai' as never })).toThrow(
+      /must be "mock", "live", or "openrouter"/,
+    )
+  })
+
+  it('accepts the openrouter provider and gives it its own credential reference', () => {
+    const config = resolveConfig({ provider: 'openrouter' })
+    expect(config.provider).toBe('openrouter')
+    // Separate refs, so the two routes cannot accidentally share a key.
+    expect(config.openRouterApiKeyRef).toBe('OPENROUTER_API_KEY')
+    expect(config.apiKeyRef).toBe('TYPESAFE_API_KEY')
+    expect(config.openRouterApiKeyRef).not.toBe(config.apiKeyRef)
+  })
+
+  it('keeps the openrouter ref overridable and independent of the baseURL', () => {
+    const config = resolveConfig({
+      provider: 'openrouter',
+      openRouterApiKeyRef: 'MY_OR_KEY',
+      openRouterBaseURL: 'https://proxy.internal',
+    })
+    expect(config.openRouterApiKeyRef).toBe('MY_OR_KEY')
+    expect(config.openRouterBaseURL).toBe('https://proxy.internal')
+    // The TypeSafe fields stay untouched.
+    expect(config.baseURL).toBeUndefined()
   })
 
   it('rejects an out-of-range confidence floor', () => {

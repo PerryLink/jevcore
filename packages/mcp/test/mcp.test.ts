@@ -33,6 +33,25 @@ describe('provider selection', () => {
     const withoutKey = (name: string) => (name === 'JEV_PROVIDER' ? 'live' : undefined)
     expect(chooseProvider(withoutKey)).toBe('live')
   })
+
+  it('selects openrouter when only an OpenRouter key is present', () => {
+    // The point of the route: a host with an OpenRouter key but no TypeSafe key
+    // should still reach Jev rather than quietly answering synthetically.
+    const env = (name: string) => (name === 'OPENROUTER_API_KEY' ? 'sk-or-v1-x' : undefined)
+    expect(chooseProvider(env)).toBe('openrouter')
+  })
+
+  it('prefers TypeSafe when both keys are present', () => {
+    const env = (name: string) =>
+      name === 'TYPESAFE_API_KEY' ? 'ts' : name === 'OPENROUTER_API_KEY' ? 'or' : undefined
+    expect(chooseProvider(env)).toBe('live')
+  })
+
+  it('honours an explicit openrouter selection', () => {
+    expect(chooseProvider((name) => (name === 'JEV_PROVIDER' ? 'openrouter' : undefined))).toBe(
+      'openrouter',
+    )
+  })
 })
 
 describe('runtime assembly', () => {
@@ -47,6 +66,31 @@ describe('runtime assembly', () => {
     await expect(buildRuntime((name) => (name === 'JEV_PROVIDER' ? 'live' : undefined))).rejects.toThrow(
       /no credential was found/,
     )
+  })
+
+  it('refuses to start openrouter without an OpenRouter credential', async () => {
+    await expect(
+      buildRuntime((name) => (name === 'JEV_PROVIDER' ? 'openrouter' : undefined)),
+    ).rejects.toThrow(/OPENROUTER_API_KEY/)
+  })
+
+  it('starts openrouter with its key and reports the OpenRouter endpoint', async () => {
+    const runtime = await buildRuntime((name) =>
+      name === 'OPENROUTER_API_KEY' ? 'sk-or-v1-test' : undefined,
+    )
+    expect(runtime.config.provider).toBe('openrouter')
+    // The report must name the destination, not leave it implied by the provider.
+    const report = runtime.egress.reportLines().join('\n')
+    expect(report).toContain('egress=ON')
+    expect(report).toContain('openrouter.ai')
+    expect(runtime.service.transmitting).toBe(true)
+  })
+
+  it('defaults the OpenRouter model to a System One id', async () => {
+    const runtime = await buildRuntime((name) =>
+      name === 'OPENROUTER_API_KEY' ? 'sk-or-v1-test' : undefined,
+    )
+    expect(runtime.config.model.startsWith('typesafe/')).toBe(true)
   })
 
   it('starts live when a credential is present', async () => {

@@ -10,6 +10,19 @@ Initial implementation. Pre-1.0, so the API may change between minor versions.
 
 ### Added
 
+- **An OpenRouter route to the same models.** OpenRouter hosts the System One
+  models behind its own Decisions route (`POST /api/alpha/decisions`), taking the
+  same `noul` / `choice` / `score` primitives plus a `model` field. Setting
+  `provider: openrouter` reaches Jev through it, which matters when a TypeSafe
+  key is impractical and an OpenRouter key is already in hand.
+
+  It is a distinct route, not an alias: state goes to OpenRouter rather than
+  TypeSafe, so the startup report names that endpoint instead of leaving the
+  destination implied by the provider's name. The route is `alpha` in
+  OpenRouter's own SDK, so the shape may change. A model id without the
+  `typesafe/` prefix is refused before the call, because any other model answers
+  with prose this plugin cannot interpret as a decision.
+
 - **`@dsh-jev/core`** — framework-agnostic decision layer.
   - The three System One primitives (`noul`, `choice`, `score`) with validation.
   - `MockProvider`, deterministic and offline, which labels every answer as

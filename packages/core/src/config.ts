@@ -17,8 +17,15 @@
  *   maxConfidenceFloor  0.7         — an unsure Jev produces `ask`, not `allow`
  */
 
-/** Which provider serves System One requests. */
-export type ProviderKind = 'mock' | 'live'
+/**
+ * Which provider serves System One requests.
+ *
+ *  - `mock` — offline, deterministic, synthetic. The default.
+ *  - `live` — TypeSafe's own API, using `apiKeyRef`.
+ *  - `openrouter` — OpenRouter's Decisions route, using `openRouterApiKeyRef`.
+ *    A second way to reach the same models when a TypeSafe key is impractical.
+ */
+export type ProviderKind = 'mock' | 'live' | 'openrouter'
 
 /** Configuration for one gate: an object, or a bare boolean shorthand. */
 export type GateInput = GateSettings | boolean
@@ -45,8 +52,16 @@ export interface JevConfigInput {
    * itself is never written to configuration.
    */
   readonly apiKeyRef?: string
+  /**
+   * Credential reference for the OpenRouter provider, used when `provider` is
+   * `openrouter`. Separate from {@link JevConfigInput.apiKeyRef} so the two
+   * routes cannot accidentally share a key.
+   */
+  readonly openRouterApiKeyRef?: string
   /** API root for the live provider. */
   readonly baseURL?: string
+  /** API root for the OpenRouter provider. */
+  readonly openRouterBaseURL?: string
   /** Model name sent with every request. */
   readonly model?: string
   /** Log level for this plugin's own diagnostics. */
@@ -67,7 +82,9 @@ export interface JevConfigInput {
 export interface JevConfig {
   readonly provider: ProviderKind
   readonly apiKeyRef: string
+  readonly openRouterApiKeyRef: string
   readonly baseURL: string | undefined
+  readonly openRouterBaseURL: string | undefined
   readonly model: string
   readonly logLevel: 'silent' | 'warn' | 'info' | 'debug'
   readonly minConfidence: number
@@ -82,7 +99,9 @@ export interface JevConfig {
 export const DEFAULT_CONFIG: JevConfig = {
   provider: 'mock',
   apiKeyRef: 'TYPESAFE_API_KEY',
+  openRouterApiKeyRef: 'OPENROUTER_API_KEY',
   baseURL: undefined,
+  openRouterBaseURL: undefined,
   model: 'jev-latest',
   logLevel: 'warn',
   minConfidence: 0.7,
@@ -125,8 +144,8 @@ const readBoolean = (name: string, value: unknown, fallback: boolean): boolean =
 
 const readProvider = (value: unknown): ProviderKind => {
   if (value === undefined) return DEFAULT_CONFIG.provider
-  if (value === 'mock' || value === 'live') return value
-  return fail(`"provider" must be "mock" or "live", got ${String(value)}`)
+  if (value === 'mock' || value === 'live' || value === 'openrouter') return value
+  return fail(`"provider" must be "mock", "live", or "openrouter", got ${String(value)}`)
 }
 
 const readGate = (name: string, value: unknown, fallback: Required<GateSettings>): Required<GateSettings> => {
@@ -176,14 +195,19 @@ export const resolveConfig = (input: JevConfigInput | undefined): JevConfig => {
 
   const gatesRaw = (raw.gates ?? {}) as Record<string, unknown>
 
+  const readRef = (value: unknown, fallback: string): string =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback
+
   return {
     provider: readProvider(raw.provider),
-    apiKeyRef:
-      typeof raw.apiKeyRef === 'string' && raw.apiKeyRef.trim().length > 0
-        ? raw.apiKeyRef.trim()
-        : DEFAULT_CONFIG.apiKeyRef,
+    apiKeyRef: readRef(raw.apiKeyRef, DEFAULT_CONFIG.apiKeyRef),
+    openRouterApiKeyRef: readRef(raw.openRouterApiKeyRef, DEFAULT_CONFIG.openRouterApiKeyRef),
     baseURL:
       typeof raw.baseURL === 'string' && raw.baseURL.trim().length > 0 ? raw.baseURL.trim() : undefined,
+    openRouterBaseURL:
+      typeof raw.openRouterBaseURL === 'string' && raw.openRouterBaseURL.trim().length > 0
+        ? raw.openRouterBaseURL.trim()
+        : undefined,
     model:
       typeof raw.model === 'string' && raw.model.trim().length > 0
         ? raw.model.trim()

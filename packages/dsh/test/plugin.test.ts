@@ -126,7 +126,7 @@ describe('plugin module shape', () => {
       provider: 'nonsense',
     })
     expect(result.value).toBeUndefined()
-    expect(result.issues?.[0]?.message).toMatch(/must be "mock" or "live"/)
+    expect(result.issues?.[0]?.message).toMatch(/must be "mock", "live", or "openrouter"/)
   })
 
   it('exposes its config shape under a non-reserved name', () => {
@@ -229,7 +229,7 @@ describe('activation on a real cordis context', () => {
   })
 
   it('rejects an invalid configuration at load time', () => {
-    expect(() => mountPlugin({ provider: 'nonsense' })).toThrow(/must be "mock" or "live"/)
+    expect(() => mountPlugin({ provider: 'nonsense' })).toThrow(/must be "mock", "live", or "openrouter"/)
   })
 })
 

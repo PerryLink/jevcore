@@ -13,10 +13,12 @@ import {
   JevService,
   LiveProvider,
   MockProvider,
+  OpenRouterProvider,
   resolveApiKey,
   type EgressFeature,
   type JevConfig,
   type JevProvider,
+  type ProviderKind,
 } from '@dsh-jev/core'
 
 /** Feature switches for the MCP surface. The gates are a DSH concept, not an MCP one. */
@@ -39,29 +41,44 @@ export interface McpRuntime {
 /**
  * Which provider to use.
  *
- * `JEV_PROVIDER` wins when set. Otherwise the presence of a credential decides:
- * a server launched with no key stays offline and answers synthetically rather
- * than failing every call, which makes the tool usable for a smoke test before
- * anyone has a key.
+ * `JEV_PROVIDER` wins when set. Otherwise the presence of a credential decides,
+ * checking OpenRouter as well as TypeSafe: a server launched with an OpenRouter
+ * key but no TypeSafe key should reach Jev rather than quietly answering
+ * synthetically. With neither, it stays offline instead of failing every call,
+ * which keeps the tool usable for a smoke test.
  */
-export const chooseProvider = (env: (name: string) => string | undefined): 'mock' | 'live' => {
+export const chooseProvider = (env: (name: string) => string | undefined): ProviderKind => {
   const explicit = env('JEV_PROVIDER')?.trim().toLowerCase()
-  if (explicit === 'live') return 'live'
-  if (explicit === 'mock') return 'mock'
-  const ref = env('TYPESAFE_API_KEY')
-  return ref !== undefined && ref.trim().length > 0 ? 'live' : 'mock'
+  if (explicit === 'live' || explicit === 'openrouter' || explicit === 'mock') return explicit
+
+  const has = (name: string): boolean => {
+    const value = env(name)
+    return value !== undefined && value.trim().length > 0
+  }
+  if (has('TYPESAFE_API_KEY')) return 'live'
+  if (has('OPENROUTER_API_KEY')) return 'openrouter'
+  return 'mock'
 }
 
 export const buildRuntime = async (
   env: (name: string) => string | undefined = (name) => process.env[name],
 ): Promise<McpRuntime> => {
   const kind = chooseProvider(env)
+  const isOpenRouter = kind === 'openrouter'
+
+  const apiKeyRef = 'TYPESAFE_API_KEY'
+  const openRouterApiKeyRef = 'OPENROUTER_API_KEY'
+  const model =
+    env(isOpenRouter ? 'OPENROUTER_MODEL' : 'TYPESAFE_MODEL')?.trim() ||
+    (isOpenRouter ? 'typesafe/jev-1.13' : 'jev-latest')
 
   const config: JevConfig = {
     provider: kind,
-    apiKeyRef: 'TYPESAFE_API_KEY',
+    apiKeyRef,
+    openRouterApiKeyRef,
     baseURL: undefined,
-    model: env('TYPESAFE_MODEL')?.trim() || 'jev-latest',
+    openRouterBaseURL: undefined,
+    model,
     logLevel: 'warn',
     minConfidence: 0.7,
     minProbability: 0.6,
@@ -73,39 +90,42 @@ export const buildRuntime = async (
   }
 
   const egress = new EgressContract(
-    { transmitting: kind === 'live', enabled: MCP_EGRESS },
-    env('TYPESAFE_BASE_URL')?.trim() || 'https://api.typesafe.ai',
+    { transmitting: kind !== 'mock', enabled: MCP_EGRESS },
+    isOpenRouter
+      ? env('OPENROUTER_BASE_URL')?.trim() || 'https://openrouter.ai'
+      : env('TYPESAFE_BASE_URL')?.trim() || 'https://api.typesafe.ai',
     // No MCP-side config surface for the cap yet, so the per-feature declared
     // caps apply unchanged.
     undefined,
   )
 
   let provider: JevProvider
-  if (kind === 'live') {
+  if (kind === 'mock') {
+    provider = new MockProvider()
+  } else {
     // Resolved once at startup: an MCP server is a long-lived process and its
     // credential does not change mid-session. A missing key is a startup error
     // rather than a per-call surprise.
-    const resolved = await resolveApiKey({
-      ref: config.apiKeyRef,
-      env,
-    })
+    const ref = isOpenRouter ? openRouterApiKeyRef : apiKeyRef
+    const resolved = await resolveApiKey({ ref, env })
     if (resolved === undefined) {
       throw new JevProviderError(
-        'JEV_PROVIDER=live but no credential was found for TYPESAFE_API_KEY. Set the ' +
-          'environment variable, or unset JEV_PROVIDER to run offline.',
+        `provider "${kind}" was selected but no credential was found for ${ref}. Set the ` +
+          `environment variable, or set JEV_PROVIDER=mock to run offline.`,
         'no-credential',
       )
     }
-    provider = new LiveProvider({
-      apiKey: resolved.value,
-      ...(config.baseURL === undefined ? {} : { baseURL: config.baseURL }),
-      model: config.model,
-    })
-  } else {
-    provider = new MockProvider()
+    provider = isOpenRouter
+      ? new OpenRouterProvider({ apiKey: resolved.value, model })
+      : new LiveProvider({ apiKey: resolved.value, model })
   }
 
-  const service = new JevService({ provider, egress, model: config.model, transmitting: kind === 'live' })
+  const service = new JevService({
+    provider,
+    egress,
+    transmitting: kind !== 'mock',
+    model,
+  })
 
   return { service, egress, config, report: egress.reportLines() }
 }
