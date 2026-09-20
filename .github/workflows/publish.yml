@@ -1,54 +1,37 @@
 name: Publish
 
-# Publishing is tag-driven on purpose. A human decides the version, the tag
-# records who decided and when, and nothing reaches npm from a working branch.
+# Publishing is tag-driven on purpose: a human decides the version, the tag
+# records when, and nothing reaches npm from a working branch.
 #
-# Requires one repository secret, named NPM_TOKEN: an npm automation token with
-# publish rights for jevkit, jevkit-dsh and jevkit-mcp. Add it under
-# Settings -> Secrets and variables -> Actions -> New repository secret.
-#
-# Until that secret exists this workflow fails at the first publish step. That is
-# deliberate: a silent no-op publish is worse than a loud failure, because a tag
-# that "succeeded" while publishing nothing is easy to mistake for a release.
-#
-# This file is deliberately ASCII-only. It previously carried typographic arrows
-# and dashes in these comments, and GitHub could not parse the workflow at all --
-# it registered, reported an empty name, and failed in 0s on every push. Whether
-# the characters or something else was at fault, plain ASCII costs nothing here.
+# Requires a repository secret named NPM_TOKEN (npm automation token with publish
+# rights for jevkit, jevkit-dsh and jevkit-mcp):
+#   Settings -> Secrets and variables -> Actions -> New repository secret
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
-    inputs:
-      dry-run:
-        description: 'Pack and verify only; do not publish'
-        type: boolean
-        default: true
 
 permissions:
   contents: read
-  id-token: write # required for npm provenance
-
-concurrency:
-  group: publish-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    env:
-      # Set at job level so a missing secret fails before any work happens.
-      # A tag push that silently publishes nothing is worse than a red run.
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check what triggered this run
+        run: |
+          echo "event      = ${{ github.event_name }}"
+          echo "ref        = ${{ github.ref }}"
+          echo "ref_name   = ${{ github.ref_name }}"
+
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Enable corepack
         run: corepack enable
@@ -57,9 +40,6 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Confirm the tag matches the manifests
-        # A tag that disagrees with the packages would publish 0.1.0 under a
-        # v0.2.0 tag, and npm has no way to take that back. Skipped on a manual
-        # dispatch, where there is no tag to check against.
         if: github.event_name == 'push'
         run: |
           node -e "
@@ -70,39 +50,27 @@ jobs:
             for (const file of names) {
               const version = JSON.parse(readFileSync(file, 'utf8')).version;
               if (version !== tag) {
-                console.error(\`\${file}: version \${version} does not match tag \${process.env.GITHUB_REF_NAME}\`);
+                console.error(file + ': version ' + version + ' does not match tag ' + process.env.GITHUB_REF_NAME);
                 failed = true;
               }
             }
             if (failed) process.exit(1);
-            console.log(\`every manifest is at \${tag}\`);
+            console.log('every manifest is at ' + tag);
           "
 
       - name: Verify before publishing
-        # The same gate as CI. Publishing an untested tree is the one mistake a
-        # version number cannot undo.
         run: pnpm run check
 
       - name: Cross-check payloads against the vendor schemas
         run: pnpm --filter jevkit run check:schemas
 
       - name: Publish
-        # Order matters: both adapters depend on `jevkit`, so the core must
-        # exist on the registry before them. `pnpm publish` (never `npm
-        # publish`) rewrites the `workspace:*` dependency into a real version.
-        #
-        # The conditions are spelled out per event rather than relying on
-        # `inputs.dry-run == false`, because GitHub Actions compares loosely the
-        # way JavaScript does: on a push, `inputs.dry-run` is null and
-        # `null == false` is true, which would read as "dry run requested".
-        if: >-
-          github.event_name == 'push' ||
-          (github.event_name == 'workflow_dispatch' && inputs.dry-run == false)
+        # Core first: both adapters depend on `jevkit`. `pnpm publish`, never
+        # `npm publish`, so the workspace dependency becomes a real version.
+        if: github.event_name == 'push'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           pnpm --filter jevkit publish --access public --provenance --no-git-checks
           pnpm --filter jevkit-dsh publish --access public --provenance --no-git-checks
           pnpm --filter jevkit-mcp publish --access public --provenance --no-git-checks
-
-      - name: Dry run summary
-        if: github.event_name == 'workflow_dispatch' && inputs.dry-run
-        run: echo "Dry run only: packed and verified. Check out a v* tag, or re-run with dry-run unchecked, to publish."
