@@ -47,6 +47,37 @@ transport payloads, and delegate every judgment to core. That is deliberate — 
 adapter cannot drift from the guarantees the others make if it owns no decision
 logic.
 
+## Verified live (round 5)
+
+The plugin is **active** and the wiring is proven end to end, not inferred:
+
+| Claim | Evidence |
+|---|---|
+| Row activates | `list_plugins` reports `include:jev` / `@dsh-jev/plugin` / `fiberPhase: active` |
+| Tools work | `jev_ask` returned `urgent=true (0.8307)`, `team=billing (0.5027)`, `provider="mock"`, 1 ms, with the SYNTHETIC warning; `jev_check` returned `verdict="insufficient"` with `{supports:0.0616, contradicts:0.632, sufficient:0.6646}` |
+| No network on the default path | every result carried `provider="mock"` and `usage {inputTokens:0, outputTokens:0, costUsd:0}` |
+| Skill registers | `typesafe-ai-dsh` appeared in the session skill catalog |
+| MCP transport | `pnpm --filter @dsh-jev/mcp run smoke` — handshake, discovery, 3 calls, error path |
+| Packages ship correctly | all three tarballs contain every required file, including `cordis.patch.yml` and `SKILL.md` |
+
+## One cosmetic defect, already fixed on disk, needs one restart
+
+`jev_ask`'s live tool description contains `—?` where an em dash and a space belong
+(`branches on —?routing`, `not decisions —?apply`). Four occurrences repo-wide, two of
+them in text the model reads.
+
+Cause, established from timestamps rather than guessed: the running server started at
+**11:10:40**, and the fix was committed at **11:13:06** — so that process loaded the
+pre-fix module and never re-read the file. `git show 87cd202:packages/dsh/src/ask.ts`
+has 3 occurrences; `8293f5c` has 0.
+
+The fix is confirmed in both source and `lib/ask.js` (0 corrupted, 3 correct em dashes).
+It cannot be applied in-process: HMR watches only profile patch files
+(`dsh-hmr`, "Exact-path watching for live profile patch configuration"), and there is no
+module-reload entry point in any installed package. Touching `lib/*.js` does nothing.
+
+**A restart is the only way to apply it.** Nothing else is pending behind that restart.
+
 ## Round 4: the restart cleared the first bug and revealed a second
 
 The restart did what was predicted: the `TypeError: ... reading 'validate'` is gone.
