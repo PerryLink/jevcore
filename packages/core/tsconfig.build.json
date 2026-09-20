@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    // Declared in each package rather than the shared base: a relative `outDir`
+    // in an extended config resolves against the file that DECLARES it, so a
+    // base-config `./lib` lands beside the base config, not here.
+    "outDir": "lib"
+  },
+  "include": ["src/**/*.ts"]
+}

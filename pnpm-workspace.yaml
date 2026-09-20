@@ -1,2 +1,15 @@
+# pnpm workspace configuration.
+#
+# `allowBuilds` grants permission for a dependency's install-time build script to
+# run. Without an explicit entry, pnpm 11 blocks the script AND exits non-zero on
+# every subsequent command, which makes `pnpm run build` and `pnpm run test`
+# unusable.
+#
+# esbuild is the only entry. It is a transitive dependency of vitest (via vite),
+# not of this project's own code; it ships a prebuilt binary and its install
+# script only selects the correct one for the platform.
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: true
+
+packages:
+  - 'packages/*'

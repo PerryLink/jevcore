@@ -8,6 +8,38 @@ importers:
 
   .:
     devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.4
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.4)
+
+  packages/core:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.4
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.4)
+    optionalDependencies:
+      '@typesafe-ai/sdk':
+        specifier: ^0.6.0
+        version: 0.6.0
+
+  packages/dsh:
+    dependencies:
+      '@dsh-jev/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
       '@deepseek-ai/cordis':
         specifier: ^4.0.2
         version: 4.0.2
@@ -23,10 +55,6 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@22.20.4)
-    optionalDependencies:
-      '@typesafe-ai/sdk':
-        specifier: ^0.6.0
-        version: 0.6.0
 
 packages:
 

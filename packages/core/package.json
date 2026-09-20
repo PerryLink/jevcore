@@ -1,0 +1,50 @@
+{
+  "name": "@dsh-jev/core",
+  "version": "0.1.0",
+  "description": "Framework-agnostic TypeSafe Jev decision core: typed primitives, pluggable providers, an explicit egress contract, redaction, and local decision policy.",
+  "keywords": [
+    "jev",
+    "typesafe",
+    "typesafe-ai",
+    "system-one",
+    "decision-model",
+    "classification",
+    "noul",
+    "choice",
+    "score"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "optionalDependencies": {
+    "@typesafe-ai/sdk": "^0.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
