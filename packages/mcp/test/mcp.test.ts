@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { EGRESS_FEATURES, EgressContract, JevService, MockProvider, type EgressFeature } from '@dsh-jev/core'
 import { buildRuntime, chooseProvider } from '../src/runtime.js'
-import { runAsk, runCheck, runRank, toQuestions } from '../src/tools.js'
+import { SYNTHETIC_WARNING, runAsk, runCheck, runRank, toQuestions } from '../src/tools.js'
 
 const allOn = (): Record<EgressFeature, boolean> =>
   Object.fromEntries(EGRESS_FEATURES.map((feature) => [feature, true])) as Record<EgressFeature, boolean>
@@ -120,6 +120,23 @@ describe('jev_ask', () => {
       questions: { q: { type: 'noul', instructions: 'ok?' } },
     })
     expect(value.warning).toContain('SYNTHETIC')
+  })
+
+  it('emits the exported warning verbatim, so the constant is what callers see', async () => {
+    // The exported constant and the string callers receive must be the same
+    // value; a substring assertion alone would let the two drift apart.
+    const value = await runAsk(service(), {
+      state: 'x',
+      questions: { q: { type: 'noul', instructions: 'ok?' } },
+    })
+    expect(value.warning).toBe(SYNTHETIC_WARNING)
+  })
+
+  it('says how to get real answers', () => {
+    // The warning is the only place a caller learns the result is not a real
+    // judgment, so it has to say what to do about that.
+    expect(SYNTHETIC_WARNING).toContain('TYPESAFE_API_KEY')
+    expect(SYNTHETIC_WARNING).toContain('mock')
   })
 
   it('rejects an invalid batch before spending a call', async () => {
