@@ -14,7 +14,7 @@ Last updated: 2026-09-20 (round 2). Read this first when resuming.
 | 6. M4 live verification | **Blocked** — needs a TypeSafe API key |
 | 7. Core split | **Done** — three packages, one decision layer |
 | 8. MCP entry | **Done** — `packages/mcp`, 21 tests, stdio binary verified offline |
-| 9. DSH skill proposal | **Done** — `../typesafe-dsh-skill-proposal.md` |
+| 9. DSH skill | **Done and shipped** — the skill is registered by the plugin (packages/dsh/skills/typesafe-ai-dsh/SKILL.md), so it works today; the upstream proposal in `../typesafe-dsh-skill-proposal.md` is now a courtesy offer rather than a dependency |
 | 10. Repo hygiene for publishing | **Done** — CONTRIBUTING, SECURITY, CHANGELOG, PUBLISHING, CI over all three packages |
 | 11. MCP transport verification | **Done** — real stdio client drives the server end to end (pnpm --filter @dsh-jev/mcp run smoke) |
 | 12. Actual publish + M4 | **Blocked** — needs your accounts and an API key |
@@ -23,7 +23,7 @@ Two unverified claims remain, both stated in the README rather than glossed: the
 live provider has never made a real TypeSafe API call, and the DSH plugin has
 never reached ctive in a running harness (blocked on the restart below).
 
-**255 tests pass** (191 core, 43 dsh, 21 mcp) with no credential and no network
+**272 tests pass** (191 core, 60 dsh, 21 mcp) with no credential and no network
 access. `pnpm run check` is green. All three tarballs pack correctly.
 
 ## Repository layout
