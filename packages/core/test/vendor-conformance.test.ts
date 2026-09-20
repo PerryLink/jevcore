@@ -62,16 +62,31 @@ describe('conformance with the TypeSafe SDK', () => {
   it('the SDK and this package agree that a scale needs two described levels', () => {
     // The SDK encodes it as a tuple; we enforce it at runtime in
     // `assertValidQuestion`, because a caller can pass a map the type system
-    // has already accepted as `Record<string, string | null>`.
+    // has already accepted.
     expect(() => assertValidQuestion('q', score('How risky?', { low: 'none', high: 'severe' }))).not.toThrow()
     expect(() => assertValidQuestion('q', score('How risky?', { low: 'none' }))).toThrow(
       /at least two/,
     )
-    // A level left undescribed carries nothing to send, so it cannot be counted
-    // toward the two the API requires.
-    expect(() => assertValidQuestion('q', score('How risky?', { low: 'none', high: null }))).toThrow(
-      /at least two/,
-    )
+    // A `null` level is refused at construction, before validation runs. Both
+    // layers matter: construction stops the silent renumbering, and validation
+    // catches a question assembled by other means.
+    expect(() => score('How risky?', { low: 'none', high: null })).toThrow(/have no description/)
+  })
+
+  it('the docs permit a null score level but the live API rejects it', () => {
+    // Recorded here because it is the one place this package deliberately does
+    // NOT follow the published shape. `/primitives/advanced` lists score
+    // criteria entries as accepting "string, object, array, or null", and the
+    // SDK types `ScoreCriteria` over `EntryType`, which includes null. The live
+    // endpoint answers 422 instead:
+    //
+    //   questions.q.score.criteria.1.str: Input should be a valid string
+    //
+    // So a null entry cannot be sent, and dropping it would renumber the scale.
+    // Refusing it locally is the only behaviour that is neither wrong nor a
+    // wasted round-trip.
+    const documentedButRejected = { low: 'none', medium: null, high: 'severe' }
+    expect(() => score('How risky?', documentedButRejected)).toThrow(/have no description/)
   })
 
   it('integer-like level names are refused rather than silently reordered', () => {

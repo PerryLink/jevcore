@@ -147,8 +147,10 @@ describe('jev_ask', () => {
   })
 
   it('refuses a score whose levels carry no descriptions', async () => {
-    // `null` means "leave this level undescribed", so a rubric of nulls sends
-    // nothing for Jev to score against.
+    // `null` is not a way to mean "undescribed": the level's position in the
+    // scale *is* its score, so dropping one renumbers the rest. The tool reports
+    // that rather than silently sending a shorter rubric, and names the empty
+    // string as the way to hold a position.
     await expect(
       run(tool, {
         state: 'x',
@@ -156,7 +158,27 @@ describe('jev_ask', () => {
           risk: { type: 'score', instructions: 'Risk?', criteria: { low: null, high: null } },
         },
       }),
-    ).rejects.toThrow(/at least two/)
+    ).rejects.toThrow(/have no description/)
+  })
+
+  it('accepts an empty string as an undescribed level that holds its place', async () => {
+    const value = (await run(tool, {
+      state: 'x',
+      questions: {
+        risk: {
+          type: 'score',
+          instructions: 'Risk?',
+          criteria: { low: 'No impact', medium: '', high: 'Users blocked' },
+        },
+      },
+    })) as { answers: { legend?: Record<string, string> }[] }
+
+    // Three levels, so `high` stays at position 2 instead of sliding into 1.
+    expect(value.answers[0]?.legend).toEqual({
+      '0': 'No impact',
+      '1': '',
+      '2': 'Users blocked',
+    })
   })
 
   it('returns probabilities, not decisions', async () => {

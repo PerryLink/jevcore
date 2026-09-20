@@ -52,14 +52,15 @@ export interface ChoiceQuestion {
  * `criteria` is an ordered array, not a keyed map, because a scale is ordered
  * and a map is not: Jev scores position `0..n-1`, so the sequence *is* the
  * rubric. This mirrors `ScoreCriteria` in the official SDK, which types it as
- * `readonly [EntryType, EntryType, ...EntryType[]]` — a tuple of at least two.
+ * `readonly [EntryType, EntryType, ...EntryType[]]`.
  *
- * The tuple length is enforced at runtime by {@link assertValidQuestion}
- * rather than in this type, because the level map a caller passes is an
- * arbitrary `Record` and its length is not statically known.
- *
- * `null` leaves a level undescribed. That is legal on the TypeSafe route and is
- * dropped from the payload on the OpenRouter route.
+ * **Every level must be described, and there must be 2 to 10 of them.** The live
+ * API rejects a `null` entry with 422 (`criteria.1.str: Input should be a valid
+ * string`) even though the published docs and the SDK type both imply `null` is
+ * allowed — verified against the real endpoint. `''` is a legal way to hold a
+ * position without describing it. {@link scoreCriteriaArray} enforces all of
+ * this, because a level's position is its score and dropping one would silently
+ * renumber the rest.
  */
 export interface ScoreQuestion {
   readonly type: 'score'

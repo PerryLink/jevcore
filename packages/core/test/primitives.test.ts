@@ -18,15 +18,39 @@ describe('question builders', () => {
   it('builds a score question as an ordered array of level descriptions', () => {
     // The API scores positions, so the scale is the sequence of descriptions,
     // not a keyed map. See `ScoreCriteria` in the official SDK.
-    expect(score('How risky?', { low: 'none', medium: null, high: 'severe' })).toEqual({
+    expect(score('How risky?', { low: 'none', medium: 'some', high: 'severe' })).toEqual({
       type: 'score',
       instructions: 'How risky?',
-      criteria: ['none', 'severe'],
+      criteria: ['none', 'some', 'severe'],
     })
   })
 
   it('keeps level order, since order is the scale', () => {
     expect(score('How risky?', { high: 'severe', low: 'none' }).criteria).toEqual(['severe', 'none'])
+  })
+
+  it('refuses to drop an undescribed level, because position is the score', () => {
+    // This used to filter `null` out silently, which renumbered the scale: a
+    // caller declaring {low, medium: null, high} got a two-level rubric in which
+    // `high` occupied position 1, so every answer mapped back to the wrong name.
+    // The live API rejects `null` entries with 422 anyway, so there was no
+    // correct fallback — only a wrong one to hide.
+    expect(() => score('How risky?', { low: 'none', medium: null, high: 'severe' })).toThrow(
+      /have no description/,
+    )
+  })
+
+  it('points the caller at the empty string as a way to hold a position', () => {
+    // The error has to be actionable: the API accepts "" as an entry, so there
+    // is a legal way to say "position 1 exists, it just is not described".
+    expect(() => score('How risky?', { low: 'none', medium: null, high: 'severe' })).toThrow(
+      /empty string/,
+    )
+    expect(score('How risky?', { low: 'none', medium: '', high: 'severe' }).criteria).toEqual([
+      'none',
+      '',
+      'severe',
+    ])
   })
 })
 
@@ -43,16 +67,32 @@ describe('question validation', () => {
     expect(() => assertValidQuestion('q', choice('pick', { only: null }))).toThrow(/declares 1 criteria/)
   })
 
-  it('rejects a score question with no described levels', () => {
-    expect(() => assertValidQuestion('q', score('rate', {}))).toThrow(/declares 0 described level/)
+  it('rejects a score question with no levels at all', () => {
+    expect(() => assertValidQuestion('q', score('rate', {}))).toThrow(/at least two/)
   })
 
   it('rejects a score question whose levels are all undescribed', () => {
-    // `null` means "leave this level undescribed", which sends nothing, so a
-    // rubric of nulls is an empty rubric.
-    expect(() => assertValidQuestion('q', score('rate', { low: null, high: null }))).toThrow(
-      /declares 0 described level/,
+    // `null` is refused at construction, so this now fails before validation
+    // gets a chance to see it. Kept as a regression guard on the ordering of the
+    // two checks: the message a caller sees should name the undescribed level,
+    // not merely count levels.
+    expect(() => score('rate', { low: null, high: null })).toThrow(/have no description/)
+  })
+
+  it('rejects a score with more levels than the API accepts', () => {
+    // The live API answers "Too many score levels. Must have at most 10 levels."
+    // Catching it locally turns a wasted round-trip into a caller-side error.
+    const eleven = Object.fromEntries(
+      Array.from({ length: 11 }, (_unused, index) => [`l${index}`, `level ${index}`]),
     )
+    expect(() => assertValidQuestion('q', score('rate', eleven))).toThrow(/at most 10/)
+  })
+
+  it('rejects a choice with more options than the API accepts', () => {
+    const many = Object.fromEntries(
+      Array.from({ length: 256 }, (_unused, index) => [`o${index}`, `option ${index}`]),
+    )
+    expect(() => assertValidQuestion('q', choice('pick', many))).toThrow(/at most 255/)
   })
 
   it('rejects an empty batch', () => {

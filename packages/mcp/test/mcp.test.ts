@@ -147,12 +147,21 @@ describe('question conversion', () => {
   })
 
   it('builds choice and score questions with their criteria', () => {
+    // A choice option may be null — the live API accepts that and the docs use
+    // it for "needs no explanation". A score level may not: its position is its
+    // score, so an undescribed level is refused rather than dropped.
     const q = toQuestions({
       c: { type: 'choice', instructions: 'pick', criteria: { a: null, b: 'B' } },
-      s: { type: 'score', instructions: 'rate', criteria: { low: null, high: null } },
+      s: { type: 'score', instructions: 'rate', criteria: { low: 'none', high: 'severe' } },
     })
     expect(q.c).toMatchObject({ type: 'choice', criteria: { a: null, b: 'B' } })
-    expect(q.s).toMatchObject({ type: 'score' })
+    expect(q.s).toMatchObject({ type: 'score', criteria: ['none', 'severe'] })
+  })
+
+  it('refuses a score level with no description rather than renumbering the scale', () => {
+    expect(() =>
+      toQuestions({ s: { type: 'score', instructions: 'rate', criteria: { low: null, high: 'x' } } }),
+    ).toThrow(/have no description/)
   })
 
   it('treats missing criteria as an empty map rather than throwing here', () => {

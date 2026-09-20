@@ -41,11 +41,13 @@ export const choice = (
  * expected score with a `legend` mapping each index back to its description.
  *
  * @param criteria - level name to its description, in ascending scale order.
- *   `null` leaves a level undescribed.
+ *   All levels must be described. `null` and a missing value are rejected rather
+ *   than dropped — see {@link scoreCriteriaArray} — and `''` is a legal way to
+ *   hold a position in the scale without describing it.
  */
 export const score = (
   instructions: string,
-  criteria: Readonly<Record<string, string | null>>,
+  criteria: Readonly<Record<string, string | null | undefined>>,
 ): ScoreQuestion => ({
   type: 'score',
   instructions,
@@ -61,9 +63,27 @@ export const score = (
  */
 const INDEX_LIKE_KEY = /^(?:0|[1-9][0-9]*)$/
 
-/** Convert a level map to the ordered array the API expects. */
+/** Documented ceilings, confirmed against the live API. */
+export const MAX_SCORE_LEVELS = 10
+export const MAX_CHOICE_OPTIONS = 255
+
+/**
+ * Convert a level map to the ordered array the API expects.
+ *
+ * **A level's position in this array *is* its score.** That is why an undescribed
+ * level is an error rather than something to filter out: dropping one silently
+ * renumbers every level after it, so `{low, medium: null, high}` would send a
+ * two-level scale in which `high` occupies position 1 — the answer would come
+ * back with `legend` keyed `"1": "severe"` and any caller mapping positions back
+ * to names would read it as the *medium* level.
+ *
+ * This was previously silent, and the live API rejects `null` entries anyway
+ * (422, `criteria.1.str: Input should be a valid string`) — so there was no
+ * correct behaviour to fall back to, only a wrong one to hide. Callers who want
+ * a level to hold its place undescribed should pass `''`, which the API accepts.
+ */
 export const scoreCriteriaArray = (
-  levels: Readonly<Record<string, string | null>>,
+  levels: Readonly<Record<string, string | null | undefined>>,
 ): readonly string[] => {
   const keys = Object.keys(levels)
   const reordered = keys.filter((key) => INDEX_LIKE_KEY.test(key))
@@ -74,10 +94,20 @@ export const scoreCriteriaArray = (
         'Name the levels instead, such as "low"/"medium"/"high".',
     )
   }
-  // `null` leaves a level undescribed; it carries no description to send.
-  return keys
-    .map((key) => levels[key])
-    .filter((description): description is string => typeof description === 'string' && description !== '')
+  const undescribed = keys.filter((key) => {
+    const description = levels[key]
+    return description === null || description === undefined
+  })
+  if (undescribed.length > 0) {
+    throw new Error(
+      `score level(s) ${undescribed.map((key) => `"${key}"`).join(', ')} have no description. A ` +
+        'level\'s position in the scale is its score, so an undescribed level cannot simply be ' +
+        'dropped: doing so would renumber every level after it and make answers map back to the ' +
+        'wrong names. Describe the level, or pass an empty string "" to hold its place in the ' +
+        'scale without describing it.',
+    )
+  }
+  return keys.map((key) => levels[key] as string)
 }
 
 /** Reject a question whose criteria map would make an answer unverifiable. */
@@ -93,11 +123,26 @@ export const assertValidQuestion = (id: string, question: JevQuestion): void => 
           'A scale needs at least two, because a one-level scale carries no ordering.',
       )
     }
+    if (question.criteria.length > MAX_SCORE_LEVELS) {
+      // The API's own error for this reads "Too many score levels. Must have at
+      // most 10 levels." Catching it here turns a wasted round-trip into a
+      // caller-side error, which is the point of local validation.
+      throw new Error(
+        `question "${id}" is a score with ${question.criteria.length} levels; the API accepts at ` +
+          `most ${MAX_SCORE_LEVELS}.`,
+      )
+    }
     return
   }
   const keys = Object.keys(question.criteria)
   if (keys.length < 2) {
     throw new Error(`question "${id}" is ${question.type} but declares ${keys.length} criteria`)
+  }
+  if (question.type === 'choice' && keys.length > MAX_CHOICE_OPTIONS) {
+    throw new Error(
+      `question "${id}" is a choice with ${keys.length} options; the API accepts at most ` +
+        `${MAX_CHOICE_OPTIONS}.`,
+    )
   }
 }
 
