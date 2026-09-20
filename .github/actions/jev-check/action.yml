@@ -1,0 +1,246 @@
+name: Jev judgment
+description: >-
+  Ask TypeSafe Jev one narrow question in CI and branch on the calibrated
+  probability instead of on prose. Wraps the `jev` CLI, so this action is a thin
+  shell over the same decision core, egress contract, and redaction path that the
+  library, the MCP server, and the DeepSeek Harness plugin use.
+
+# The action deliberately does NOT turn a probability into a permission.
+#
+# A Jev call returns a number and a verdict; what that number is allowed to
+# authorise is a policy decision belonging to the workflow that owns it. So the
+# default is `fail-on: never`: the action reports, and the caller branches on the
+# outputs. A runner that silently failed a build because a model said 0.62 would
+# be exactly the failure mode this project exists to avoid.
+author: PerryLink
+
+branding:
+  icon: git-pull-request
+  color: purple
+
+inputs:
+  command:
+    description: >-
+      Which judgment to run. `check` verifies a claim against evidence and
+      reports one of supported/contradicted/conflicted/insufficient/undecided/
+      unknown. `gate` dry-runs the safety gate against a hypothetical tool call
+      and reports allow/ask/deny without running anything.
+    required: true
+  claim:
+    description: 'Required by `command: check` — the single claim to test.'
+    required: false
+    default: ''
+  evidence-file:
+    description: >-
+      Required by `command: check` — path to a file holding the evidence the
+      claim is judged against, or `-` to read standard input.
+    required: false
+    default: ''
+  tool:
+    description: 'Required by `command: gate` — the tool name to judge, e.g. `pwsh`.'
+    required: false
+    default: ''
+  args-json:
+    description: >-
+      Required by `command: gate` — the tool call's arguments as a JSON object.
+      Passed to the gate exactly as the host would, so a gate verdict here means
+      what it would mean in a session.
+    required: false
+    default: '{}'
+  fail-on:
+    description: >-
+      When the step should fail the job. One of: `never` (default — report only),
+      `contradicted` (check only: fail when the evidence contradicts the claim),
+      `deny-or-ask` (gate only: fail on anything that is not an allow),
+      `any-nonzero` (fail on any non-zero CLI exit, including the "could not
+      decide" outcomes — usually a mistake, and available for completeness).
+    required: false
+    default: never
+  api-key:
+    description: >-
+      TypeSafe API key. Pass `${{ secrets.TYPESAFE_API_KEY }}`. When empty the
+      CLI falls back to the `TYPESAFE_API_KEY` environment variable, and failing
+      that refuses to run rather than degrading silently.
+    required: false
+    default: ''
+  model:
+    description: >-
+      Model override. Leave empty for the CLI's default. Pin a version rather
+      than using `jev-latest` if you want a CI verdict that is reproducible.
+    required: false
+    default: ''
+  mock:
+    description: >-
+      Run against the offline mock instead of the API: no key, no network, and
+      therefore no measurement. Useful for exercising a workflow's plumbing, and
+      the action says so loudly on stderr so a mock result is never mistaken for
+      a real one.
+    required: false
+    default: 'false'
+  version:
+    description: >-
+      Version of the `jevcore-cli` npm package to run. Pin it for a reproducible
+      gate; `latest` is the moving default.
+    required: false
+    default: latest
+
+outputs:
+  exit-code:
+    description: >-
+      The CLI's own exit code: check → 0 supported, 1 contradicted, 3 anything
+      else; gate → 0 allow, 1 deny, 2 ask. Available whether or not the step
+      failed, so a later step can apply its own policy.
+    value: ${{ steps.judge.outputs.exit-code }}
+  result-json:
+    description: 'The `--json` result, verbatim and unparsed.'
+    value: ${{ steps.judge.outputs.result-json }}
+  summary:
+    description: 'The one-line human summary the CLI printed.'
+    value: ${{ steps.judge.outputs.summary }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v5
+      with:
+        node-version: '20'
+        # The CLI is installed by `npx` at run time, so there is no lockfile for a
+        # package manager to cache. Leaving caching on makes setup-node look for a
+        # lockfile, find none, and fail the step.
+        package-manager-cache: false
+
+    - id: judge
+      shell: bash
+      # Inputs arrive through the environment rather than by interpolation into
+      # the script text. A claim or an argument list can come from a pull request
+      # body, and `${{ }}` substitution happens before the shell ever sees the
+      # line, so an interpolated value containing shell syntax would execute.
+      # Environment variables are data and cannot become code.
+      env:
+        JEV_COMMAND: ${{ inputs.command }}
+        JEV_CLAIM: ${{ inputs.claim }}
+        JEV_EVIDENCE_FILE: ${{ inputs.evidence-file }}
+        JEV_TOOL: ${{ inputs.tool }}
+        JEV_ARGS_JSON: ${{ inputs.args-json }}
+        JEV_FAIL_ON: ${{ inputs.fail-on }}
+        JEV_MODEL: ${{ inputs.model }}
+        JEV_MOCK: ${{ inputs.mock }}
+        JEV_VERSION: ${{ inputs.version }}
+        # Exported for the CLI to resolve. Never echoed: the whole point of the
+        # key resolver is that a secret does not reach a log line.
+        TYPESAFE_API_KEY: ${{ inputs.api-key }}
+      run: |
+        # No `-e`: a non-zero exit from the CLI is the result being reported, not
+        # an error in this script. `-u` still catches a typo'd variable, and
+        # `pipefail` makes the CLI's status survive the `tee` below.
+        set -uo pipefail
+
+        args=()
+        summary_index=-1
+
+        case "$JEV_COMMAND" in
+          check)
+            if [ -z "$JEV_CLAIM" ]; then
+              echo "::error::command 'check' requires the 'claim' input"
+              exit 64
+            fi
+            if [ -z "$JEV_EVIDENCE_FILE" ]; then
+              echo "::error::command 'check' requires the 'evidence-file' input"
+              exit 64
+            fi
+            args=(check --claim "$JEV_CLAIM" --evidence "$JEV_EVIDENCE_FILE" --json)
+            ;;
+          gate)
+            if [ -z "$JEV_TOOL" ]; then
+              echo "::error::command 'gate' requires the 'tool' input"
+              exit 64
+            fi
+            args=(gate --tool "$JEV_TOOL" --args-json "$JEV_ARGS_JSON" --json)
+            ;;
+          *)
+            echo "::error::unknown command '$JEV_COMMAND'; expected 'check' or 'gate'"
+            exit 64
+            ;;
+        esac
+
+        if [ -n "$JEV_MODEL" ]; then
+          args+=(--model "$JEV_MODEL")
+        fi
+
+        if [ "$JEV_MOCK" = "true" ]; then
+          args+=(--mock)
+          # A mock result is a plumbing check, never a measurement. Saying so in
+          # the log is cheap; assuming a reader knows is how a fixture ends up in
+          # a status report.
+          echo "::warning::running against the offline mock — this result measures nothing about the model"
+        fi
+
+        # stdout and stderr are captured separately, and the separation is
+        # load-bearing. With `--json` the CLI writes one parseable document to
+        # stdout and everything diagnostic to stderr. Piping `2>&1` into a single
+        # file produced a `result-json` that was the document *plus* the
+        # diagnostics, which does not parse — and the entire reason to offer the
+        # output is so a later step can parse it.
+        out_file="$(mktemp)"
+        err_file="$(mktemp)"
+        set +e
+        npx --yes "jevcore-cli@${JEV_VERSION}" "${args[@]}" >"$out_file" 2>"$err_file"
+        code=$?
+        set -e
+
+        # Diagnostics go to the job log, where a human reads them...
+        cat "$err_file" >&2
+        # ...and the document to stdout, where the next step reads it.
+        cat "$out_file"
+
+        {
+          echo "exit-code=${code}"
+          echo 'result-json<<JEV_RESULT_EOF'
+          cat "$out_file"
+          echo 'JEV_RESULT_EOF'
+        } >> "$GITHUB_OUTPUT"
+
+        # The human line: the last non-empty line the CLI wrote to stderr, which is
+        # where it puts prose. Falls back to the exit code rather than to an empty
+        # string, because a caller annotating a pull request with nothing is worse
+        # than one annotating it with the number they can already see.
+        summary="$(grep -v '^[[:space:]]*$' "$err_file" | tail -n 1 || true)"
+        if [ -z "$summary" ]; then
+          summary="jev ${JEV_COMMAND} exited ${code}"
+        fi
+        {
+          echo 'summary<<JEV_SUMMARY_EOF'
+          echo "$summary"
+          echo 'JEV_SUMMARY_EOF'
+        } >> "$GITHUB_OUTPUT"
+
+        echo "::notice::jev ${JEV_COMMAND} exited ${code}: ${summary}"
+        rm -f "$out_file" "$err_file"
+
+        # The policy the caller asked for, applied here and nowhere else.
+        case "$JEV_FAIL_ON" in
+          never)
+            exit 0
+            ;;
+          contradicted)
+            if [ "$code" -eq 1 ]; then
+              echo "::error::the evidence contradicts the claim"
+              exit 1
+            fi
+            exit 0
+            ;;
+          deny-or-ask)
+            if [ "$code" -eq 1 ] || [ "$code" -eq 2 ]; then
+              echo "::error::the safety gate did not allow this call"
+              exit 1
+            fi
+            exit 0
+            ;;
+          any-nonzero)
+            exit "$code"
+            ;;
+          *)
+            echo "::error::unknown fail-on value '$JEV_FAIL_ON'"
+            exit 64
+            ;;
+        esac

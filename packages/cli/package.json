@@ -1,0 +1,68 @@
+{
+  "name": "jevcore-cli",
+  "version": "0.4.0",
+  "description": "The `jev` command-line tool: ask, check, rank, gate, egress and models over the jevcore decision core, for a shell or a CI job.",
+  "keywords": [
+    "cli",
+    "jev",
+    "typesafe",
+    "typesafe-ai",
+    "system-one",
+    "decision-model",
+    "ci",
+    "gate"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PerryLink/jevcore.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PerryLink/jevcore/issues"
+  },
+  "homepage": "https://github.com/PerryLink/jevcore#readme",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "bin": {
+    "jev": "./lib/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "src",
+    "docs",
+    "README.md",
+    "README-zh.md",
+    "README-es.md",
+    "README-pt.md",
+    "README-hi.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "jevcore": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

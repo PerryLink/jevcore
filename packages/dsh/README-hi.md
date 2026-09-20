@@ -249,6 +249,17 @@ Gates एक सादा boolean (`safety: false`) स्वीकार कर
 कोई अपरिचित value load पर key का नाम बताते हुए अस्वीकार कर दी जाती है, चुपचाप
 अनदेखी नहीं की जाती — एक config typo को privacy posture चुपचाप नहीं बदलनी चाहिए।
 
+### वहाँ safety gate चालू करना जहाँ कोई जवाब नहीं दे सकता
+
+Gate `allow`, `deny`, या `ask` में जवाब देता है, और `ask` उसका जवाब है — किसी उठाए गए hazard के लिए
+भी और किसी undecided verdict के लिए भी। एक `ask` को approval channel चाहिए: जो deployment कोई
+approval service compose नहीं करता, वह किसी इंसान तक बात नहीं बढ़ा सकता, और harness उस पूछताछ को
+call चलाने के बजाय अस्वीकार में बदल देता है। Gate tool नाम के fragment से मेल करता है, और उसकी सूची
+में `pwsh`, `bash`, `git`, `write` और `edit` शामिल हैं, इसलिए जो वहाँ इसे चालू करता है, वह आम shell
+commands और file edits को fail होते देखता है। इसे वहाँ चालू करें जहाँ कोई channel सवाल किसी इंसान
+तक पहुँचा सके, और यह जानने के लिए कि वह channel कौन देता है,
+[docs/approval.md](docs/approval.md) पढ़ें।
+
 ---
 
 ## इसे इस्तेमाल करना
@@ -285,6 +296,9 @@ const result = await jev.ask({
 - **`jev_ask`** — एक state पर typed सवालों का batch।
 - **`jev_rank`** — एक criterion पर candidates को score और sort करें, प्रति candidate एक सवाल एक
   ही round-trip में। Probabilities प्रति-candidate स्वतंत्र निर्णय हैं, कोई distribution नहीं।
+  सूची सीमित है: हर candidate एक fixed 4,000-character budget में एक सवाल जोड़ता है, इसलिए default
+  criterion के साथ 20 candidates फिट होते हैं, 100-character criterion के साथ 17, और इससे लंबी सूची
+  को error के साथ अस्वीकार कर दिया जाता है, उन्हीं तक काटा नहीं जाता जो फिट होते हैं।
 - **`jev_check`** — क्या यह evidence इस claim का समर्थन करता है? `supported`, `contradicted`,
   `conflicted`, `insufficient`, `undecided`, या `unknown` लौटाता है। Contradiction, support से ऊपर है, क्योंकि जो evidence
   समर्थन और खंडन दोनों करता है वह एक conflict है, कोई कमज़ोर हाँ नहीं।

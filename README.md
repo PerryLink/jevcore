@@ -255,6 +255,12 @@ value rather than the declared one, so what it prints is what is enforced.
 Gates accept a bare boolean (`safety: false`) or an object with `onUndecided`: `ask` (default),
 `allow`, or `deny`.
 
+`ask` is a question, so it needs something to ask. A deployment that composes no approval service
+cannot escalate to a human, and DeepSeek Harness then refuses the call instead of running it: every
+tool the safety gate matches is refused, which an operator experiences as the plugin having broken
+shell commands. [docs/approval.md](docs/approval.md) has the mechanism, and the plugin README covers
+the deployment view.
+
 An unknown value is rejected at load with a message naming the key, rather than being silently
 ignored — a config typo should not quietly change the privacy posture.
 

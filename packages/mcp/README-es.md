@@ -75,6 +75,12 @@ de Jev que distribuyen diez herramientas cada uno; este existe para el caso en q
 host quiere las tres primitivas y nada más, construido sobre el mismo core que el
 plugin de DeepSeek Harness para que los dos no puedan divergir.
 
+`jev_rank` acepta una lista acotada, no lo mejor de una lista cualquiera. Cada candidato añade una pregunta a
+un presupuesto fijo de 4,000 caracteres sobre el mapa de preguntas, y una lista que no cabe se rechaza
+con un error, no se trunca a los primeros N que sí caben: con el criterio por defecto caben 20
+candidatos, con un criterio de 100 caracteres 17, y con uno de 500 caracteres 6. Mantén cortas las
+listas de candidatos, conciso el criterio, y divide una lista larga en lotes.
+
 Cada resultado lleva probabilidades, no decisiones. Aplica tu propio umbral de
 confianza antes de actuar, y trata una respuesta de baja confianza como desconocida en
 lugar de elegir por ella.

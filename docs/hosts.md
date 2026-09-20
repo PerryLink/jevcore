@@ -484,6 +484,11 @@ permissions. Two consequences for host configuration:
   resolves a verdict itself (`supported` / `contradicted` / `conflicted` /
   `insufficient` / `unknown`) from three probabilities with fixed thresholds.
 
+Two pages cover what a host cannot see from here: [approval.md](./approval.md)
+for what a gate's `ask` becomes when the deployment composes no approval service
+(the host denies the call), and [limits.md](./limits.md) for what a call's
+timeout really bounds and how many candidates one `jev_rank` call can carry.
+
 ### 9.5 Reading an answer
 
 A `score` answer's number may fall **between** levels, and its `legend` maps each

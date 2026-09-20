@@ -73,6 +73,12 @@ default है, `typesafe/` किसी versioned id जैसे `typesafe/jev
 ship करते हैं; यह वाला उस स्थिति के लिए है जहाँ host को तीनों primitives चाहिए
 और कुछ नहीं, और यह DeepSeek Harness plugin के समान core पर बना है ताकि दोनों भटक न सकें।
 
+`jev_rank` किसी भी सूची में से सबसे अच्छे नहीं, बल्कि एक सीमित सूची स्वीकार करता है। हर candidate
+question map के एक fixed 4,000-character budget में एक सवाल जोड़ता है, और जो सूची फिट नहीं होती वह
+error के साथ अस्वीकार कर दी जाती है, पहले N तक काटी नहीं जाती: default criterion के साथ 20
+candidates फिट होते हैं, 100-character criterion के साथ 17, और 500-character criterion के साथ 6।
+candidate सूचियाँ छोटी रखें, criterion संक्षिप्त रखें, और लंबी सूची को batches में बाँटें।
+
 हर result probabilities लिए हुए आता है, निर्णय नहीं। कार्रवाई से पहले अपनी खुद की confidence
 threshold लगाएँ, और कम-confidence वाले उत्तर को unknown मानें, उसके लिए चुनाव
 करने के बजाय।

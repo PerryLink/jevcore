@@ -75,6 +75,12 @@ ship ten tools each; this one exists for the case where a host wants the three
 primitives and nothing else, built on the same core as the DeepSeek Harness
 plugin so the two cannot drift.
 
+`jev_rank` accepts a bounded list rather than the best of any list. Each candidate adds one question
+to a fixed 4,000-character budget on the question map, and a list that does not fit is refused with an
+error, not truncated to the first N that do: with the default criterion 20 candidates fit, with a
+100-character criterion 17, and with a 500-character one 6. Keep candidate lists short, keep the
+criterion terse, and split a long list into batches.
+
 Every result carries probabilities, not decisions. Apply your own confidence
 threshold before acting, and treat a low-confidence answer as unknown rather than
 picking for it.

@@ -499,6 +499,11 @@ tool that will never carry them.
 
 The tool schemas in your host are the authority for what that host accepts.
 
+Two pages carry the boundaries this table only names:
+[approval.md](./approval.md) for what a gate's `ask` becomes when the deployment
+composes no approval service, and [limits.md](./limits.md) for the request
+timing, cost accounting, ranking cap, and mock behaviour.
+
 ---
 
 ## 8. Next

@@ -33,7 +33,7 @@ import {
   type JevConfigInput,
   type JevProvider,
 } from 'jevcore'
-import type { JevCallRecord } from 'jevcore'
+import type { JevCallRecord, SeverityLevel } from 'jevcore'
 import { jevAskTool } from './ask.js'
 import { jevCheckTool } from './check.js'
 import { jevRankTool } from './rank.js'
@@ -91,6 +91,14 @@ export const CONFIG_DOC = {
   requestMaxRetries: DEFAULT_CONFIG.requestMaxRetries,
   minConfidence: DEFAULT_CONFIG.minConfidence,
   minProbability: DEFAULT_CONFIG.minProbability,
+  // Annotated, and the annotation is load-bearing rather than decorative.
+  // `jevcore`'s `exports` map publishes only `.` and `./package.json`, so a type
+  // inferred from a deep module is not nameable portably and `tsc` refuses to
+  // emit it: TS2742, "cannot be named without a reference to
+  // ../node_modules/jevcore/lib/config.js". Naming the union through the package
+  // entry is what keeps the declaration portable. The value still comes from
+  // `DEFAULT_CONFIG`, so it cannot drift from the real default.
+  safetySeverityBlock: DEFAULT_CONFIG.safetySeverityBlock as SeverityLevel,
   gates: {
     safety: { enabled: false, onUndecided: 'ask' },
     context: { enabled: false, onUndecided: 'ask' },
@@ -145,25 +153,38 @@ const readCredentials = (ctx: Context): CredentialsLike | undefined => {
  *
  * `JevService.history` is appended in `record()`, which runs when a call
  * *finishes*, not when it starts. Two concurrent judgments therefore land in
- * completion order, and `recent()` handed that order straight to callers: a call
+ * completion order, and `recent()` hands that order straight to callers: a call
  * that started first is reported after one that started later. With the three
  * tools now opted into the host's parallel pool (each declares
  * `isConcurrencySafe`), that ordering is reachable in ordinary use rather than
  * theoretical.
  *
- * Where the fix belongs: a monotonic `seq` stamped in `record()` and sorted
- * before the history is truncated. `JevCallRecord` has no such field and
- * `JevService.record` lives in the core, which this package does not own, so
- * `at` - the send time, stamped before the provider call - is the only ordering
- * key available at this call site. Sorting by it restores send order; calls that
- * share a millisecond keep the order they were recorded in, because
- * `Array.prototype.sort` is stable. Truncation still happens inside the core,
- * *before* anything here can reorder it, so with more concurrent calls than
- * `historyLimit` **which** records survive remains scheduling-dependent. That is
- * the part this package cannot fix, and it is recorded as an upstream item.
+ * **Upstream has since made the history order well defined, and this function is
+ * still not redundant — the two orders are different.** `JevCallRecord.seq` is
+ * now a monotonic stamp assigned when a record is appended, and `recent()` returns
+ * `Object.freeze([...this.history])` documented as "Ordered by
+ * {@link JevCallRecord.seq} — append order" (`packages/core/src/service.ts`).
+ * Append order is completion order: `seq` fixes *which* order the history has, not
+ * whether it is the order the calls were sent in. Sorting by `at` — the send time,
+ * stamped before the provider call — is still the only way to get send order, and
+ * send order is what this plugin's `recent()` reports.
  *
- * The copy is not a nicety: `recent()` returns the service's own array, so
- * sorting it in place would rewrite the service's history.
+ * So this is a presentation choice on top of a now-deterministic history, not a
+ * workaround for a missing key. If a consumer would rather have append order (and
+ * the milliseconds-resolution ties that order avoids), deleting this function and
+ * calling `recent()` directly is a two-line change: the service's `recent` field
+ * below, plus the three tests that exercise the helper in `test/plugin.test.ts`.
+ *
+ * Two caveats worth knowing either way. Calls that share a millisecond keep the
+ * order they were recorded in, because `Array.prototype.sort` is stable — with
+ * `seq` behind them that fallback is now well defined. And truncation happens
+ * inside the core, before anything here can reorder it, so with more concurrent
+ * calls than `historyLimit` **which** records survive is still append-ordered
+ * rather than send-ordered.
+ *
+ * The copy is belt-and-braces now that `recent()` returns a frozen copy, but it
+ * stays: this function must not mutate the array it is handed, and it is called
+ * with hand-built arrays in tests as well as with `recent()`.
  */
 export const orderRecent = (records: readonly JevCallRecord[]): JevCallRecord[] =>
   [...records].sort((left, right) => left.at - right.at)
@@ -273,6 +294,27 @@ export const buildRuntime = (
   return { service, egress, provider: keyedProvider, config }
 }
 
+/**
+ * Whether an approval channel is mounted on this context.
+ *
+ * Read through Cordis's reflect registry — `ctx.get('approval')` — because that is
+ * the read the tool runtime itself performs when it resolves an `ask`, so this
+ * answers the same question rather than a lookalike. Cast-free: Cordis declares a
+ * `string → any` overload for unknown names, and the value is widened to `unknown`
+ * on the spot, so nothing here depends on the service's shape. Every shipped DSH
+ * caller reads it the same way (`tool-fs`, `tool-pwsh`, `tool-bash`, `subagent`,
+ * `plugin-manager`), which is what makes the detection portable across contexts.
+ *
+ * Only *presence* is asked. A mounted service whose policy is `never` is a
+ * deliberate deployment stance that auto-rejects asks; no service at all is the
+ * surprise this exists to report, and reading the policy would mean reaching into
+ * an untyped config object to second-guess it.
+ */
+export const hasApprovalChannel = (ctx: Context): boolean => {
+  const approval: unknown = ctx.get('approval')
+  return approval !== undefined
+}
+
 /** Cordis plugin entry: register the service, the tools, and any enabled gates. */
 export function apply(ctx: Context, input?: JevConfigInput): void {
   const config = resolveConfig(input)
@@ -333,11 +375,35 @@ export function apply(ctx: Context, input?: JevConfigInput): void {
 
   // Gate: judge tool calls before dispatch. Off by default.
   if (config.gates.safety.enabled) {
+    // An `ask` decision needs somewhere to go, and DSH resolves that seam
+    // opportunistically: with no ApprovalService mounted, its tool runtime turns
+    // every `ask` into a *denial* that keeps the reason string supplied here
+    // (`packages/core/tools/src/index.ts` - "approval support turns `ask` into
+    // denial"). The operator then reads this gate's own "Approve to proceed" on a
+    // call that was refused outright, with no control anywhere able to approve it.
+    // Absence is knowable before the first tool call, so it is said once at startup
+    // rather than discovered one denied command at a time.
+    //
+    // A warning rather than a refusal: a deployment may enable this gate precisely
+    // for its deny-on-uncertainty behaviour and never need an approval at all.
+    if (!hasApprovalChannel(ctx)) {
+      logger.warn(
+        '[jevcore] the safety gate is enabled but no approval service is mounted: every "ask" ' +
+          'decision becomes a denial, so a call Jev is unsure about is refused with this gate\'s ' +
+          'own reason and nothing can approve it. Compose @deepseek-ai/dsh-user-approval, or ' +
+          'raise the gate thresholds so it stops asking.',
+      )
+    }
     const gate = createSafetyGate({
       service: runtime.service,
       onUndecided: config.gates.safety.onUndecided,
       minConfidence: config.minConfidence,
       minProbability: config.minProbability,
+      // Forwarded, not defaulted here. The severity dimension was added to the
+      // core gate and this call did not pass it, so an operator configuring a
+      // block level would have set a value nothing read — the same shape of
+      // defect as a documented option the code never consults.
+      severityBlock: config.safetySeverityBlock,
       describeContext: () => {
         const cwd = (ctx as unknown as { cwd?: string }).cwd
         return cwd === undefined ? undefined : `workspace: ${cwd}`

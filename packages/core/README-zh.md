@@ -93,6 +93,13 @@ const verdict = applyPolicy(answer, ['low', 'medium', 'high'], {
 以及结果上的一个 `warning` 字段。
 一个可能被误认为真实判断的 mock，会比完全没有 mock 更糟。
 
+它变化的东西比这句话听起来要窄，而且有一个输入它从不读取，那就是问题的
+`instructions` 文本：哈希只覆盖问题的 id 和请求的 state。因此，同一个 id、同一个
+state 下两个措辞不同的问题会得到同一个答案，mock 也就无法告诉你一个提示词的措辞
+好不好。声明的判据同样不进入哈希，但它们仍然决定答案的形状 —— `choice` 答案把它的一份
+概率摊在你声明的那些标签上，`score` 答案摊在你声明的层数上。两者报告的置信度都固定为
+0.5。[docs/limits.md](docs/limits.md) 列出了离线路径没有建模的其他东西。
+
 ## 开发
 
 ```sh

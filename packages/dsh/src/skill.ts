@@ -89,7 +89,37 @@ export const loadSkill = (moduleUrl: string = import.meta.url): ParsedSkill => {
   return parseSkill(document)
 }
 
-/** The registry fields for the bundled skill, plus its body. */
+/**
+ * The registry fields for the bundled skill, plus its body.
+ *
+ * **`whenToUse` is provider metadata, not routing.** Verified against DeepSeek
+ * Harness rather than assumed, because the field reads as though the model
+ * consumes it:
+ *
+ *  - the registration contract declares it *optional*
+ *    (`packages/skill/skill/src/index.ts`, `SkillSummary.whenToUse?: string`, and
+ *    `SkillRegistration` omits only `invocation` and `provider`);
+ *  - nothing model-facing renders it. The catalog the model is given lists name
+ *    and a length-capped description, and the loaded wrapper does not render it
+ *    either — "the catalog omits `whenToUse` … routing is based only on name and a
+ *    capped description" (`packages/skill/tool-skill/README.md`, "Known
+ *    Limitations"), asserted in that package's own test at
+ *    `tests/tool-skill.spec.ts` (`expect(rendered).not.toContain('whenToUse')`,
+ *    with a fixture whose value reads "Never render this routing hint.").
+ *
+ * It is kept, not dropped, because it is not *unreachable*: DSH forwards it into
+ * the client-facing skill catalog (`packages/api/session-controller/src/
+ * skill-catalog.ts`, which maps `skill.whenToUse` into `SkillEntry.whenToUse`)
+ * that the Web composer fetches. No shipped client component reads that field
+ * today, so this value is currently inert — but it is part of a protocol payload,
+ * and removing it here would be a silent change to that payload rather than a
+ * cleanup. A maintainer who wants it gone should change this test and the note in
+ * `test/skill.test.ts` deliberately.
+ *
+ * Do not "make it work" by folding it into `description`: the description is
+ * capped and rendered in every session's catalog, and it already carries the
+ * routing guidance the model needs.
+ */
 export const skillRegistration = (moduleUrl?: string) => {
   const skill = loadSkill(moduleUrl)
   return {

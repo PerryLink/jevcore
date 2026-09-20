@@ -4,6 +4,175 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.0 — 2026-09-21
+
+Four surfaces over one decision core now, and most of this release is about the
+places where they had quietly stopped agreeing with it. The headline item is a
+defect that had been shipping since the safety gate existed and that no test could
+see, because the gate's own error handling turned it into a plausible answer.
+
+### Fixed
+
+- **The `credential_exposure` hazard never reached Jev.** `EgressContract`
+  redacted the question map with the key rules on, and a key rule replaces a value
+  whose *field name* looks secret-bearing. The hazard id `credential_exposure`
+  matches `/credential/i`, so its entire question was replaced by the string
+  `"[redacted]"` before transmission — 160 characters of a declared
+  1,774-character payload. On the live route the API received a string where a
+  question object belongs. On the offline route, which is the default and what
+  every test ran against, the mock threw
+  `TypeError: Cannot convert undefined or null to object`. The safety gate catches
+  provider errors and routes them through `onUndecided`, whose default is `ask`,
+  so a gate that had stopped judging anything returned exactly the decision a
+  careful gate returns. Nothing failed; nothing was asked either.
+
+  The question map is redacted with the value rules only now — question ids key
+  the answers, so they are protocol identifiers rather than field names — and
+  `measure` asserts the shape survived, raising `EgressShapeError` instead of
+  letting a reshaped map become a silent `ask`. `state` still gets both passes, so
+  a credential in the payload is still redacted.
+
+  The test that should have caught this compared the *keys* of the transmitted map
+  against the declared one. The keys were never the problem.
+
+- **The MCP tools never reported that they had truncated.** `EgressContract` caps
+  `state` by truncating it, deliberately. All three MCP handlers build their own
+  result objects rather than going through the core's `renderResult`, and all
+  three dropped `truncated` and `egress`. Measured: ten candidates of 4,000
+  characters are 40,271 characters of state, 16,000 of them are sent, and
+  `runRank` returned all ten original strings beside their scores with nothing to
+  say that six had been reduced to fragments.
+
+- **The DSH `jev_rank` and `jev_check` tools dropped the same two fields**, for the
+  same reason and out of the same kind of hand-built return object. `jev_ask`
+  returns `renderResult(...)` directly and was unaffected.
+
+- **The TypeSafe SDK's `debug` log level writes request bodies verbatim**, with
+  credential headers redacted and bodies not (`@typesafe-ai/sdk` 0.6.0,
+  `dist/index.d.mts:210-215`). It was reachable from this plugin: `logLevel`
+  accepts `'debug'`, and both the DSH plugin and the MCP runtime forwarded it. Both
+  routes now clamp to a body-safe level through one shared client builder, and body
+  logging requires an explicit `allowSdkBodyLogging` opt-in that says what it does.
+
+- **The safety gate's reason told operators to approve a call that had been
+  denied.** With no approval service mounted, the DSH host turns `ask` into `deny`
+  and carries the gate's own reason text into the refusal, so a deployment with no
+  approver saw "Approve to proceed" attached to a call that was refused. The reason
+  now names the hazards and the severity factually, and the plugin warns at startup
+  when the gate is enabled and nothing in the deployment can approve anything.
+
+- **The rank candidate cap was enforced but undocumented**, so a caller passing too
+  many candidates got an error it could not explain. It is a 4,000-character cap on
+  the generated questions — refused, never truncated — which is 20 candidates under
+  the default criterion and 7 under a 400-character one. Both the DSH and the MCP
+  tool descriptions now state it, derived from the contract rather than typed in,
+  with tests that fail if the prose and the enforcement drift apart.
+
+- **The CLI's `gate` dry run said the safety gate does not ask a severity
+  question** and dropped the severity from its output. Both were true before this
+  release and neither is now.
+
+### Added
+
+- **`jev` — a command line over the same decision core** (new package
+  `jevcore-cli`). `ask`, `check`, `rank`, `gate`, `egress` and `models`, each with
+  `--json` and a documented exit-code contract. `jev gate` is the one worth
+  knowing: it dry-runs the safety gate against a hypothetical tool call, so an
+  operator or a CI job can see the decision without running anything and without a
+  DSH session.
+
+- **A GitHub Action** (`.github/actions/jev-check`) wrapping the CLI's `check` and
+  `gate`. Its default is `fail-on: never`: a Jev call returns a probability, and
+  what that probability is allowed to authorise belongs to the workflow that owns
+  it rather than to this action. Workflow inputs arrive through the environment
+  instead of by interpolation into the script text, because a claim can come from a
+  pull request body.
+
+- **A resilience layer, inert unless asked for**: an answer cache keyed on the
+  *measured* payload, a hard ceiling on calls and spend, and a consecutive-failure
+  breaker that honours `Retry-After`. The cache cannot be enabled for
+  `gate:safety` — a gate verdict is about one call, not about a reusable input —
+  and a cache constructed without an explicit allow/exclude decision caches
+  nothing. A budget refusal and an open breaker throw before the provider is
+  touched, so neither is recorded as a provider failure, and a cache hit does not
+  increment `transmitted` because nothing left the machine.
+
+- **`JevService.askMany`**: N independent states with bounded concurrency and
+  per-item failure isolation. Not a batching discount, and it cannot be one — the
+  wire format carries exactly one `state` per request.
+
+- **`runRepeated`**, a reusable form of the self-consistency measurement this
+  project had been performing by hand. It measures agreement, not correctness, and
+  its doc comment is emphatic about the difference because a small spread is easy
+  to over-read.
+
+- **`x-typesafe-request-id` is now read and surfaced.** The SDK assigns it on the
+  *response* and exposes it through `APIPromise.withResponse()`, which this package
+  was not calling, so the id was being discarded. None is invented and none is
+  sent: whether the service accepts a client-supplied one is undocumented, and
+  therefore untested here.
+
+- **A model catalogue and an alias-drift check.** `jev-latest` and `jev-preview`
+  move, and the SDK's own default when no model is configured is `jev-latest`, so
+  "I did not choose a model" silently means "whatever is newest". The catalogue
+  cannot resolve an alias; the response's `model` field can. `checkAliasDrift`
+  therefore needs an observed answer and reports `unknown` without one.
+
+- **A severity dimension for the safety gate**, so that "delete a scratch file" and
+  "drop the production database" stop gating identically. One `score` question over
+  a documented five-rung ladder, a configurable `safetySeverityBlock` defaulting to
+  `high`, and a test that runs eighteen fixtures through a transcription of the
+  pre-severity decision and asserts the new one is never *less* strict.
+
+- **`seq` on every call record**, so `recent()` has a defined order that does not
+  depend on wall-clock ties. `recent()` also returns a frozen copy now rather than
+  the service's live internal array.
+
+- **`costAccounting` and `callsWithoutCost` on `JevStats`.** `totalCostUsd` is
+  always `0` on the official route, because `Usage` has no cost field at all
+  (`dist/index.d.mts:121-126`) — a confident-looking zero that means "unknown". The
+  new field says which of the two a zero is.
+
+- **An `onRecord` observer hook** for a metrics or logging surface. An observer
+  that throws never fails the Jev call.
+
+- **The four `docs/` pages now ship inside every package.** They were in no
+  package's `files` array, so an npm install produced a plugin with no quickstart
+  and no statement of its deployment boundaries while the repository looked
+  complete. They are generated copies kept in sync by
+  `scripts/sync-package-docs.mjs`, guarded by `check:docs`, and named in the CI step
+  that verifies each tarball — because what a gate does not name, it does not
+  protect.
+
+- **`docs/approval.md`** documents the deployment boundary that bites: `ask` needs
+  something that can ask a human, and a deployment without one gets a denial
+  carrying the gate's own reason. **`docs/limits.md`** collects what the project
+  does not do — the per-attempt timeout with no total retry budget, what a zero cost
+  means, the ranking cap, what the offline mock ignores, and what has never been
+  measured.
+
+- **`scripts/check-workflow-shell.mjs`**, a gate for a trap that had already caught
+  this repository twice: bash performs command substitution on backticks inside a
+  `run:` block before the program in that block sees the text, so a backtick in a
+  JavaScript comment is executed as a command.
+
+### Changed
+
+- **Package README links to the documentation now resolve inside the tarball.**
+  `../../docs/limits.md` escapes the installed package; `docs/limits.md` resolves
+  both on the forge and after `npm install`, which is the entire point of shipping
+  the documents.
+
+- **`packages/cli` is part of the release**: the tag-to-manifest check, the
+  trusted-publishing diagnostic, the publish order (core first, because every other
+  package depends on it) and the five-language README gate all name it now.
+
+- **`skillRegistration` still returns `whenToUse`, and that is a finding rather
+  than an omission.** It is not rendered to the model, which is what an earlier
+  audit concluded — but the host forwards it into the client-facing skill catalog,
+  so removing it would drop a protocol payload field. The doc comment records what
+  was checked, so nobody re-opens it from the same wrong premise.
+
 ## 0.3.1 — 2026-09-20
 
 Documentation and one script. Nothing about how the packages behave changed, but

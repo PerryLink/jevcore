@@ -82,3 +82,49 @@ describe('the bundled skill', () => {
     expect(parsed.frontMatter.description.length).toBeGreaterThan(80)
   })
 })
+
+/**
+ * The contract the registry on the other side of `ctx.skills.register()` applies.
+ *
+ * The sources these assertions come from, so a reader can re-check them instead of
+ * trusting a comment: DeepSeek Harness `packages/skill/skill/src/index.ts` (the
+ * registration contract, the name pattern, and `validateRuntimeSkill`, which
+ * checks name, description and invocation only) and
+ * `packages/skill/tool-skill/README.md` with its `tests/tool-skill.spec.ts` (the
+ * model-facing catalog renders name and a capped description, and never
+ * `whenToUse`).
+ */
+describe('the registration the registry receives', () => {
+  it('pins the key set, because the registry silently ignores fields it does not know', () => {
+    // A misspelled field is registered and does nothing: unknown keys are not
+    // rejected. Pinning the keys is what makes adding or dropping one deliberate.
+    expect(Object.keys(skillRegistration()).sort()).toEqual([
+      'content',
+      'description',
+      'name',
+      'whenToUse',
+    ])
+  })
+
+  it('names the skill in the form the registry matches and the model routes by', () => {
+    // The registry's own pattern: a name that does not match it is rejected at
+    // registration time, and the catalog addresses the skill by this name.
+    expect(SKILL_NAME).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    expect(skillRegistration().name).toBe(SKILL_NAME)
+  })
+
+  it('carries `whenToUse` as provider metadata, which the model never sees', () => {
+    // Kept on purpose, and this test exists so that dropping it is a decision
+    // rather than a tidy-up: DSH forwards it into the client-facing skill catalog,
+    // so it is part of a protocol payload even though no model-facing renderer
+    // reads it and no shipped client component displays it yet. See the note on
+    // `skillRegistration`.
+    const { whenToUse, description } = skillRegistration()
+    expect(typeof whenToUse).toBe('string')
+    expect(whenToUse.length).toBeGreaterThan(0)
+    // And it is not folded into the one field the model does read: the catalog
+    // description is capped and is rendered in every session, so a routing hint
+    // duplicated there would be paid for on every step.
+    expect(description).not.toContain(String(whenToUse))
+  })
+})

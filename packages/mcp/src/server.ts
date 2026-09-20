@@ -174,10 +174,25 @@ export const createServer = (service: JevService, version: string = packageVersi
         'candidate with an independent relevance probability, sorted. Use it to order search ' +
         'hits, triage a backlog, or find the one item that answers a question.\n\n' +
         'The probabilities are independent per-candidate judgments, NOT a distribution that sums ' +
-        'to 1. A flat set of scores means "none of these stands out", not a fine-grained ordering.',
+        'to 1. A flat set of scores means "none of these stands out", not a fine-grained ordering.\n\n' +
+        'What you send is capped, and the two caps behave differently. The candidate list is ' +
+        'truncated at 16,000 characters, and the reply carries `truncated: true` when that ' +
+        'happens — check for it, because a cut list is still ranked and the scores then describe ' +
+        'what Jev actually read rather than what you sent. The generated questions are refused ' +
+        'at 4,000 characters instead: exceeding that gives you an error asking for fewer or ' +
+        'smaller items, never a silent best-N, so retrying the same call cannot help. Because ' +
+        "the criterion is repeated into every candidate's question, that second cap is what " +
+        'bounds the candidate count — measured, an ordinary criterion fits 20 candidates and a ' +
+        '400-character criterion fits 7, while candidate length does not change the count at ' +
+        'all and only starts truncating the list past roughly 1,600 characters per candidate.',
       inputSchema: {
         query: z.string().describe('The task or question the candidates are ranked against.'),
-        candidates: z.array(z.string()).describe('One string per candidate.'),
+        candidates: z
+          .array(z.string())
+          .describe(
+            'One string per candidate. The serialized list is truncated at 16,000 characters, ' +
+              'and the reply reports `truncated: true` when it was cut.',
+          ),
         criterion: z
           .string()
           .optional()

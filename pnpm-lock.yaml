@@ -18,6 +18,22 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@22.20.4)
 
+  packages/cli:
+    dependencies:
+      jevcore:
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.4
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.4)
+
   packages/core:
     devDependencies:
       '@types/node':

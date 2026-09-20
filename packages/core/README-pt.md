@@ -93,6 +93,15 @@ sintéticos são rotulados em três lugares — `provider: "mock"`, um nome de
 modelo `mock/jev-synthetic` e um campo `warning`. Um mock que pudesse ser confundido
 com um julgamento real seria pior do que nenhum mock.
 
+O que ele varia é mais estreito do que isso sugere, e há uma entrada que ele nunca lê: o texto
+`instructions` da pergunta. O hash cobre apenas o id da pergunta e o estado da requisição. Duas
+perguntas com redação diferente, com o mesmo id sobre o mesmo estado, recebem portanto a mesma
+resposta, então o mock não consegue dizer se um prompt está bem redigido. Os critérios declarados
+também não entram no hash, mas ainda moldam a resposta: uma resposta `choice` distribui seus pesos
+entre os rótulos que você declarou, e uma `score` entre o número de níveis. Ambas informam uma
+confiança fixa de 0.5. [docs/limits.md](docs/limits.md) lista o resto do que o caminho offline
+não modela.
+
 ## Desenvolvimento
 
 ```sh

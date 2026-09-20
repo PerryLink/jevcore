@@ -252,6 +252,17 @@ Os gates aceitam um booleano puro (`safety: false`) ou um objeto com `onUndecide
 Um valor desconhecido é recusado no carregamento com uma mensagem que nomeia a chave, em vez de ser
 silenciosamente ignorado — um erro de digitação na configuração não deveria mudar a postura de privacidade em silêncio.
 
+### Habilitar o gate de safety onde ninguém pode responder
+
+O gate responde `allow`, `deny` ou `ask`, e `ask` é a resposta tanto para um perigo sinalizado quanto
+para um veredito que não consegue decidir. Um `ask` precisa de um canal de aprovação: uma implantação
+que não compõe nenhum serviço de aprovação não consegue escalar para um humano, e o harness resolve a
+consulta como recusa em vez de executar a chamada. O gate casa por fragmento de nome de ferramenta, e
+sua lista inclui `pwsh`, `bash`, `git`, `write` e `edit`, então quem o habilita ali vê comandos de
+shell e edições de arquivo comuns falharem. Habilite-o onde houver um canal que consiga levar a
+pergunta a um humano, e leia [docs/approval.md](docs/approval.md) para saber o que fornece esse
+canal.
+
 ---
 
 ## Como usar
@@ -288,6 +299,9 @@ Três ferramentas, deliberadamente poucas e ortogonais:
 - **`jev_ask`** — um lote de perguntas tipadas sobre um único estado.
 - **`jev_rank`** — pontua e ordena candidatos segundo um critério, uma pergunta por candidato em uma
   única ida e volta. As probabilidades são julgamentos independentes por candidato, não uma distribuição.
+  A lista é limitada: cada candidato acrescenta uma pergunta a um orçamento fixo de 4.000 caracteres,
+  então cabem 20 candidatos com o critério padrão, 17 com um de 100 caracteres, e uma lista maior é
+  recusada com erro em vez de cortada até os que cabem.
 - **`jev_check`** — esta evidência sustenta esta afirmação? Devolve `supported`, `contradicted`,
   `conflicted`, `insufficient`, `undecided` ou `unknown`. A contradição tem precedência sobre o suporte, porque evidência que
   sustenta e refuta ao mesmo tempo é um conflito, não um sim fraco.

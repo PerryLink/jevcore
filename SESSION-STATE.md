@@ -1,6 +1,14 @@
 # Session state — dsh-jev
 
-Last updated: 2026-09-20 (round 2). Read this first when resuming.
+Last updated: 2026-09-21 (round 3). Read this first when resuming.
+
+**Current state.** Four packages (`core`, `dsh`, `mcp`, `cli`) at version 0.4.0.
+855 tests pass (586 / 116 / 58 / 95) with no credential and no network, and
+`pnpm run check` is green. Everything below this line was written in an earlier
+round and is kept because the reasoning in it still applies, but its numbers — and
+the sections titled "Verified live (round 5)" and "One cosmetic defect" — describe
+the state at the time they were written rather than now. Where they disagree with
+this paragraph, this paragraph is right.
 
 ## Where things stand
 
@@ -8,23 +16,29 @@ Last updated: 2026-09-20 (round 2). Read this first when resuming.
 |---|---|
 | 1. TypeSafe SDK issue drafts | **Done** — `../typesafe-sdk-issue-drafts.md`, four ready-to-paste issues |
 | 2. M0 scaffolding | **Done** |
-| 3. M1 offline core engine | **Done** — `packages/core`, 191 tests |
+| 3. M1 offline core engine | **Done** — `packages/core`, 586 tests |
 | 4. M2 service + 3 tools | **Code done and tested; live activation blocked on a restart** (see below) |
 | 5. M3 gates | **Done** — both opt-in, tested |
 | 6. M4 live verification | **Blocked** — needs a TypeSafe API key |
-| 7. Core split | **Done** — three packages, one decision layer |
-| 8. MCP entry | **Done** — `packages/mcp`, 21 tests, stdio binary verified offline |
+| 7. Core split | **Done** — four packages, one decision layer |
+| 8. MCP entry | **Done** — `packages/mcp`, 58 tests, stdio binary verified offline |
 | 9. DSH skill | **Done and shipped** — the skill is registered by the plugin (packages/dsh/skills/typesafe-ai-dsh/SKILL.md), so it works today; the upstream proposal in `../typesafe-dsh-skill-proposal.md` is now a courtesy offer rather than a dependency |
-| 10. Repo hygiene for publishing | **Done** — CONTRIBUTING, SECURITY, CHANGELOG, PUBLISHING, CI over all three packages |
+| 10. Repo hygiene for publishing | **Done** — CONTRIBUTING, SECURITY, CHANGELOG, PUBLISHING, CI over all four packages |
 | 11. MCP transport verification | **Done** — real stdio client drives the server end to end (pnpm --filter jevcore-mcp run smoke) |
 | 12. Actual publish + M4 | **Blocked** — needs your accounts and an API key |
 
-One unverified claim remains, stated in the README rather than glossed: the live
-provider has never made a real TypeSafe API call. The plugin's activation is no
-longer in doubt; see the Verified live section below.
+The live provider has now made real TypeSafe API calls. `pnpm --filter jevcore run
+probe:typesafe` ran twice against `api.typesafe.ai`: ten claim/evidence pairs whose
+verdict was known in advance, one question repeated six times, and a noul carrying
+a `criteria` boundary. Supporting evidence scored 0.95, contradicting evidence
+0.10, evidence silent about its claim 0.03, and the repeated question varied by
+0.01 and then by nothing. That is a small constructed sample, not calibration, and
+`docs/limits.md` states what remains unmeasured: quota, rate limits and entitlement
+on a real account, which need production traffic rather than a probe.
 
-**349 tests pass** (257 core, 63 dsh, 29 mcp) with no credential and no network
-access. `pnpm run check` is green. All three tarballs pack correctly.
+**855 tests pass** (586 core, 116 dsh, 58 mcp, 95 cli) with no credential and no
+network access. `pnpm run check` is green, including the documentation, legal-file,
+five-language README and workflow-shell gates. All four tarballs pack correctly.
 
 ## Repository layout
 
@@ -37,9 +51,10 @@ dsh-jev/
 │                               then a job that asserts each tarball contains
 │                               what the package needs to load
 └── packages/
-    ├── core/   jevcore    the decisions; no framework imports; 191 tests
-    ├── dsh/    jevcore-dsh  the DSH plugin; 4 source files; 60 tests
-    └── mcp/    jevcore-mcp     the same tools over MCP; 21 tests
+    ├── core/   jevcore        the decisions; no framework imports; 586 tests
+    ├── dsh/    jevcore-dsh    the DSH plugin; 116 tests
+    ├── mcp/    jevcore-mcp    the same tools over MCP; 58 tests
+    └── cli/    jevcore-cli    the `jev` command line; 95 tests
 ```
 
 `packages/dsh` and `packages/mcp` are both thin: they declare schemas, translate
@@ -58,7 +73,7 @@ The plugin is **active** and the wiring is proven end to end, not inferred:
 | No network on the default path | every result carried `provider="mock"` and `usage {inputTokens:0, outputTokens:0, costUsd:0}` |
 | Skill registers | `typesafe-ai-dsh` appeared in the session skill catalog |
 | MCP transport | `pnpm --filter jevcore-mcp run smoke` — handshake, discovery, 3 calls, error path |
-| Packages ship correctly | all three tarballs contain every required file, including `cordis.patch.yml` and `SKILL.md` |
+| Packages ship correctly | all four tarballs contain every required file, including `cordis.patch.yml` and `SKILL.md` |
 
 ## One cosmetic defect, already fixed on disk, needs one restart
 

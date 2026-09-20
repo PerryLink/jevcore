@@ -366,3 +366,171 @@ describe('no ambient credential is read', () => {
     spy.mockRestore()
   })
 })
+
+/**
+ * A stub of the SDK shaped the way the real `systemOne` is.
+ *
+ * The real call returns an `APIPromise`: awaitable, and *additionally* carrying
+ * `withResponse()`, which resolves `{ data, response, requestId }` where the id
+ * is read from `x-typesafe-request-id` on the response (`@typesafe-ai/sdk@0.6.0`,
+ * `dist/index.d.mts:3-10` and `:25-32`). The plain stub above resolves a bare
+ * promise, which is what a caller's own transport may do — both are exercised,
+ * because the provider has to survive either.
+ */
+const envelopeSdk = (body: unknown, requestId?: string) => {
+  const calls: StubCall[] = []
+  /** Whether `withResponse` was invoked with the promise as its receiver. */
+  const seen = { boundReceiver: false }
+  class StubClient {
+    readonly config: Record<string, unknown>
+    constructor(config: Record<string, unknown>) {
+      this.config = config
+    }
+    systemOne(
+      request: Record<string, unknown>,
+      options?: Record<string, unknown>,
+    ): Promise<unknown> {
+      calls.push({ config: this.config, request, options })
+      const pending = Promise.resolve(body) as Promise<unknown> & {
+        withResponse?: () => Promise<unknown>
+      }
+      pending.withResponse = function (this: unknown) {
+        // The SDK's `APIPromise` keeps its state in `#private` fields, so a
+        // detached call throws instead of degrading. Asserting the receiver is
+        // how that regression is caught without the vendor's class.
+        seen.boundReceiver = this === pending
+        return Promise.resolve(requestId === undefined ? { data: body } : { data: body, requestId })
+      }
+      return pending
+    }
+  }
+  return { module: { TypeSafeClient: StubClient as never }, calls, seen }
+}
+
+/** A stub whose `withResponse()` rejects, which is how a non-2xx arrives. */
+const rejectingEnvelopeSdk = (error: unknown) => {
+  class StubClient {
+    systemOne(): Promise<unknown> {
+      const pending = Promise.resolve() as Promise<unknown> & {
+        withResponse?: () => Promise<unknown>
+      }
+      pending.withResponse = () => Promise.reject(error)
+      return pending
+    }
+  }
+  return { module: { TypeSafeClient: StubClient as never } }
+}
+
+describe('the server-assigned correlation id', () => {
+  it('surfaces x-typesafe-request-id from the response', async () => {
+    const sdk = envelopeSdk(goodResponse, 'req_01HZX')
+    const provider = new LiveProvider({ apiKey: 'k', loadSdk: async () => sdk.module as never })
+    const result = await provider.answer(request())
+    expect(result.requestId).toBe('req_01HZX')
+  })
+
+  it('calls withResponse as a method on the promise, not detached', async () => {
+    // `APIPromise` stores its state in `#private` fields, so `const f =
+    // promise.withResponse; f()` throws `TypeError: Cannot read private member`.
+    // The provider must call it on the promise.
+    const sdk = envelopeSdk(goodResponse, 'req_01HZX')
+    const provider = new LiveProvider({ apiKey: 'k', loadSdk: async () => sdk.module as never })
+    await provider.answer(request())
+    expect(sdk.seen.boundReceiver).toBe(true)
+  })
+
+  it('reads the body out of the envelope the SDK hands back', async () => {
+    const sdk = envelopeSdk(goodResponse, 'req_01HZX')
+    const provider = new LiveProvider({ apiKey: 'k', loadSdk: async () => sdk.module as never })
+    const result = await provider.answer(request())
+    expect(result.model).toBe('jev-1.13.0')
+    expect(result.answers.urgent).toEqual({ type: 'noul', noul: 0.91 })
+  })
+
+  it('omits the field entirely when the endpoint sent no id', async () => {
+    // Absent, not `undefined`: a result that carries the key is one a caller can
+    // log as "correlated", and an absent id is not a correlation.
+    const sdk = envelopeSdk(goodResponse)
+    const provider = new LiveProvider({ apiKey: 'k', loadSdk: async () => sdk.module as never })
+    const result = await provider.answer(request())
+    expect('requestId' in result).toBe(false)
+  })
+
+  it('ignores an empty id rather than reporting a blank one', async () => {
+    const sdk = envelopeSdk(goodResponse, '')
+    const provider = new LiveProvider({ apiKey: 'k', loadSdk: async () => sdk.module as never })
+    expect('requestId' in (await provider.answer(request()))).toBe(false)
+  })
+
+  it('degrades to the plain promise when the transport has no withResponse', async () => {
+    // The behaviour every existing caller already has: an injected transport
+    // that resolves a bare promise is not an error, and the answer is unchanged.
+    const sdk = stubSdk(() => goodResponse)
+    const provider = new LiveProvider({ apiKey: 'k', loadSdk: async () => sdk.module as never })
+    const result = await provider.answer(request())
+    expect(result.answers.urgent).toEqual({ type: 'noul', noul: 0.91 })
+    expect('requestId' in result).toBe(false)
+  })
+
+  it('reports an unshaped withResponse result as a malformed response', async () => {
+    const provider = new LiveProvider({
+      apiKey: 'k',
+      loadSdk: async () => {
+        class StubClient {
+          systemOne(): Promise<unknown> {
+            const pending = Promise.resolve(goodResponse) as Promise<unknown> & {
+              withResponse?: () => Promise<unknown>
+            }
+            pending.withResponse = () => Promise.resolve('not an envelope')
+            return pending
+          }
+        }
+        return { TypeSafeClient: StubClient as never } as never
+      },
+    })
+    await expect(provider.answer(request())).rejects.toThrow(/not an object/)
+  })
+
+  it('sends no request-id header of its own', async () => {
+    // The id is the server's. A client-supplied value is documented nowhere by
+    // TypeSafe, and an id the server did not issue would send an operator
+    // looking for a request that does not exist on TypeSafe's side — so the only
+    // key the SDK is given is the signal.
+    const sdk = envelopeSdk(goodResponse, 'req_01HZX')
+    const provider = new LiveProvider({ apiKey: 'k', loadSdk: async () => sdk.module as never })
+    await provider.answer(request())
+    const options = sdk.calls[0]?.options ?? {}
+    expect(Object.keys(options)).toEqual(['signal'])
+    expect(options).not.toHaveProperty('headers')
+  })
+
+  it('carries the id on a failure too, which is when it is most needed', async () => {
+    const provider = new LiveProvider({
+      apiKey: 'k',
+      loadSdk: async () =>
+        rejectingEnvelopeSdk({ status: 429, requestId: 'req_err_9' }).module as never,
+    })
+    const failure = await provider.answer(request()).then(
+      () => {
+        throw new Error('the provider resolved, so there was no failure to inspect')
+      },
+      (error: unknown) => error as Record<string, unknown>,
+    )
+    expect(failure.code).toBe('rate-limited')
+    expect(failure.requestId).toBe('req_err_9')
+  })
+
+  it('adds no requestId key to a failure that had none', async () => {
+    const provider = new LiveProvider({
+      apiKey: 'k',
+      loadSdk: async () => rejectingEnvelopeSdk({ status: 500 }).module as never,
+    })
+    const failure = await provider.answer(request()).then(
+      () => {
+        throw new Error('the provider resolved, so there was no failure to inspect')
+      },
+      (error: unknown) => error as Record<string, unknown>,
+    )
+    expect('requestId' in failure).toBe(false)
+  })
+})

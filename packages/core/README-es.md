@@ -93,6 +93,15 @@ Los resultados sintéticos se etiquetan en tres lugares — `provider: "mock"`, 
 de modelo `mock/jev-synthetic` y un campo `warning`. Un mock que pudiera confundirse
 con un juicio real sería peor que ningún mock.
 
+Lo que varía es más estrecho de lo que eso sugiere, y hay una entrada que nunca lee: el texto
+`instructions` de la pregunta. El hash cubre únicamente el id de la pregunta y el estado de la
+petición. Dos preguntas redactadas de forma distinta con el mismo id sobre el mismo estado reciben por
+tanto la misma respuesta, así que el mock no puede decirte si un prompt está bien redactado. Los
+criterios declarados tampoco entran en el hash, pero siguen dando forma a la respuesta: una respuesta
+`choice` reparte sus pesos entre las etiquetas que declaraste, y una `score` entre el número de
+niveles. Ambas informan de una confianza fija de 0.5. [docs/limits.md](docs/limits.md) enumera el
+resto de lo que la ruta offline no modela.
+
 ## Desarrollo
 
 ```sh

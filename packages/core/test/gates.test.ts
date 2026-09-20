@@ -1,14 +1,25 @@
 import { describe, expect, it, vi } from 'vitest'
-import { EGRESS_FEATURES, EgressContract, type EgressFeature } from '../src/egress.js'
+import { SEVERITY_LEVELS, type SeverityLevel } from '../src/config.js'
+import {
+  EGRESS_FEATURES,
+  EGRESS_FIELDS,
+  EgressContract,
+  type EgressFeature,
+} from '../src/egress.js'
 import { createContextGate, CONTEXT_QUESTIONS, resultText } from '../src/gates/context.js'
 import {
   createSafetyGate,
   DEFAULT_GATED_TOOL_PATTERNS,
   HAZARD_QUESTIONS,
+  SAFETY_FEATURE,
+  SAFETY_QUESTIONS,
+  SEVERITY_QUESTION_ID,
+  SEVERITY_QUESTIONS,
   isGated,
   serializeArguments,
 } from '../src/gates/safety.js'
 import { MockProvider } from '../src/provider/mock.js'
+import { redact } from '../src/redact.js'
 import { JevService } from '../src/service.js'
 import { JevProviderError, type JevAnswer, type JevProvider } from '../src/types.js'
 
@@ -21,19 +32,47 @@ const service = (provider: JevProvider = new MockProvider()) =>
     egress: new EgressContract({ transmitting: true, enabled: allOn() }, 'https://api.typesafe.ai'),
   })
 
-/** A provider that answers every question with the given noul probability. */
-const answering = (noul: number): JevProvider => ({
+/**
+ * A score answer naming one rung of the declared ladder.
+ *
+ * The legend is built from the declared rubric so a fixture cannot quietly use a
+ * scale the gate does not send; `probabilities` is a point mass on the rung the
+ * fixture names, which is what makes it `decided` under the default floors.
+ */
+const severityAnswer = (level: SeverityLevel, confidence = 0.9): JevAnswer => {
+  const index = SEVERITY_LEVELS.indexOf(level)
+  const question = SEVERITY_QUESTIONS[SEVERITY_QUESTION_ID]
+  const criteria = question?.type === 'score' ? question.criteria : []
+  return {
+    type: 'score',
+    score: index,
+    legend: Object.fromEntries(criteria.map((description, i) => [String(i), description])),
+    probabilities: { [String(index)]: 0.95 },
+    confidence,
+  }
+}
+
+/**
+ * A provider that answers every question with the given noul probability and the
+ * severity score at the given level.
+ *
+ * Severity is answered here rather than left out on purpose: an unanswered
+ * severity is undecided, and undecided is asked about rather than waved through,
+ * so a fixture that omitted it would exercise that one path in every test
+ * instead of the path each test names.
+ */
+const answering = (noul: number, severity: SeverityLevel = 'none'): JevProvider => ({
   id: 'fixed',
   answer: async (_request, _signal) => ({
     model: 'm',
     provider: 'fixed',
     latencyMs: 1,
-    answers: Object.fromEntries(
-      Object.keys(HAZARD_QUESTIONS).map((key) => [
-        key,
-        { type: 'noul', noul } as JevAnswer,
-      ]),
-    ),
+    answers: {
+      ...Object.fromEntries(
+        Object.keys(HAZARD_QUESTIONS).map((key) => [key, { type: 'noul', noul } as JevAnswer]),
+      ),
+      [SEVERITY_QUESTION_ID]: severityAnswer(severity),
+    },
   }),
 })
 
@@ -236,8 +275,8 @@ describe('safety gate decisions', () => {
   })
 })
 
-describe('the hazard list is the disclosure', () => {
-  it('asks exactly the declared hazards', async () => {
+describe('the declaration is the disclosure', () => {
+  it('asks exactly the declared questions', async () => {
     let seen: Record<string, unknown> = {}
     const capture: JevProvider = {
       id: 'capture',
@@ -250,13 +289,71 @@ describe('the hazard list is the disclosure', () => {
       name: 'pwsh',
       args: { command: 'ls' },
     })
-    expect(Object.keys(seen).sort()).toEqual(Object.keys(HAZARD_QUESTIONS).sort())
+    expect(Object.keys(seen).sort()).toEqual(Object.keys(SAFETY_QUESTIONS).sort())
+  })
+
+  it('declares the hazards and the severity score, and nothing else', () => {
+    expect(Object.keys(HAZARD_QUESTIONS)).toHaveLength(5)
+    expect(Object.keys(SEVERITY_QUESTIONS)).toEqual([SEVERITY_QUESTION_ID])
+    // The batch is the two declarations, so a question added to the gate without
+    // being declared here cannot reach the wire unnoticed.
+    expect(Object.keys(SAFETY_QUESTIONS).sort()).toEqual(
+      [...Object.keys(HAZARD_QUESTIONS), SEVERITY_QUESTION_ID].sort(),
+    )
   })
 
   it('declares every hazard as a noul question', () => {
     for (const question of Object.values(HAZARD_QUESTIONS)) {
       expect(question.type).toBe('noul')
     }
+  })
+
+  it('declares the severity question as a score over the declared ladder', () => {
+    const question = SEVERITY_QUESTIONS[SEVERITY_QUESTION_ID]
+    if (question?.type !== 'score') throw new Error('the severity question must be a score')
+    expect(question.criteria).toHaveLength(SEVERITY_LEVELS.length)
+    // One description per rung, all different: a repeated or missing description
+    // would make two positions in the scale indistinguishable.
+    expect(new Set(question.criteria).size).toBe(SEVERITY_LEVELS.length)
+  })
+
+  it('fits inside the questions cap it declares for egress', () => {
+    // Not decoration. `measure` *refuses* an over-cap question map, and the
+    // gate's catch turns that refusal into an undecided verdict on every judged
+    // call — a gate that asks about everything, or under `onUndecided: allow`
+    // one that allows everything, with nothing in the config to explain it. The
+    // budget is asserted here so a future rubric expansion fails loudly instead.
+    //
+    // Measured twice: once with redaction bypassed, which is the declared size
+    // and the number this test is really about, and once through the real
+    // redaction pass, which is what actually leaves. A redaction rule that
+    // fired on a question would shrink the second number and hide an over-cap
+    // declaration behind it.
+    const identityRedact = (value: unknown) => ({
+      value: value as never,
+      summary: { redactions: 0, rules: [], fields: [], values: 0 },
+    })
+    const cap = EGRESS_FIELDS[SAFETY_FEATURE].find((field) => field.field === 'questions')?.maxChars
+    expect(cap).toBeDefined()
+    const contract = new EgressContract(
+      { transmitting: true, enabled: allOn() },
+      'https://api.typesafe.ai',
+    )
+    const state = { tool: 'pwsh', arguments: '{}' }
+    const declared = contract.measure({
+      feature: SAFETY_FEATURE,
+      state,
+      questions: SAFETY_QUESTIONS,
+      redact: identityRedact,
+    })
+    const sent = contract.measure({
+      feature: SAFETY_FEATURE,
+      state,
+      questions: SAFETY_QUESTIONS,
+      redact,
+    })
+    expect(declared.questionsChars).toBeLessThanOrEqual(cap ?? 0)
+    expect(sent.questionsChars).toBeLessThanOrEqual(cap ?? 0)
   })
 })
 

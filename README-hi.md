@@ -248,6 +248,12 @@ Declared `state` caps तीन tools के लिए 16,000 characters है�
 Gates एक bare boolean (`safety: false`) या `onUndecided` वाला object स्वीकार करते हैं: `ask` (default),
 `allow`, या `deny`।
 
+`ask` एक सवाल है, इसलिए उसे पूछने के लिए किसी की ज़रूरत होती है। जो deployment कोई approval service
+compose नहीं करता, वह किसी इंसान तक बात नहीं बढ़ा सकता, और DeepSeek Harness तब उस call को चलाने के
+बजाय अस्वीकार कर देता है: safety gate जिस-जिस tool से मेल खाता है, हर एक अस्वीकार हो जाता है, और
+operator को यह plugin द्वारा सारे shell commands तोड़ देने जैसा लगता है।
+[docs/approval.md](docs/approval.md) में तंत्र है, और plugin README deployment का नज़रिया देता है।
+
 अज्ञात value को load पर अस्वीकार किया जाता है, key का नाम लेते हुए संदेश के साथ, बजाय इसके कि चुपचाप
 अनदेखा कर दिया जाए — config की एक typo चुपचाप privacy posture नहीं बदलनी चाहिए।
 

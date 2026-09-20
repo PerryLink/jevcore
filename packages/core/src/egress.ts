@@ -203,6 +203,38 @@ export class EgressTooLargeError extends Error {
   }
 }
 
+/**
+ * Redaction changed the shape of the question map, which it must never do.
+ *
+ * Only a key rule replaces a value wholesale; value rules rewrite strings. So a
+ * question that comes back as anything other than an object means a key rule
+ * matched a question id, and question ids are protocol identifiers rather than
+ * field names — the answer map is keyed by them.
+ *
+ * This is a runtime check rather than a comment because the failure it catches is
+ * both silent and severe. One of this package's own hazard ids is
+ * `credential_exposure`, which `/credential/i` matches. With the key rules on,
+ * that question was replaced by the string `"[redacted]"` before transmission: a
+ * malformed request on the live route, a `TypeError` from the offline mock, and
+ * in both cases an error the safety gate turns into a conservative `ask`. A gate
+ * that had stopped judging anything looked exactly like a gate being careful.
+ */
+export class EgressShapeError extends Error {
+  override readonly name = 'EgressShapeError'
+
+  constructor(
+    readonly feature: EgressFeature,
+    readonly field: string,
+    readonly ids: readonly string[],
+  ) {
+    super(
+      `redaction reshaped "${field}" for "${feature}": ${ids.join(', ')} came back as something ` +
+        `other than a question. Question ids key the answers, so they have to survive redaction ` +
+        `intact; a key rule matched one and replaced the whole question.`,
+    )
+  }
+}
+
 export class EgressContract {
   /**
    * @param settings - which features may transmit, and whether the provider can
@@ -267,7 +299,16 @@ export class EgressContract {
     readonly feature: EgressFeature
     readonly state: JsonValue
     readonly questions: Readonly<Record<string, JevQuestion>>
-    readonly redact: (value: JsonValue) => {
+    /**
+     * Redaction, injected so this module stays free of policy.
+     *
+     * The options parameter exists for exactly one decision made below: the
+     * question map is redacted with the value rules only.
+     */
+    readonly redact: (
+      value: JsonValue,
+      options?: { readonly keyRules?: readonly RegExp[] },
+    ) => {
       readonly value: JsonValue
       readonly summary: {
         readonly redactions: number
@@ -293,9 +334,44 @@ export class EgressContract {
     // was redacted in `state` and left intact in `questions`. The contract's whole
     // claim is that what leaves is the redacted content, and a question is content.
     const { value: safeState, summary } = input.redact(input.state)
+
+    // `state` gets both passes. The question map gets the value rules only, and
+    // that distinction is a defect fix, not a preference.
+    //
+    // A key rule replaces a value whose *field name* looks secret-bearing. A
+    // question id is not a field name in that sense: it is a protocol identifier,
+    // and the answer map is keyed by it. With the key rules on, this package's own
+    // `credential_exposure` hazard matched `/credential/i` and its whole question
+    // was replaced by the string `"[redacted]"` before transmission — 160
+    // characters of a declared 1,774-character payload, gone. Verified by
+    // instrumenting a recording provider: the id arrived, the question did not.
+    //
+    // Both consequences were invisible. The live route is sent
+    // `"credential_exposure":"[redacted]"` where a question object belongs. The
+    // offline route — the default, and what every test ran against — throws
+    // `TypeError: Cannot convert undefined or null to object` from the mock. The
+    // safety gate catches provider errors and routes them through `onUndecided`,
+    // whose default is `ask`, so a gate that had stopped judging anything produced
+    // exactly the decision a careful gate produces. Nothing failed. Nothing was
+    // asked either.
+    //
+    // Value rules still run, so a credential written *into* a question is still
+    // caught. What is removed is the ability to destroy the question map's shape.
     const { value: safeQuestions, summary: questionSummary } = input.redact(
       input.questions as unknown as JsonValue,
+      { keyRules: [] },
     )
+
+    // The invariant the call above depends on, checked rather than assumed. With
+    // no key rules nothing can replace a question wholesale, because only a key
+    // rule substitutes an object for a value. If that ever stops being true, this
+    // must fail loudly here instead of quietly turning every gate decision into an
+    // `ask`. `Object.entries` on a non-object flags its members too, so a wholesale
+    // replacement of the map itself is caught by the same test.
+    const reshaped = Object.entries(safeQuestions as Record<string, unknown>)
+      .filter(([, value]) => typeof value !== 'object' || value === null)
+      .map(([id]) => id)
+    if (reshaped.length > 0) throw new EgressShapeError(input.feature, 'questions', reshaped)
     const stateText = JSON.stringify(safeState) ?? 'null'
     const questionsText = JSON.stringify(safeQuestions) ?? '{}'
 

@@ -15,10 +15,35 @@ import {
   score,
   type EntryType,
   type JevQuestion,
+  type JevResult,
   type JevService,
   type JsonValue,
   type NoulCriteria,
 } from 'jevcore'
+
+/**
+ * Attach what egress did to the payload to a tool result.
+ *
+ * Every handler in this module builds its own return object rather than going
+ * through the core's `renderResult`, and every one of them used to drop these two
+ * fields. The consequence was not cosmetic. `EgressContract` caps `state` by
+ * *truncating* it — deliberately, and unlike `questions`, which is refused — so a
+ * caller that sent more than the declared 16,000 characters had its evidence cut,
+ * and received a confident verdict about the fragment with nothing in the reply
+ * to say a cut had happened. Measured on this package: ten candidates of 4,000
+ * characters each are 40,271 characters of state, 16,000 of them are sent, and
+ * `runRank` still returned all ten original strings alongside their scores.
+ *
+ * The answer is about the state Jev actually read, so the caller has to be able
+ * to see what that was.
+ *
+ * `truncated` is written as an explicit `true` only when it happened, so a result
+ * from an ordinary call keeps exactly the shape it had before this existed.
+ */
+const withEgressFacts = (result: JevResult) => ({
+  ...(result.truncated === true ? { truncated: true } : {}),
+  ...(result.egress === undefined ? {} : { egress: result.egress }),
+})
 
 export interface QuestionInput {
   readonly type: 'noul' | 'choice' | 'score'
@@ -145,6 +170,7 @@ export const runAsk = async (service: JevService, input: AskInput) => {
     model: result.model,
     latencyMs: result.latencyMs,
     answers: result.answers,
+    ...withEgressFacts(result),
     ...(result.usage === undefined ? {} : { usage: result.usage }),
     ...(result.provider === 'mock' ? { warning: SYNTHETIC_WARNING } : {}),
   }
@@ -222,6 +248,7 @@ export const runRank = async (service: JevService, input: RankInput) => {
     model: result.model,
     latencyMs: result.latencyMs,
     ranking,
+    ...withEgressFacts(result),
     ...(result.usage === undefined ? {} : { usage: result.usage }),
     ...(result.provider === 'mock' ? { warning: SYNTHETIC_WARNING } : {}),
   }
@@ -258,6 +285,7 @@ export const runCheck = async (service: JevService, input: CheckInput) => {
       ...(resolved.contradicts === undefined ? {} : { contradicts: resolved.contradicts }),
       ...(resolved.sufficient === undefined ? {} : { sufficient: resolved.sufficient }),
     },
+    ...withEgressFacts(result),
     ...(result.usage === undefined ? {} : { usage: result.usage }),
     ...(result.provider === 'mock' ? { warning: SYNTHETIC_WARNING } : {}),
   }

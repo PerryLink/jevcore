@@ -19,7 +19,7 @@ name: Release
 # 7), which is why this file is not named after what it does.
 #
 # `id-token: write` below is what lets the runner mint the OIDC token that npm
-# exchanges for publish rights for these three packages.
+# exchanges for publish rights for every package listed in the Publish step.
 #
 # Do NOT reintroduce a registry token. pnpm treats a configured
 # `//registry.npmjs.org/:_authToken` as an instruction to publish with that token
@@ -101,7 +101,7 @@ jobs:
           node -e "
             const tag = process.env.GITHUB_REF_NAME.replace(/^v/, '');
             const { readFileSync } = require('node:fs');
-            const names = ['package.json', 'packages/core/package.json', 'packages/dsh/package.json', 'packages/mcp/package.json'];
+            const names = ['package.json', 'packages/core/package.json', 'packages/dsh/package.json', 'packages/mcp/package.json', 'packages/cli/package.json'];
             let failed = false;
             for (const file of names) {
               const version = JSON.parse(readFileSync(file, 'utf8')).version;
@@ -152,7 +152,7 @@ jobs:
           # that is merely close -- `token-exchange/<name>`, say -- answers
           # `ResourceNotFound: ... does not exist`, which reads like a missing
           # trusted publisher and is not.
-          for pkg in jevcore jevcore-dsh jevcore-mcp; do
+          for pkg in jevcore jevcore-dsh jevcore-mcp jevcore-cli; do
             code="$(curl -sS -o exchange.json -w '%{http_code}' -X POST \
               -H "Authorization: bearer $token" -H 'Accept: application/json' --data '' \
               "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$pkg")"
@@ -166,7 +166,10 @@ jobs:
           done
 
       - name: Publish
-        # Core first: both adapters depend on `jevcore`.
+        # Core first: every other package depends on `jevcore`, and pnpm rewrites
+        # the `workspace:*` specifier to the real version at pack time, so a
+        # dependent published against an unpublished core would point at a version
+        # that does not exist yet.
         if: github.event_name == 'push'
         run: |
           set -euo pipefail
@@ -190,6 +193,7 @@ jobs:
           publish jevcore core
           publish jevcore-dsh dsh
           publish jevcore-mcp mcp
+          publish jevcore-cli cli
 
       - name: Check the MCP Registry manifest before publishing
         # Runs only where the npm publish runs: the registry verifies npm

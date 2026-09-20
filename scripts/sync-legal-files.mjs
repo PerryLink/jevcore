@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const packages = ['core', 'dsh', 'mcp']
+const packages = ['core', 'dsh', 'mcp', 'cli']
 const files = ['LICENSE', 'NOTICE', 'CHANGELOG.md']
 const checkOnly = process.argv.includes('--check')
 

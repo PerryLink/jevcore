@@ -3,6 +3,7 @@ import {
   DEFAULT_CHECK_THRESHOLDS,
   EGRESS_FEATURES,
   EgressContract,
+  EgressTooLargeError,
   JevService,
   MockProvider,
   VERDICT_QUESTION,
@@ -20,8 +21,24 @@ import {
   type JsonValue,
 } from 'jevcore'
 import { jevAskTool, toQuestions } from '../src/ask.js'
-import { TOOL_VERDICTS, jevCheckTool, reconcileVerdict } from '../src/check.js'
-import { candidateIndex, candidateQuestionId, jevRankTool, rankSummary } from '../src/rank.js'
+import {
+  STATE_CHAR_CAP as CHECK_STATE_CHAR_CAP,
+  TOOL_VERDICTS,
+  jevCheckTool,
+  reconcileVerdict,
+} from '../src/check.js'
+import {
+  CANDIDATE_QUESTION_OVERHEAD,
+  DEFAULT_CANDIDATE_CAP,
+  DEFAULT_CRITERION,
+  QUESTION_CHAR_CAP,
+  STATE_CHAR_CAP as RANK_STATE_CHAR_CAP,
+  candidateCap,
+  candidateIndex,
+  candidateQuestionId,
+  jevRankTool,
+  rankSummary,
+} from '../src/rank.js'
 const allOn = (): Record<EgressFeature, boolean> =>
   Object.fromEntries(EGRESS_FEATURES.map((feature) => [feature, true])) as Record<EgressFeature, boolean>
 
@@ -295,6 +312,106 @@ describe('jev_rank', () => {
   })
 })
 
+describe('jev_rank candidate cap', () => {
+  /**
+   * The description with its thousands separators removed.
+   *
+   * The description groups digits for a reader ("4,000"); the contract declares
+   * `4000`. Comparing digits rather than formatted text keeps this test about the
+   * number agreeing and not about the punctuation.
+   */
+  const plainDigits = (text: string): string => text.replace(/(\d),(?=\d{3}\b)/g, '$1')
+
+  const candidates = (count: number): string[] =>
+    Array.from({ length: count }, (_, index) => `candidate ${index}`)
+
+  it('states the caps and the per-candidate cost the egress contract declares', () => {
+    // The model can only stay under a budget it is told about. Every number in the
+    // note is interpolated from the contract or measured from the question builder,
+    // so this asserts the wiring rather than a transcription: if the core's cap
+    // changes, or a question's wording grows, the note moves with it or this fails.
+    const description = plainDigits(jevRankTool(service()).description)
+
+    expect(description).toContain(`${QUESTION_CHAR_CAP} characters`)
+    expect(description).toContain(`${CANDIDATE_QUESTION_OVERHEAD} characters plus`)
+    expect(description).toContain(`about ${DEFAULT_CANDIDATE_CAP} candidates`)
+    expect(description).toContain(`${RANK_STATE_CHAR_CAP} characters`)
+    // ...and says which of the two is refused, and which is not.
+    expect(description).toContain('REFUSED')
+    expect(description).toContain('truncated')
+  })
+
+  it('finds the boundary with the same counter the description is written from', async () => {
+    // The strongest form of "the description and the enforcement agree": don't
+    // compare the note to a second copy of the arithmetic - drive the real tool to
+    // the boundary the note advertises and one candidate past it. `candidateCap` is
+    // what the note interpolates, so this closes the loop for every criterion, not
+    // just the default one.
+    const tool = jevRankTool(service())
+    for (const criterion of [DEFAULT_CRITERION, 'x'.repeat(400), 'y'.repeat(120)]) {
+      const cap = candidateCap(criterion)
+      const atCap = candidates(cap)
+
+      const accepted = (await run(tool, { query: 'q', candidates: atCap, criterion })) as {
+        ranking: unknown[]
+      }
+      expect(accepted.ranking).toHaveLength(cap)
+
+      // Refused, not trimmed: the call fails outright, so a model that sent too
+      // many gets an error naming both sizes rather than a silently shorter list.
+      await expect(
+        run(tool, { query: 'q', candidates: [...atCap, 'one past the cap'], criterion }),
+      ).rejects.toThrow(EgressTooLargeError)
+    }
+  })
+
+  it('shows the criterion shortening the effective candidate count', async () => {
+    // The claim the note makes in words: the criterion is repeated into every
+    // question, so a long one costs candidates. Asserted as a relationship rather
+    // than a second magic number.
+    expect(candidateCap('x'.repeat(400))).toBeLessThan(DEFAULT_CANDIDATE_CAP)
+    expect(candidateCap('x'.repeat(400))).toBeGreaterThan(0)
+    // An empty criterion is substituted with the default before it is measured, so
+    // the count the note gives for `criterion: ""` is the default one.
+    const tool = jevRankTool(service())
+    await expect(
+      run(tool, { query: 'q', candidates: candidates(DEFAULT_CANDIDATE_CAP), criterion: '   ' }),
+    ).resolves.toBeDefined()
+  })
+
+  it('marks a state that lost candidates to the size cap instead of ranking it silently', async () => {
+    // The second budget, and the one that does NOT refuse: twenty candidates of
+    // 800 characters fit the question budget and not the state budget. Jev is asked
+    // about a truncation envelope, so the ranking beside it describes no candidate
+    // at all - the result has to say so, or the model reads twenty judgments about
+    // evidence Jev never saw.
+    const recorder = recordingProvider()
+    const tool = jevRankTool(service(recorder.provider))
+    const long = Array.from({ length: 20 }, (_, index) => `${index}`.padEnd(800, 'y'))
+
+    const value = (await run(tool, { query: 'q', candidates: long })) as {
+      truncated?: unknown
+      egress?: { truncated?: unknown; stateChars?: unknown }
+      ranking: unknown[]
+    }
+
+    // Every candidate is still listed - that is what makes the silence dangerous.
+    expect(value.ranking).toHaveLength(20)
+    expect(value.truncated).toBe(true)
+    expect(value.egress?.truncated).toBe(true)
+    expect(value.egress?.stateChars).toBeLessThanOrEqual(RANK_STATE_CHAR_CAP)
+    // What Jev was actually handed: an envelope, with no `candidates` array in it.
+    expect(Object.keys((recorder.requests[0]?.state ?? {}) as object)).toEqual([
+      '[truncated]',
+      '[originalChars]',
+      '[maxChars]',
+      '[head]',
+    ])
+    // And the one-line card carries it, for the same reason the payload does.
+    expect(rankSummary(value)).toContain('[truncated]')
+  })
+})
+
 describe('jev_check verdict precedence', () => {
   const resolve = (answers: Record<string, number>) =>
     resolveCheck({
@@ -425,6 +542,42 @@ describe('jev_check tool', () => {
     if (value.verdict !== 'unknown') {
       expect(Object.keys(value.probabilities).length).toBeGreaterThan(0)
     }
+  })
+
+  it('marks a state that lost the evidence to the size cap instead of judging it silently', async () => {
+    // The handler rebuilds its payload from `rendered` fields, which is how the
+    // core's `truncated` and `egress` went missing: `renderResult` computed them
+    // and this return never mentioned them. Reading `renderResult` and assuming a
+    // caller forwards its value is not evidence — a call does. One oversized
+    // evidence string is enough, because `state` is a character budget and this
+    // field is free text.
+    const recorder = recordingProvider()
+    const capped = jevCheckTool(service(recorder.provider))
+
+    const value = (await run(capped, { claim: 'the sky is blue', evidence: 'e'.repeat(17_000) })) as {
+      truncated?: unknown
+      egress?: { truncated?: unknown; stateChars?: unknown }
+      verdict?: unknown
+    }
+
+    // A verdict still comes back, which is what made the omission dangerous.
+    expect(value.verdict).toBeDefined()
+    expect(value.truncated).toBe(true)
+    expect(value.egress?.truncated).toBe(true)
+    expect(value.egress?.stateChars).toBeLessThanOrEqual(CHECK_STATE_CHAR_CAP)
+    // What Jev was handed: an envelope, with neither `claim` nor `evidence` in it.
+    expect(Object.keys((recorder.requests[0]?.state ?? {}) as object)).toEqual([
+      '[truncated]',
+      '[originalChars]',
+      '[maxChars]',
+      '[head]',
+    ])
+    // And the evidence parameter says so before the call, not only after it:
+    // `parameters` is the compiled schema, so this asserts the text the model is
+    // actually sent rather than a spec a compiler might have dropped.
+    const declared = JSON.stringify(capped.parameters).replace(/(\d),(?=\d{3}\b)/g, '$1')
+    expect(declared).toContain('truncated')
+    expect(declared).toContain(String(CHECK_STATE_CHAR_CAP))
   })
 })
 

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { ConfigError, DEFAULT_CONFIG, resolveConfig } from '../src/config.js'
+import {
+  ConfigError,
+  DEFAULT_CONFIG,
+  DEFAULT_SAFETY_SEVERITY_BLOCK,
+  SEVERITY_LEVELS,
+  resolveConfig,
+  type SeverityLevel,
+} from '../src/config.js'
 
 describe('defaults are the security posture', () => {
   it('defaults to the offline mock provider', () => {
@@ -27,6 +34,35 @@ describe('defaults are the security posture', () => {
 
   it('has no baseURL until one is set', () => {
     expect(resolveConfig({}).baseURL).toBeUndefined()
+  })
+
+  it('asks about a damaging call without waiting for a hazard', () => {
+    expect(resolveConfig({}).safetySeverityBlock).toBe('high')
+    expect(DEFAULT_CONFIG.safetySeverityBlock).toBe(DEFAULT_SAFETY_SEVERITY_BLOCK)
+  })
+})
+
+describe('the severity ladder', () => {
+  it('names every member of the type, in ascending order', () => {
+    // The record is the compile-time half: a level added to `SeverityLevel`
+    // without a rung stops type-checking here. The comparison is the runtime
+    // half, because the array can also fall behind by omission, which no type
+    // can see.
+    const everyLevel: Record<SeverityLevel, true> = {
+      none: true,
+      low: true,
+      moderate: true,
+      high: true,
+      critical: true,
+    }
+    expect([...SEVERITY_LEVELS]).toEqual(Object.keys(everyLevel))
+  })
+
+  it('ships a block level that is not the floor of the ladder', () => {
+    // `none` would ask about every write, which is how a safety setting becomes
+    // something an operator turns off.
+    expect(SEVERITY_LEVELS.indexOf(DEFAULT_SAFETY_SEVERITY_BLOCK)).toBeGreaterThan(0)
+    expect(DEFAULT_SAFETY_SEVERITY_BLOCK).not.toBe(SEVERITY_LEVELS[0])
   })
 })
 
@@ -108,6 +144,23 @@ describe('validation', () => {
 
   it('rejects an unknown log level', () => {
     expect(() => resolveConfig({ logLevel: 'verbose' as never })).toThrow(/silent, warn, info, or debug/)
+  })
+
+  it('accepts every declared severity level', () => {
+    for (const level of SEVERITY_LEVELS) {
+      expect(resolveConfig({ safetySeverityBlock: level }).safetySeverityBlock).toBe(level)
+    }
+  })
+
+  it('rejects an unknown severity level rather than falling back to the default', () => {
+    // A typo here decides when a human is interrupted. Falling back silently
+    // would leave an operator believing they had tightened or relaxed a check
+    // that is enforcing something else.
+    expect(() => resolveConfig({ safetySeverityBlock: 'severe' as never })).toThrow(ConfigError)
+    expect(() => resolveConfig({ safetySeverityBlock: 'severe' as never })).toThrow(
+      /must be one of none, low, moderate, high, critical/,
+    )
+    expect(() => resolveConfig({ safetySeverityBlock: 3 as never })).toThrow(/safetySeverityBlock/)
   })
 
   it('rejects a negative maxStateChars', () => {

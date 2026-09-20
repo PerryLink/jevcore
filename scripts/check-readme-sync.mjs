@@ -72,6 +72,11 @@ const SETS = [
   { dir: 'packages/core', label: 'packages/core/README.md', requiresInstallCommand: false },
   { dir: 'packages/dsh', label: 'packages/dsh/README.md', requiresInstallCommand: true },
   { dir: 'packages/mcp', label: 'packages/mcp/README.md', requiresInstallCommand: false },
+  // The CLI's page is not a plugin page either: its reader wants a command to
+  // run, not a `dsh plugin add`. It IS a package page, so it belongs in the gate
+  // for the same reason the others do — an npm page without its translations is
+  // half a document.
+  { dir: 'packages/cli', label: 'packages/cli/README.md', requiresInstallCommand: false },
 ]
 
 const failures = []

@@ -75,6 +75,12 @@ entregam dez ferramentas cada um; este existe para o caso em que um host quer as
 primitivas e nada mais, construído sobre o mesmo core do plugin do DeepSeek Harness
 para que os dois não possam divergir.
 
+`jev_rank` aceita uma lista limitada, não o melhor de qualquer lista. Cada candidato acrescenta uma
+pergunta a um orçamento fixo de 4.000 caracteres sobre o mapa de perguntas, e uma lista que não cabe é
+recusada com erro, não truncada nos primeiros N que cabem: com o critério padrão cabem 20 candidatos,
+com um critério de 100 caracteres 17, e com um de 500 caracteres 6. Mantenha as listas de candidatos
+curtas, o critério conciso, e divida uma lista longa em lotes.
+
 Todo resultado carrega probabilidades, não decisões. Aplique seu próprio limite
 de confiança antes de agir, e trate uma resposta de baixa confiança como desconhecida em vez de
 escolher por ela.

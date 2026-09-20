@@ -252,6 +252,17 @@ defecto), `allow` o `deny`.
 Un valor desconocido se rechaza al cargar con un mensaje que nombra la clave, en lugar de ignorarse en
 silencio — una errata en la configuración no debería cambiar discretamente la postura de privacidad.
 
+### Habilitar el gate de safety donde nadie puede responder
+
+El gate responde `allow`, `deny` o `ask`, y `ask` es su respuesta tanto ante un peligro señalado como
+ante un veredicto que no logra decidir. Un `ask` necesita un canal de aprobación: un despliegue que no
+compone ningún servicio de aprobación no puede escalar a una persona, y el harness resuelve la consulta
+como un rechazo en lugar de ejecutar la llamada. El gate empareja por fragmento de nombre de
+herramienta, y su lista incluye `pwsh`, `bash`, `git`, `write` y `edit`, así que quien lo habilita allí
+ve fallar comandos de shell y ediciones de archivos corrientes. Habilítalo donde haya un canal que
+pueda plantear la pregunta a una persona, y lee [docs/approval.md](docs/approval.md) para saber
+qué proporciona ese canal.
+
 ---
 
 ## Cómo usarlo
@@ -288,6 +299,9 @@ Tres herramientas, deliberadamente pocas y ortogonales:
 - **`jev_ask`** — un lote de preguntas tipadas sobre un estado.
 - **`jev_rank`** — puntúa y ordena candidatos según un único criterio, con una pregunta por candidato en
   una sola ida y vuelta. Las probabilidades son juicios independientes por candidato, no una distribución.
+  La lista está acotada: cada candidato añade una pregunta a un presupuesto fijo de 4,000 caracteres,
+  así que caben 20 candidatos con el criterio por defecto, 17 con uno de 100 caracteres, y una lista
+  más larga se rechaza con un error en lugar de recortarse a los que caben.
 - **`jev_check`** — ¿esta evidencia respalda esta afirmación? Devuelve `supported`, `contradicted`,
   `conflicted`, `insufficient`, `undecided` o `unknown`. La contradicción tiene más peso que el respaldo, porque una
   evidencia que a la vez respalda y refuta es un conflicto, no un sí débil.

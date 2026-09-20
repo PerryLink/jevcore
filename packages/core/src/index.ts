@@ -75,6 +75,7 @@ export {
   EGRESS_FIELDS,
   EgressContract,
   EgressDeniedError,
+  EgressShapeError,
   EgressTooLargeError,
   MIN_TRUNCATED_HEAD_CHARS,
   type EgressFeature,
@@ -90,12 +91,15 @@ export {
   DEFAULT_CONFIG,
   DEFAULT_REQUEST_MAX_RETRIES,
   DEFAULT_REQUEST_TIMEOUT_MS,
+  DEFAULT_SAFETY_SEVERITY_BLOCK,
+  SEVERITY_LEVELS,
   resolveConfig,
   type GateInput,
   type GateSettings,
   type JevConfig,
   type JevConfigInput,
   type ProviderKind,
+  type SeverityLevel,
 } from './config.js'
 export { Config, validateConfig } from './schema.js'
 
@@ -117,12 +121,15 @@ export {
   classifyStatus,
   isAbortFailure,
   isTimeoutFailure,
+  requestIdOf,
   retryAfterOf,
   statusOf,
   type CallBudget,
   type ProviderCallContext,
+  type ProviderFailure,
 } from './provider/classify.js'
 export {
+  BODY_SAFE_LOG_LEVEL,
   DEFAULT_CALL_TOTAL_BUDGET_MS,
   DEFAULT_ENDPOINT,
   DEFAULT_LOG_LEVEL,
@@ -131,8 +138,10 @@ export {
   NO_PER_ATTEMPT_TIMEOUT_MS,
   assertUsableEndpoint,
   loadOfficialSdk,
+  sdkLogLevelFor,
   timeoutForSdk,
   type LiveProviderOptions,
+  type LiveResult,
   type ProviderLogLevel,
 } from './provider/live.js'
 export {
@@ -145,8 +154,95 @@ export {
   type OpenRouterProviderOptions,
 } from './provider/openrouter.js'
 
+// Model catalogue and alias drift.
+//
+// A pin and an alias are different promises. `jev-1.13.0` names a fixed thing;
+// `jev-latest` names whatever the service serves today, and it is the SDK's own
+// default when no model is configured -- so "I did not choose a model" silently
+// means "whatever is newest". The catalogue shows what the account can see, which
+// is not the same as what answered; `checkAliasDrift` therefore needs an observed
+// answer and reports `unknown` rather than guessing when it has none.
+export {
+  checkAliasDrift,
+  listModels,
+  probeAlias,
+  readModelCards,
+  resolveAliasFromAnswer,
+  type AliasDrift,
+  type AliasDriftVerdict,
+  type AliasProbeOptions,
+  type JevAliasResolution,
+  type JevModelCard,
+  type ModelCatalogOptions,
+} from './provider/models.js'
+
 // Service
-export { JevService, type JevAskInput, type JevCallRecord, type JevServiceOptions, type JevStats } from './service.js'
+export {
+  DEFAULT_ASK_MANY_CONCURRENCY,
+  JevService,
+  type JevAskInput,
+  type JevCallRecord,
+  type JevServiceOptions,
+  type JevStats,
+} from './service.js'
+
+// Self-consistency measurement (a diagnostic, not a gate).
+//
+// Asking one state N times says whether Jev agrees with itself; it says nothing
+// about whether the answer is right. The distinction is the whole reason this is
+// exported as its own module rather than folded into the service: a small spread
+// is easy to over-read as a correctness result, and `runRepeated`'s doc comment
+// is emphatic about what it does not measure.
+export {
+  runRepeated,
+  type RepeatedObservation,
+  type RepeatedQuestion,
+  type RepeatedRun,
+  type RepeatedRunOptions,
+  type RepeatedSource,
+} from './consistency.js'
+
+// Resilience: an optional cache, a hard budget, and a failure breaker.
+//
+// All three are inert until `JevService` is given one, and that is the design
+// rather than an oversight. Each of them can suppress a call, and a layer that
+// can suppress a call has to be something an operator switched on deliberately.
+//
+// The cache in particular refuses to be a general-purpose memo: a feature may be
+// protected from caching in code (`gate:safety` is, because a gate verdict is
+// about a specific call, not about a reusable input), and a cache with no
+// decision configured caches nothing at all.
+export {
+  AnswerCache,
+  CACHE_KEY_SEPARATOR,
+  CacheKeyError,
+  DEFAULT_CACHE_EXCLUDED,
+  DEFAULT_CACHE_MAX_ENTRIES,
+  type AnswerCacheOptions,
+  type CacheDecision,
+  type CacheKey,
+  type CachePolicy,
+  type CacheStats,
+} from './resilience/cache.js'
+export {
+  JevBudget,
+  JevBudgetExceededError,
+  ZERO_BUDGET,
+  type BudgetDecision,
+  type BudgetLimits,
+  type BudgetOptions,
+  type JevBudgetReport,
+  type UnknownCostPolicy,
+} from './resilience/budget.js'
+export {
+  BreakerOpenError,
+  DEFAULT_COOLDOWN_MS,
+  DEFAULT_FAILURE_THRESHOLD,
+  FailureBreaker,
+  type BreakerOptions,
+  type BreakerSnapshot,
+  type BreakerState,
+} from './resilience/breaker.js'
 
 // Policy
 export {
@@ -207,6 +303,9 @@ export {
   DEFAULT_GATED_TOOL_PATTERNS,
   HAZARD_QUESTIONS,
   SAFETY_FEATURE,
+  SAFETY_QUESTIONS,
+  SEVERITY_QUESTION_ID,
+  SEVERITY_QUESTIONS,
   createSafetyGate,
   isGated,
   serializeArguments,

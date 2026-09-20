@@ -259,6 +259,12 @@ o valor efetivo em vez do declarado, de modo que o que ele imprime é o que é a
 Os portões aceitam um booleano puro (`safety: false`) ou um objeto com `onUndecided`: `ask` (padrão),
 `allow` ou `deny`.
 
+`ask` é uma pergunta, portanto precisa de algo a quem perguntar. Uma implantação que não compõe nenhum
+serviço de aprovação não consegue escalar para um humano, e o DeepSeek Harness então recusa a chamada
+em vez de executá-la: toda ferramenta com que o portão de safety casa é recusada, o que um operador
+vive como o plugin ter quebrado todos os comandos de shell. [docs/approval.md](docs/approval.md) tem o
+mecanismo, e o README do plugin cobre a visão de implantação.
+
 Um valor desconhecido é recusado no carregamento com uma mensagem que nomeia a chave, em vez de ser
 silenciosamente ignorado — um erro de digitação na configuração não deve mudar discretamente a postura de
 privacidade.

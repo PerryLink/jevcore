@@ -17,6 +17,7 @@ import {
   EGRESS_FEATURES,
   EgressContract,
   JevService,
+  MockProvider,
   type EgressFeature,
   type JevCallRecord,
   type JevProvider,
@@ -61,19 +62,44 @@ const fakeSkills = () => {
   }
 }
 
-const mountPlugin = (config?: unknown, options: { withSkills?: boolean } = {}) => {
+const mountPlugin = (
+  config?: unknown,
+  options: { withSkills?: boolean; withApproval?: boolean; captureLogs?: string[] } = {},
+) => {
   const ctx = new Context()
   const tools = fakeTools()
   const skills = fakeSkills()
   // `ctx.get('skills')` reads through Cordis's reflect registry, so the fake has
   // to be registered the same way a real provider would be — a plain property
-  // assignment is invisible to `get`.
+  // assignment is invisible to `get`. The same is true of the approval service
+  // below, which is why the plugin's detection is exercised against this
+  // registry rather than against a stub of our own.
   ctx.provide('tools', tools.service)
   ctx.provide('credentials', fakeCredentials())
   // Omitted by default so a test asserts the plugin still loads without the
   // skill subsystem present — the whole point of declaring it optional.
   if (options.withSkills === true) {
     ctx.provide('skills', skills.service)
+  }
+  // A stand-in for `ApprovalService`, which is a Cordis service like any other
+  // (`packages/interaction/user-approval/src/index.ts`, `super(ctx, 'approval')`)
+  // and mounted as an ordinary host row (`packages/bundle/base/cordis.patch.yml`).
+  if (options.withApproval === true) {
+    ctx.provide('approval', { request: async () => 'allowed-once' as const })
+  }
+  // Installed before `apply` so a message emitted during activation is captured.
+  // Cordis drops WARN below an exporter's threshold — its default is INFO, and
+  // `warn` is level 2 — so an exporter has to ask for it by name. DSH's own boot
+  // does exactly this (`packages/boot/app-boot/src/index.ts`), which is why a
+  // plugin's `logger.warn` reaches an operator there.
+  if (options.captureLogs !== undefined) {
+    const messages = options.captureLogs
+    ctx.logger.exporter({
+      levels: { default: 2 },
+      export: (message) => {
+        messages.push(String((message.args as unknown[])[0]))
+      },
+    })
   }
   const events: string[] = []
   // Record which events are subscribed so a gate that is off can be proven to
@@ -309,8 +335,89 @@ describe('the registered tool definitions', () => {
   })
 })
 
+describe('the safety gate and the approval seam', () => {
+  /**
+   * What these tests do and do not establish.
+   *
+   * They establish the plugin's half against a real Cordis context: `provide()`
+   * is what makes `ctx.get('approval')` resolve, resolution walks up through
+   * `extend()`, and the warning fires on absence and only while the gate is on.
+   *
+   * They cannot establish the host's half — that a deployment which composes no
+   * ApprovalService is the same thing the tool runtime's own `ctx.get('approval')`
+   * sees. That link is evidence, not test: the service is an ordinary Cordis
+   * service (`packages/interaction/user-approval/src/index.ts`, `super(ctx,
+   * 'approval')`) mounted as a plain host row, and five shipped DSH packages read
+   * it from their own plugin contexts (`tool-fs`, `tool-pwsh`, `tool-bash`,
+   * `subagent`, `plugin-manager`).
+   */
+  const approvalWarnings = (logs: readonly string[]): string[] =>
+    logs.filter((line) => line.includes('approval service'))
+
+  it('detects an approval channel through the same registry the tool runtime reads', () => {
+    // The detection itself, against a real Cordis context: `provide` is what makes
+    // `ctx.get('approval')` resolve, so this proves the check keys on the service
+    // registry rather than on a property the test happened to set.
+    const without = new Context()
+    const with_ = new Context()
+    with_.provide('approval', { request: async () => 'allowed-once' as const })
+
+    expect(plugin.hasApprovalChannel(without)).toBe(false)
+    expect(plugin.hasApprovalChannel(with_)).toBe(true)
+    // And it resolves across contexts, which is the shape DSH actually has: the
+    // service is provided on the host root while a plugin runs on a context
+    // extended from it. This is the only part of the detection a test here can
+    // reach — see the note on the two warnings tests for what it cannot.
+    expect(plugin.hasApprovalChannel(with_.extend())).toBe(true)
+    expect(plugin.hasApprovalChannel(without.extend())).toBe(false)
+  })
+
+  it('warns at startup when the gate is enabled and nothing can approve an ask', () => {
+    const logs: string[] = []
+    mountPlugin({ gates: { safety: { enabled: true } } }, { captureLogs: logs })
+
+    const warnings = approvalWarnings(logs)
+    expect(warnings).toHaveLength(1)
+    // The message has to name the consequence, not just the missing service: an
+    // operator's symptom is a refused tool call carrying an "approve" reason.
+    expect(warnings[0]).toContain('denial')
+    expect(warnings[0]).toContain('dsh-user-approval')
+  })
+
+  it('stays silent when an approval service is mounted', () => {
+    const logs: string[] = []
+    mountPlugin(
+      { gates: { safety: { enabled: true } } },
+      { captureLogs: logs, withApproval: true },
+    )
+    expect(approvalWarnings(logs)).toEqual([])
+  })
+
+  it('stays silent when the gate is off, because no ask can be produced', () => {
+    // Exactly when the gate is on: a plugin that warns about a seam it never
+    // reaches is noise, and noise is how a real warning gets ignored.
+    const logs: string[] = []
+    mountPlugin(undefined, { captureLogs: logs })
+    expect(approvalWarnings(logs)).toEqual([])
+  })
+})
+
 describe('the recent() window', () => {
+  /**
+   * A hand-built record, because the point of these tests is the *order* of a
+   * history rather than what the service recorded.
+   *
+   * `seq` is stamped in call order here, deliberately independent of `at`: the two
+   * disagree in exactly the case these tests are about, because `at` is the send
+   * time while the core assigns `seq` when the call finishes. In the built core
+   * `seq` is required and `recent()` is already ordered by it
+   * (`packages/core/src/service.ts`, `readonly seq: number`), which is why the
+   * fixture carries it and why the assertions below are about what this package
+   * adds on top of that order rather than about producing an order at all.
+   */
+  let nextSeq = 1
   const record = (at: number, feature: EgressFeature = 'tool:jev_ask'): JevCallRecord => ({
+    seq: nextSeq++,
     feature,
     at,
     latencyMs: 0,
@@ -323,17 +430,49 @@ describe('the recent() window', () => {
 
   it('orders calls by when they were sent, not by when they finished', () => {
     // The service appends its history in `record()`, which runs when a call
-    // *finishes*. Two concurrent judgments therefore arrive in completion order.
+    // *finishes*, and the core now orders `recent()` by that append order (`seq`).
+    // Send order is a different order, and this is the function that recovers it.
     const recorded = [record(200, 'tool:jev_check'), record(100)]
     expect(plugin.orderRecent(recorded).map((entry) => entry.at)).toEqual([100, 200])
+    // What the history itself reports: append order, so the later *send* first.
+    expect(recorded.map((entry) => entry.seq)).toEqual([1, 2])
   })
 
-  it("copies, because recent() hands out the service's own array", () => {
+  it('copies, so ordering a history never rewrites it', () => {
+    // `recent()` returns a frozen copy now (`Object.freeze([...this.history])`), so
+    // this is belt-and-braces rather than the only thing standing between a caller
+    // and the service's history. It still asserts the property that matters: a
+    // caller that reverses what it was given cannot rewrite what other readers see.
     const recorded = [record(2), record(1)]
     const ordered = plugin.orderRecent(recorded)
     expect(ordered).not.toBe(recorded)
     ordered.reverse()
     expect(recorded.map((entry) => entry.at)).toEqual([2, 1])
+  })
+
+  it('gives the history an order that does not depend on the wall clock', async () => {
+    // The property `seq` exists for, and the reason `recent()` is now trustworthy
+    // without help: `at` has millisecond resolution, so two concurrent calls
+    // routinely stamp the same value, while `seq` strictly increases in the order
+    // records are appended. Asserted with no spacing at all, so a tie is the
+    // expected case rather than a flaky one.
+    const service = new JevService({
+      provider: new MockProvider(),
+      egress: new EgressContract(
+        { transmitting: true, enabled: allOn() },
+        'https://api.typesafe.ai',
+      ),
+    })
+    const questions = { q: { type: 'noul' as const, instructions: 'ok?' } }
+    await Promise.all([
+      service.ask({ feature: 'tool:jev_ask', state: 'a', questions }),
+      service.ask({ feature: 'tool:jev_ask', state: 'b', questions }),
+    ])
+
+    const records = service.recent()
+    expect(records.map((entry) => entry.seq)).toEqual([1, 2])
+    // Frozen, not the live array: a consumer cannot reorder the history in place.
+    expect(Object.isFrozen(records)).toBe(true)
   })
 
   it('reports two overlapping calls in send order whichever finishes first', async () => {
@@ -359,17 +498,22 @@ describe('the recent() window', () => {
     const questions = { q: { type: 'noul' as const, instructions: 'ok?' } }
 
     const first = service.ask({ feature: 'tool:jev_ask', state: 'first', questions })
-    // The sends have to be more than a millisecond apart: `at` carries
-    // millisecond resolution and is the only ordering key the record has.
+    // The sends are held more than a millisecond apart because this test asserts
+    // *send* order, and `at` is the only key that carries it — `seq` orders the
+    // history by completion instead. Two sends inside one millisecond would be
+    // indistinguishable by `at`, and the sort would fall back to append order,
+    // which is the opposite of what is asserted here.
     await new Promise((resolve) => setTimeout(resolve, 10))
     const second = service.ask({ feature: 'tool:jev_ask', state: 'second', questions })
     await second
     releaseFirst()
     await first
 
-    // Completion order is second-then-first; the reported order is send order.
+    // Completion order is second-then-first, and the history reports exactly that;
+    // the reported order is send order, which is what this package adds.
     const recorded = service.recent()
     expect(recorded[0]?.at).toBeGreaterThan(recorded[1]?.at ?? 0)
+    expect(recorded[0]?.seq).toBeLessThan(recorded[1]?.seq ?? 0)
     const ordered = plugin.orderRecent(recorded)
     expect(ordered[0]?.at).toBeLessThan(ordered[1]?.at ?? 0)
   })

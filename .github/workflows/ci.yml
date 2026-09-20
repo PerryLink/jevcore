@@ -87,13 +87,22 @@ jobs:
             const { execSync } = require('node:child_process');
 
             const required = {
-              'packages/core': ['lib/index.js', 'lib/index.d.ts', 'src/index.ts', 'README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md', 'CHANGELOG.md', 'LICENSE', 'NOTICE', 'scripts/probe-openrouter-live.mjs'],
-              'packages/dsh': ['lib/index.js', 'lib/index.d.ts', 'src/index.ts', 'cordis.patch.yml', 'skills/typesafe-ai-dsh/SKILL.md', 'README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md', 'CHANGELOG.md', 'LICENSE', 'NOTICE'],
-              'packages/mcp': ['lib/index.js', 'lib/bin.js', 'lib/index.d.ts', 'src/index.ts', 'README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md', 'CHANGELOG.md', 'LICENSE', 'NOTICE', 'scripts/mcp-smoke.mjs', 'scripts/mcp-smoke-live.mjs'],
+              'packages/core': ['lib/index.js', 'lib/index.d.ts', 'src/index.ts', 'README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md', 'CHANGELOG.md', 'LICENSE', 'NOTICE', 'docs/quickstart.md', 'docs/hosts.md', 'docs/approval.md', 'docs/limits.md', 'scripts/probe-openrouter-live.mjs'],
+              'packages/dsh': ['lib/index.js', 'lib/index.d.ts', 'src/index.ts', 'cordis.patch.yml', 'skills/typesafe-ai-dsh/SKILL.md', 'README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md', 'CHANGELOG.md', 'LICENSE', 'NOTICE', 'docs/quickstart.md', 'docs/hosts.md', 'docs/approval.md', 'docs/limits.md'],
+              'packages/mcp': ['lib/index.js', 'lib/bin.js', 'lib/index.d.ts', 'src/index.ts', 'README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md', 'CHANGELOG.md', 'LICENSE', 'NOTICE', 'docs/quickstart.md', 'docs/hosts.md', 'docs/approval.md', 'docs/limits.md', 'scripts/mcp-smoke.mjs', 'scripts/mcp-smoke-live.mjs'],
+              'packages/cli': ['lib/index.js', 'lib/bin.js', 'lib/index.d.ts', 'README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md', 'CHANGELOG.md', 'LICENSE', 'NOTICE', 'docs/quickstart.md', 'docs/hosts.md', 'docs/approval.md', 'docs/limits.md'],
             };
 
+            // The docs/ entries are here for the same reason the READMEs are:
+            // the four documents were in no package's files array at all, so an
+            // npm install shipped a plugin with no quickstart and no statement of
+            // the deployment boundaries -- while the repository looked complete.
+            // They are generated copies now, kept in sync by
+            // scripts/sync-package-docs.mjs, and this list is what makes a stale
+            // copy fail rather than ship.
+
             // The five READMEs and CHANGELOG.md are in this list because they
-            // were NOT in the tarballs until 0.2.2. They were listed in `files`
+            // were NOT in the tarballs until 0.2.2. They were listed in files
             // from the start while the package directories held none, so npm
             // dropped them silently and the guard above, which only asked for
             // README.md, never noticed. What a gate does not name, it does not

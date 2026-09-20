@@ -40,6 +40,17 @@ export interface ProviderCallContext {
   readonly label: string
   /** The caller's signal, so a cancellation is not reported as a timeout. */
   readonly signal?: AbortSignal | undefined
+  /**
+   * The upstream's own correlation id, when the failure carried one.
+   *
+   * Supplied by the caller because only the caller holds the thrown error, and
+   * it is the SDK that reads the header back off it: TypeSafe returns the id in
+   * `x-typesafe-request-id`, and the SDK exposes it as `APIError.requestId`
+   * (`@typesafe-ai/sdk@0.6.0`, `dist/index.mjs:181` reading `:1`). A failure is
+   * the case an operator is most likely to be asked about, so the id travels
+   * with it as well as with a success.
+   */
+  readonly requestId?: string | undefined
 }
 
 /**
@@ -101,6 +112,28 @@ export const retryAfterOf = (error: unknown): number | undefined => {
   return seconds === undefined ? undefined : seconds * 1_000
 }
 
+/**
+ * The correlation id the upstream put on a response, when it put one there.
+ *
+ * TypeSafe assigns the id and returns it in `x-typesafe-request-id`; the SDK
+ * reads that header back off the response (`@typesafe-ai/sdk@0.6.0`,
+ * `dist/index.mjs:1`) and exposes it twice — `WithResponse.requestId` on a
+ * success (`dist/index.d.mts:5-9`) and `APIError.requestId` on a failure
+ * (`dist/index.d.mts:338-339`). This is how a failure carries the same handle a
+ * success does, so an operator asked to quote a request id by TypeSafe support
+ * has one to quote.
+ *
+ * It reads a non-empty string and nothing else. No id is generated here, and a
+ * response that named none reports `undefined` rather than a placeholder: the id
+ * is the server's, and a local invention wearing its name would be worse than an
+ * absent one.
+ */
+export const requestIdOf = (value: unknown): string | undefined => {
+  if (!isRecord(value)) return undefined
+  const candidate = value.requestId
+  return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined
+}
+
 /** The error names that mean "this call ran out of time". */
 const TIMEOUT_NAMES = new Set(['TimeoutError', 'APITimeoutError'])
 
@@ -145,6 +178,19 @@ export const classifyStatus = (status: number): JevErrorCode => {
 }
 
 /**
+ * A classified failure, plus the upstream's correlation id when there was one.
+ *
+ * A named type rather than a bare {@link JevProviderError} because that class is
+ * closed — `types.ts` does not declare `requestId` on it — and a caller should
+ * not have to cast to read a field that is simply there at runtime. Read it back
+ * with {@link requestIdOf}, or as `error.requestId` when the type is in hand.
+ */
+export interface ProviderFailure extends JevProviderError {
+  /** `x-typesafe-request-id` off the failed response; absent when the server sent none. */
+  readonly requestId?: string | undefined
+}
+
+/**
  * Classify a thrown transport failure.
  *
  * Order matters. A caller aborts by definition, so their signal wins over
@@ -155,7 +201,7 @@ export const classifyStatus = (status: number): JevErrorCode => {
 export const classifyProviderFailure = (
   cause: unknown,
   context: ProviderCallContext,
-): JevProviderError => {
+): ProviderFailure => {
   const status = statusOf(cause)
   const retryAfterMs = retryAfterOf(cause)
   const evidence = {
@@ -166,39 +212,60 @@ export const classifyProviderFailure = (
     ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
   }
 
+  /**
+   * Attach the correlation id to the failure being returned.
+   *
+   * Not passed to the constructor: `JevProviderError` copies only the keys its
+   * own options type names, so an extra one would be silently dropped rather
+   * than refused. Assigning after construction is the only way to carry the id
+   * without widening a type this package does not own.
+   */
+  const carrying = (failure: JevProviderError): ProviderFailure =>
+    context.requestId === undefined
+      ? failure
+      : Object.assign(failure, { requestId: context.requestId })
+
   if (isAbortFailure(cause, context.signal)) {
-    return new JevProviderError(
-      `${context.label} call was aborted before an answer arrived.`,
-      'aborted',
-      evidence,
+    return carrying(
+      new JevProviderError(
+        `${context.label} call was aborted before an answer arrived.`,
+        'aborted',
+        evidence,
+      ),
     )
   }
 
   if (isTimeoutFailure(cause)) {
-    return new JevProviderError(
-      status === undefined
-        ? `${context.label} call timed out before an answer arrived.`
-        : `${context.label} call timed out after HTTP ${status}.`,
-      'timeout',
-      evidence,
+    return carrying(
+      new JevProviderError(
+        status === undefined
+          ? `${context.label} call timed out before an answer arrived.`
+          : `${context.label} call timed out after HTTP ${status}.`,
+        'timeout',
+        evidence,
+      ),
     )
   }
 
   if (status === undefined) {
     // No status and no abort: the request never got a response. Connection
     // refused, DNS failure, socket reset — the original `upstream-unreachable`.
-    return new JevProviderError(
-      `${context.label} request failed before a response arrived (network or timeout).`,
-      'upstream-unreachable',
-      evidence,
+    return carrying(
+      new JevProviderError(
+        `${context.label} request failed before a response arrived (network or timeout).`,
+        'upstream-unreachable',
+        evidence,
+      ),
     )
   }
 
   const code = classifyStatus(status)
-  return new JevProviderError(
-    `${context.label} rejected the request with HTTP ${status} (${code}).`,
-    code,
-    evidence,
+  return carrying(
+    new JevProviderError(
+      `${context.label} rejected the request with HTTP ${status} (${code}).`,
+      code,
+      evidence,
+    ),
   )
 }
 

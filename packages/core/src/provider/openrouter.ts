@@ -40,7 +40,7 @@ import {
 import {
   DEFAULT_MODEL,
   loadOfficialSdk,
-  timeoutForSdk,
+  sdkClientConfig,
   type ProviderLogLevel,
   type SdkModule,
   type SystemOneClient,
@@ -82,6 +82,15 @@ export interface OpenRouterProviderOptions {
   readonly model?: string
   /** SDK log level, passed explicitly so the environment cannot raise it. */
   readonly logLevel?: ProviderLogLevel
+  /**
+   * Let the SDK print request bodies, including the state this package redacted.
+   *
+   * Off by default. The SDK's `debug` level logs `body: req.body` with the body
+   * unredacted (`@typesafe-ai/sdk@0.6.0`, `dist/index.mjs:598`), so `debug` is
+   * forwarded at the body-safe level unless this is set. See
+   * {@link sdkLogLevelFor}, which both routes share.
+   */
+  readonly allowSdkBodyLogging?: boolean
   /**
    * Milliseconds per attempt, **not per call**.
    *
@@ -223,19 +232,23 @@ export class OpenRouterProvider implements JevProvider {
     if (this.client !== undefined) return this.client
     const load = this.options.loadSdk ?? loadOfficialSdk
     const sdk = await load()
-    const timeout = timeoutForSdk(this.options.timeout)
-    this.client = new sdk.TypeSafeClient({
-      // Explicit, for the same reasons as the TypeSafe route: the key is never
-      // left to the environment, and `logLevel` is, because the SDK's `debug`
-      // level writes request bodies whose credential headers are redacted but
-      // whose bodies are not.
-      apiKey: this.options.apiKey,
-      baseURL: this.baseURL,
-      logLevel: this.options.logLevel ?? 'warn',
-      ...(timeout === undefined ? {} : { timeout }),
-      ...(this.options.retry === undefined ? {} : { retry: this.options.retry }),
-      dangerouslyAllowBrowser: false,
-    })
+    // Built by the one shared builder, for the same reasons as the TypeSafe
+    // route: the key is never left to the environment, `logLevel` is never left
+    // to it either, and `debug` is clamped so this route cannot write request
+    // bodies — which the SDK's `debug` level does, headers redacted and bodies
+    // not (`@typesafe-ai/sdk@0.6.0`, `dist/index.mjs:596-599`). This provider's
+    // own options carry the same escape hatch as the TypeSafe route's, named
+    // after the consequence: {@link OpenRouterProviderOptions.allowSdkBodyLogging}.
+    this.client = new sdk.TypeSafeClient(
+      sdkClientConfig({
+        apiKey: this.options.apiKey,
+        baseURL: this.baseURL,
+        logLevel: this.options.logLevel,
+        timeout: this.options.timeout,
+        retry: this.options.retry,
+        allowSdkBodyLogging: this.options.allowSdkBodyLogging,
+      }),
+    )
     return this.client
   }
 

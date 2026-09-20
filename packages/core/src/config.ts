@@ -15,10 +15,15 @@
  *   gates.context       false       — does not read tool results
  *   defaultModel        'jev-latest'
  *   minConfidence       0.7         — an unsure Jev produces `ask`, not `allow`
+ *   safetySeverityBlock 'high'      — damage alone can send a call to the human
  *
  * The two numeric thresholds are read from `DEFAULT_POLICY` rather than written
  * here, so the posture described above and the posture enforced cannot drift
  * apart. They used to be literals in five separate places.
+ *
+ * `safetySeverityBlock` is a level name rather than a number, and it is the one
+ * gate setting with no off switch: the lowest level is the strictest one. See
+ * {@link SEVERITY_LEVELS} and {@link DEFAULT_SAFETY_SEVERITY_BLOCK}.
  */
 
 import { DEFAULT_POLICY } from './policy.js'
@@ -32,6 +37,68 @@ import { DEFAULT_POLICY } from './policy.js'
  *    A second way to reach the same models when a TypeSafe key is impractical.
  */
 export type ProviderKind = 'mock' | 'live' | 'openrouter'
+
+/**
+ * How damaging a gated tool call would be if it is wrong or malicious.
+ *
+ * A named ladder rather than a bare number, because the number is Jev's and the
+ * name is the operator's: `safetySeverityBlock` has to be readable in a config
+ * file, and a `2.0` would silently mean something else the moment a rung is
+ * inserted into or removed from the rubric. The order is the scale; it is
+ * written down once, in {@link SEVERITY_LEVELS}.
+ *
+ * This is the severity dimension from the guardrails cookbook, which scores "how
+ * much harm could result" beside a battery of hazard nouls and blocks on a
+ * threshold of its own, so that "delete one scratch file" and "drop the
+ * production database" do not gate identically. The cookbook's threshold is a
+ * number on a rubric it controls; here it is a level name, so editing the rubric
+ * cannot silently move the line.
+ *
+ * @see https://docs.typesafe.ai/cookbooks/llm_guardrails
+ */
+export type SeverityLevel = 'none' | 'low' | 'moderate' | 'high' | 'critical'
+
+/**
+ * The ladder, ascending: `none` is position 0, `critical` is the last rung.
+ *
+ * Exported because two modules must agree about it and neither may restate it —
+ * the validator below, which refuses an unknown level in configuration, and the
+ * safety gate, which sends these levels as its rubric and compares an answer
+ * against `safetySeverityBlock`. A second copy is how a level added to the type
+ * would become unselectable without anything failing.
+ *
+ * Annotated as `SeverityLevel[]` rather than as a literal tuple so the type and
+ * the array cannot disagree about spelling; a test asserts the array names every
+ * member of the type, which is the direction the type system cannot check.
+ */
+export const SEVERITY_LEVELS: readonly SeverityLevel[] = [
+  'none',
+  'low',
+  'moderate',
+  'high',
+  'critical',
+]
+
+/**
+ * The shipped severity at or above which the safety gate asks the human.
+ *
+ * `high`, not `moderate` and not `none`. The hazard questions are already a
+ * coarse filter, and the whole point of this dimension is to separate the call
+ * that can be re-run for free from the one that cannot be undone — so the line
+ * belongs at the rung that means "not recoverable by re-running it", not below
+ * it, where every write would be asked about.
+ *
+ * There is deliberately no value that switches the dimension off. Raising this
+ * to `critical` asks about less; lowering it to `none` asks about everything,
+ * because every resolved level is at or above the floor of the ladder. Neither
+ * can make the gate quieter than it was before this dimension existed, which is
+ * the property a "safety" setting has to keep.
+ */
+export const DEFAULT_SAFETY_SEVERITY_BLOCK: SeverityLevel = 'high'
+
+/** Whether a value is one of the declared severity levels. */
+const isSeverityLevel = (value: unknown): value is SeverityLevel =>
+  typeof value === 'string' && (SEVERITY_LEVELS as readonly string[]).includes(value)
 
 /** Configuration for one gate: an object, or a bare boolean shorthand. */
 export type GateInput = GateSettings | boolean
@@ -102,6 +169,14 @@ export interface JevConfigInput {
   readonly minConfidence?: number
   /** Minimum probability of the selected criterion. */
   readonly minProbability?: number
+  /**
+   * Severity at or above which the safety gate asks about a call even when no
+   * hazard crossed its floor. Defaults to `"high"`.
+   *
+   * Read by the safety gate only, and only to *add* escalations: a hazard that
+   * crossed its floor is asked about whatever this says.
+   */
+  readonly safetySeverityBlock?: SeverityLevel
   /** Maximum characters of `state` sent per call. `0` uses the feature default. */
   readonly maxStateChars?: number
   readonly gates?: {
@@ -123,6 +198,7 @@ export interface JevConfig {
   readonly requestMaxRetries: number
   readonly minConfidence: number
   readonly minProbability: number
+  readonly safetySeverityBlock: SeverityLevel
   readonly maxStateChars: number | undefined
   readonly gates: {
     readonly safety: Required<GateSettings>
@@ -180,6 +256,9 @@ export const DEFAULT_CONFIG: JevConfig = {
   // place so they're easy to review."
   minConfidence: DEFAULT_POLICY.minConfidence,
   minProbability: DEFAULT_POLICY.minProbability,
+  // A level name, so this is not a second copy of a `DEFAULT_POLICY` number —
+  // it is the one gate threshold the policy module has no opinion about.
+  safetySeverityBlock: DEFAULT_SAFETY_SEVERITY_BLOCK,
   maxStateChars: undefined,
   gates: {
     safety: { enabled: false, onUndecided: 'ask' },
@@ -252,6 +331,22 @@ const readLogLevel = (value: unknown): JevConfig['logLevel'] => {
   return fail(`"logLevel" must be silent, warn, info, or debug, got ${String(value)}`)
 }
 
+/**
+ * Read the severity block threshold.
+ *
+ * Refused rather than coerced, and the message lists the ladder: this value
+ * decides when a human is interrupted, so a typo that silently fell back to the
+ * default would leave an operator believing they had tightened or relaxed a
+ * check that is enforcing something else.
+ */
+const readSeverityLevel = (value: unknown): SeverityLevel => {
+  if (value === undefined) return DEFAULT_CONFIG.safetySeverityBlock
+  if (isSeverityLevel(value)) return value
+  return fail(
+    `"safetySeverityBlock" must be one of ${SEVERITY_LEVELS.join(', ')}, got ${String(value)}`,
+  )
+}
+
 /** Read a non-negative integer, or fail with the field name. */
 const readPositiveInt = (name: string, value: unknown, fallback: number): number => {
   if (value === undefined) return fallback
@@ -310,6 +405,7 @@ export const resolveConfig = (input: JevConfigInput | undefined): JevConfig => {
     requestMaxRetries: readRequestMaxRetries(raw.requestMaxRetries),
     minConfidence: readFraction('minConfidence', raw.minConfidence, DEFAULT_CONFIG.minConfidence),
     minProbability: readFraction('minProbability', raw.minProbability, DEFAULT_CONFIG.minProbability),
+    safetySeverityBlock: readSeverityLevel(raw.safetySeverityBlock),
     maxStateChars: readMaxStateChars(raw.maxStateChars),
     gates: {
       safety: readGate('safety', gatesRaw.safety, DEFAULT_CONFIG.gates.safety),

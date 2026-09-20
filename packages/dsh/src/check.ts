@@ -17,6 +17,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import {
   DEFAULT_CHECK_THRESHOLDS,
+  EGRESS_FIELDS,
   VERDICT_QUESTION,
   noul,
   renderResult,
@@ -27,6 +28,19 @@ import {
 } from 'jevcore'
 
 const FEATURE: EgressFeature = 'tool:jev_check'
+
+/**
+ * The declared egress cap on this tool's `state` field, which carries the claim
+ * and the evidence.
+ *
+ * Read from the core's contract rather than restated, for the same reason
+ * `rank.ts` reads its caps: the number the model is told has to be the number
+ * `EgressContract.measure` enforces. Declared rather than effective — an
+ * operator's `maxStateChars` overrides it and nothing at this call site sees
+ * those settings.
+ */
+export const STATE_CHAR_CAP: number =
+  EGRESS_FIELDS[FEATURE].find((field) => field.field === 'state')?.maxChars ?? 16_000
 
 type CheckArgs = {
   claim: string
@@ -180,6 +194,11 @@ const OUTPUT_SCHEMA = {
     answers: { type: 'json' as const, required: true as const },
     usage: { type: 'json' as const },
     warning: { type: 'string' as const },
+    // Declared because `execute` returns them: `renderResult` computes both, and a
+    // handler that rebuilds its payload out of `rendered` fields drops them
+    // silently. See the note in `execute`.
+    truncated: { type: 'boolean' as const },
+    egress: { type: 'json' as const },
   },
   additionalProperties: false,
 }
@@ -217,8 +236,11 @@ export const jevCheckTool = (
         type: 'string',
         required: true,
         description:
-          'The evidence to judge the claim against - quote it rather than paraphrasing. This ' +
-          'text is transmitted to TypeSafe when the live provider is configured.',
+          'The evidence to judge the claim against - quote it rather than paraphrasing. The ' +
+          `claim plus the evidence must serialise inside ${STATE_CHAR_CAP.toLocaleString('en-US')} ` +
+          'characters: over that the state is truncated rather than refused, Jev judges a fragment ' +
+          'of your own text, and the result carries "truncated": true. This text is transmitted ' +
+          'to TypeSafe when the live provider is configured.',
       },
     },
     output: {
@@ -274,6 +296,25 @@ export const jevCheckTool = (
         answers: rendered.answers,
         ...(rendered.usage === undefined ? {} : { usage: rendered.usage }),
         ...(rendered.warning === undefined ? {} : { warning: rendered.warning }),
+        // Forwarded for the reason the core's `RenderedResult.truncated` gives:
+        // they change how the verdict has to be read. `renderResult` computed both
+        // and this return dropped them, so an evidence string over the state cap
+        // was replaced by a `[truncated]` envelope — Jev judged a prefix of the
+        // caller's own JSON rather than the evidence — and the payload still read
+        // as a verdict about the evidence that was sent. Measured with one 17,000
+        // character evidence string, which a free-text field reaches trivially.
+        ...(rendered.truncated === true ? { truncated: true } : {}),
+        // Spread, and the two arrays copied, so the value is lossless JSON: the
+        // core's `JevEgressFacts` is an interface (no implicit index signature)
+        // whose array members are `readonly`, which the output schema's inferred
+        // `JsonValue` refuses.
+        ...(rendered.egress === undefined ? {} : {
+          egress: {
+            ...rendered.egress,
+            redactedFields: [...rendered.egress.redactedFields],
+            redactionRules: [...rendered.egress.redactionRules],
+          },
+        }),
       }
     },
   })

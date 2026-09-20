@@ -258,6 +258,13 @@ arranque muestra el valor efectivo en lugar del declarado, así que lo que impri
 Las barreras aceptan un booleano simple (`safety: false`) o un objeto con `onUndecided`: `ask` (por
 defecto), `allow` o `deny`.
 
+`ask` es una pregunta, así que necesita algo a lo que preguntar. Un despliegue que no compone ningún
+servicio de aprobación no puede escalar a una persona, y DeepSeek Harness entonces rechaza la llamada
+en lugar de ejecutarla: se rechaza toda herramienta con la que la barrera de seguridad coincide, lo
+que un operador vive como que el plugin le ha roto todos los comandos de shell.
+[docs/approval.md](docs/approval.md) tiene el mecanismo, y el README del plugin cubre la vista de
+despliegue.
+
 Un valor desconocido se rechaza al cargar con un mensaje que nombra la clave, en lugar de ignorarse en
 silencio — una errata de configuración no debería cambiar discretamente la postura de privacidad.
 

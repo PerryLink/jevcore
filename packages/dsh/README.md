@@ -253,6 +253,16 @@ Gates accept a bare boolean (`safety: false`) or an object with `onUndecided`: `
 An unknown value is rejected at load with a message naming the key, rather than being silently
 ignored — a config typo should not quietly change the privacy posture.
 
+### Enabling the safety gate where nothing can answer
+
+The gate answers `allow`, `deny`, or `ask`, and `ask` is its answer both for a raised hazard and for
+an undecided verdict. An `ask` needs an approval channel: a deployment that composes no approval
+service cannot escalate to a human, and the harness resolves the ask to a refusal instead of running
+the call. The gate matches by tool-name fragment, and its list includes `pwsh`, `bash`, `git`,
+`write` and `edit`, so an operator who enables it there watches ordinary shell commands and file
+edits fail. Enable it where a channel can put the question to a human, and read
+[docs/approval.md](docs/approval.md) for what provides that channel.
+
 ---
 
 ## Using it
@@ -289,6 +299,9 @@ Three tools, deliberately few and orthogonal:
 - **`jev_ask`** — a batch of typed questions over one state.
 - **`jev_rank`** — score and sort candidates against one criterion, one question per candidate in a
   single round-trip. The probabilities are independent per-candidate judgments, not a distribution.
+  The list is bounded: every candidate adds a question to a fixed 4,000-character budget, so 20
+  candidates fit alongside the default criterion, 17 alongside a 100-character one, and a longer list
+  is refused with an error rather than trimmed to the ones that fit.
 - **`jev_check`** — does this evidence support this claim? Returns `supported`, `contradicted`,
   `conflicted`, `insufficient`, `undecided`, or `unknown`. Contradiction outranks support, because
   evidence that both supports and refutes is a conflict, not a weak yes.

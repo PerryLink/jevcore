@@ -93,6 +93,14 @@ results are labelled in three places — `provider: "mock"`, a `mock/jev-synthet
 model name, and a `warning` field. A mock that could be mistaken for a real
 judgment would be worse than no mock at all.
 
+What it varies is narrower than that sounds, and one input it never reads is the question's
+`instructions` text: the hash covers the question's id and the request's state alone. Two
+differently-worded questions with the same id over the same state therefore get the same answer, so
+the mock cannot tell you whether a prompt is worded well. The declared criteria do not enter the hash
+either, though they still shape the answer: a `choice` answer spreads its weights across the labels
+you declared, and a `score` answer across the number of levels. Both report a fixed confidence of 0.5.
+[docs/limits.md](docs/limits.md) lists the rest of what the offline path does not model.
+
 ## Development
 
 ```sh

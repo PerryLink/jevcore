@@ -22,6 +22,7 @@ import {
   OpenRouterProvider,
   assertSystemOneModel,
 } from '../src/index.js'
+import { BODY_SAFE_LOG_LEVEL, sdkLogLevelFor } from '../src/provider/live.js'
 
 /**
  * Capture what a provider hands to the SDK constructor.
@@ -84,6 +85,100 @@ describe('transport settings are passed explicitly', () => {
   it('ships transport defaults in the shared config', () => {
     expect(DEFAULT_CONFIG.requestTimeoutMs).toBeGreaterThan(0)
     expect(DEFAULT_CONFIG.requestMaxRetries).toBe(2)
+  })
+})
+
+/**
+ * The debug path, which used to be a privacy hole.
+ *
+ * The SDK's `debug` level writes request bodies verbatim, headers redacted and
+ * bodies not — its own source, `@typesafe-ai/sdk@0.6.0` `dist/index.mjs:596-599`:
+ *
+ * ```js
+ * this.logger.debug(`${tag} -> ${url}`, {
+ *   headers: redactHeaders(attemptHeaders),
+ *   body: req.body
+ * })
+ * ```
+ *
+ * and the same level prints the parsed response body (`:573`) and an error body
+ * (`:618`). `LiveProviderOptions.logLevel` accepted `'debug'` and forwarded it,
+ * and the DSH and MCP wiring both pass `config.logLevel` straight through
+ * (`packages/dsh/src/index.ts:235`, `packages/mcp/src/runtime.ts:148`), so a
+ * single `logLevel: 'debug'` in configuration wrote the state this package
+ * redacts — after redaction, but to a log the caller believed was safe — with no
+ * warning anywhere on the path. The fix is that `debug` is not forwarded unless
+ * the caller asks for body logging by name.
+ */
+describe('a request body cannot reach the log by configuration alone', () => {
+  it('maps only debug, and only when the caller allows bodies', () => {
+    expect(sdkLogLevelFor('debug')).toBe(BODY_SAFE_LOG_LEVEL)
+    expect(sdkLogLevelFor('debug', false)).toBe(BODY_SAFE_LOG_LEVEL)
+    expect(sdkLogLevelFor('debug', true)).toBe('debug')
+    // Nothing else is touched: `allowSdkBodyLogging` is an opt-in to bodies, not
+    // a licence to raise verbosity past what was asked for.
+    for (const level of ['info', 'warn', 'error', 'off'] as const) {
+      expect(sdkLogLevelFor(level), level).toBe(level)
+      expect(sdkLogLevelFor(level, true), level).toBe(level)
+    }
+    expect(BODY_SAFE_LOG_LEVEL).not.toBe('debug')
+  })
+
+  it('never hands the SDK a level that prints bodies, from configuration alone', async () => {
+    const seen = await captureClientConfig({ logLevel: 'debug' })
+    expect(seen.logLevel).not.toBe('debug')
+    expect(seen.logLevel).toBe(BODY_SAFE_LOG_LEVEL)
+  })
+
+  it('forwards debug only behind the option named after its consequence', async () => {
+    const seen = await captureClientConfig({ logLevel: 'debug', allowSdkBodyLogging: true })
+    expect(seen.logLevel).toBe('debug')
+  })
+
+  it('cannot reach debug when nothing is configured', async () => {
+    const seen = await captureClientConfig({})
+    expect(seen.logLevel).toBe(DEFAULT_LOG_LEVEL)
+  })
+
+  it('applies the same clamp on the OpenRouter route, which shares the client', async () => {
+    const captured: { config?: Record<string, unknown> } = {}
+    const stub = {
+      TypeSafeClient: class {
+        constructor(config: Record<string, unknown>) {
+          captured.config = config
+        }
+        async systemOne() {
+          return { model: 'stub', answers: {} }
+        }
+      },
+    }
+    const provider = new OpenRouterProvider({
+      apiKey: 'test-key',
+      logLevel: 'debug',
+      loadSdk: async () => stub as never,
+    })
+    await provider.answer({ state: 'x', questions: { q: { type: 'noul', instructions: 'ok?' } } })
+    expect(captured.config?.logLevel).toBe(BODY_SAFE_LOG_LEVEL)
+
+    const allowed: { config?: Record<string, unknown> } = {}
+    const optInStub = {
+      TypeSafeClient: class {
+        constructor(config: Record<string, unknown>) {
+          allowed.config = config
+        }
+        async systemOne() {
+          return { model: 'stub', answers: {} }
+        }
+      },
+    }
+    const opted = new OpenRouterProvider({
+      apiKey: 'test-key',
+      logLevel: 'debug',
+      allowSdkBodyLogging: true,
+      loadSdk: async () => optInStub as never,
+    })
+    await opted.answer({ state: 'x', questions: { q: { type: 'noul', instructions: 'ok?' } } })
+    expect(allowed.config?.logLevel).toBe('debug')
   })
 })
 
