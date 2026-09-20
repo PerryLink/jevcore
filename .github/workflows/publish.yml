@@ -53,6 +53,13 @@ jobs:
           # would write an `_authToken` line into `.npmrc` and silently downgrade
           # the publish below.
           node-version: "22"
+          # setup-node v5 turns package-manager caching on by itself when
+          # package.json declares `packageManager`, and this repository pins one.
+          # That runs `pnpm` before `corepack enable` has put it on PATH and the
+          # step fails before the publish is ever reached. Caching is not worth
+          # reordering the toolchain for: the pnpm that performs the OIDC
+          # exchange must be the one corepack resolves.
+          package-manager-cache: false
 
       - name: Enable corepack
         run: corepack enable

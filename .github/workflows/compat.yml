@@ -38,6 +38,12 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
+          # setup-node v5 turns package-manager caching on by itself when
+          # package.json declares `packageManager`, and this repository pins
+          # one. That makes the action run `pnpm` before `corepack enable`
+          # has put it on PATH, and the step dies with "Unable to locate
+          # executable file: pnpm".
+          package-manager-cache: false
 
       - name: Enable corepack
         run: corepack enable
@@ -106,6 +112,12 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
+          # setup-node v5 turns package-manager caching on by itself when
+          # package.json declares `packageManager`, and this repository pins
+          # one. That makes the action run `pnpm` before `corepack enable`
+          # has put it on PATH, and the step dies with "Unable to locate
+          # executable file: pnpm".
+          package-manager-cache: false
 
       - name: Enable corepack
         run: corepack enable
