@@ -108,6 +108,32 @@ export const CONFIG_DOC = {
 type Level = 'silent' | 'warn' | 'info' | 'debug'
 const ORDER: Record<Level, number> = { silent: 0, warn: 1, info: 2, debug: 3 }
 
+/**
+ * Add what a human needs when the gate judged a fragment rather than the whole.
+ *
+ * Both gate decisions carry `truncated` and the egress facts, and this file
+ * forwarded only `reason` — so a gate that had judged a capped payload presented
+ * its decision exactly like one that had judged all of it. That is the defect the
+ * core's `renderResult` had, in the one place where the audience is a person
+ * deciding whether to approve something rather than a model deciding what to do
+ * next.
+ *
+ * Only an explicit `true` adds the sentence. `undefined` means the payload was
+ * judged whole, which is the ordinary case, and a caveat attached to every
+ * decision is a caveat nobody reads.
+ */
+export const withTruncationCaveat = (
+  text: string | undefined,
+  decision: { readonly truncated?: boolean },
+): string | undefined => {
+  if (decision.truncated !== true) return text
+  const base = text ?? 'the jevcore gate did not explain its decision'
+  return (
+    `${base} (What was judged had been capped first, so this is a judgment about the part that ` +
+    'survived the cap rather than about all of it.)'
+  )
+}
+
 interface Logger {
   warn: (message: string) => void
   info: (message: string) => void
@@ -421,10 +447,11 @@ export function apply(ctx: Context, input?: JevConfigInput): void {
           ...(call.signal === undefined ? {} : { signal: call.signal }),
         })
         if (decision.kind === 'allow') return (next as () => Promise<unknown>)()
+        const reason = withTruncationCaveat(decision.reason, decision)
         if (decision.kind === 'deny') {
-          return { kind: 'deny', reason: decision.reason ?? 'denied by the jevcore safety gate' }
+          return { kind: 'deny', reason: reason ?? 'denied by the jevcore safety gate' }
         }
-        return { kind: 'ask', ...(decision.reason === undefined ? {} : { reason: decision.reason }) }
+        return { kind: 'ask', ...(reason === undefined ? {} : { reason }) }
       }),
     )
   }
@@ -450,7 +477,12 @@ export function apply(ctx: Context, input?: JevConfigInput): void {
         if (!decision.block) return (next as () => Promise<unknown>)()
         return {
           kind: 'block',
-          feedback: [{ type: 'text', text: decision.feedback ?? 'result withheld by jevcore' }],
+          feedback: [
+            {
+              type: 'text',
+              text: withTruncationCaveat(decision.feedback, decision) ?? 'result withheld by jevcore',
+            },
+          ],
         }
       }),
     )

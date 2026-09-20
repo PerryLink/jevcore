@@ -536,3 +536,25 @@ describe('the recent() window', () => {
     expect(at).toEqual([...at].sort((left, right) => left - right))
   })
 })
+
+describe('the truncation caveat', () => {
+  // `GateDecision` carries `truncated`, and the plugin forwarded only `reason`.
+  // So a gate that had judged a capped payload presented its decision exactly
+  // like one that had judged all of it — the same defect the core's
+  // `renderResult` had, in the one place where the audience is a person deciding
+  // whether to approve something.
+  it('is added only when the payload really was capped', () => {
+    expect(plugin.withTruncationCaveat('flagged x', {})).toBe('flagged x')
+    expect(plugin.withTruncationCaveat('flagged x', { truncated: false })).toBe('flagged x')
+    expect(plugin.withTruncationCaveat('flagged x', { truncated: true })).toContain('capped')
+  })
+
+  it('says something even when the gate gave no reason of its own', () => {
+    // A caveat that silently vanishes when the text it would attach to is missing
+    // is the failure this is meant to prevent, so absence gets a sentence too.
+    const text = plugin.withTruncationCaveat(undefined, { truncated: true })
+    expect(text).toBeDefined()
+    expect(text).toContain('capped')
+    expect(plugin.withTruncationCaveat(undefined, {})).toBeUndefined()
+  })
+})
