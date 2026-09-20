@@ -42,13 +42,17 @@ export const name = 'dsh-jev'
 /**
  * Host services this plugin consumes.
  *
- * `tools` and `credentials` are required — without them the plugin has nothing
- * to register and no way to resolve a key. `skills` is optional (`false` in the
- * inject declaration): the registry only exists when a profile composes the
- * skill subsystem, and the bundled skill is a convenience rather than a
- * capability, so its absence must not stop the plugin from loading.
+ * Only the two it cannot work without. `tools` is where the three tools are
+ * registered; `credentials` is how a key is resolved.
+ *
+ * `skills` is deliberately absent. Every key in `inject` makes the fiber wait
+ * for that service, so listing it would leave the plugin `pending` forever in a
+ * profile that does not compose the skill subsystem — which is most of them, and
+ * which is exactly what happened here. The registry is looked up at runtime
+ * through `ctx.get('skills')` instead, and its absence is a warning rather than a
+ * failure.
  */
-export const inject = ['tools', 'credentials', { skills: false }]
+export const inject = ['tools', 'credentials']
 
 /**
  * The configuration schema, as Cordis consumes it.

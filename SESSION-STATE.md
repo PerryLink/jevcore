@@ -47,7 +47,32 @@ transport payloads, and delegate every judgment to core. That is deliberate — 
 adapter cannot drift from the guarantees the others make if it owns no decision
 logic.
 
-## The one blocker, now with reproducible evidence
+## Round 4: the restart cleared the first bug and revealed a second
+
+The restart did what was predicted: the `TypeError: ... reading 'validate'` is gone.
+The row moved `failed` -> `pending`.
+
+It did not reach `active`, because a **second, unrelated bug of mine** was behind it:
+
+```
+jev (dsh-jev): pending (waiting for service: [object Object])
+```
+
+`[object Object]` is the stringified form of `{ skills: false }`, which I had put in
+`inject` believing the object form marks a dependency optional. It does not. Every key
+in `inject` makes the fiber wait for that service, and no service in this profile is
+named after that object, so the plugin waited forever.
+
+Fixed: `inject` is now `['tools', 'credentials']`, and `skills` is looked up at runtime
+through `ctx.get('skills')` with its absence treated as a warning. The built artifact
+was verified to contain the corrected array.
+
+**This fix needs one more restart to take effect.** Toggling the row does not help, for
+the same reason as before: cordis caches the plugin record, and the cached record still
+carries the old `inject`. Touching the profile's `cordis.patch.yml` (the profile sets
+`patchReload: live`) also did not reload it.
+
+## The original blocker, with reproducible evidence
 
 The DSH plugin row still shows `failed`:
 

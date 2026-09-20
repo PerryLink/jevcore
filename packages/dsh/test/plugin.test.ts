@@ -87,10 +87,12 @@ describe('plugin module shape', () => {
     expect(plugin.inject).toContain('credentials')
   })
 
-  it('declares the skills registry as an optional dependency', () => {
-    // The registry only exists when a profile composes the skill subsystem, so
-    // a required injection would stop the plugin loading without it.
-    expect(plugin.inject).toContainEqual({ skills: false })
+  it('does NOT list skills in inject, because any inject key blocks activation', () => {
+    // Every key in `inject` makes the fiber wait for that service, so listing
+    // `skills` leaves the plugin `pending` forever wherever the skill subsystem
+    // is not composed. It is looked up at runtime instead.
+    expect(plugin.inject).not.toContain('skills')
+    expect(plugin.inject.filter((entry) => typeof entry !== 'string')).toEqual([])
   })
 
   it('exports apply as a function', () => {
