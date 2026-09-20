@@ -4,6 +4,91 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.1 — 2026-09-21
+
+0.4.0 was staged and never released, except for the CLI. This is what an
+adversarial pass over it found, and the first item is why the release was pulled.
+
+### Fixed
+
+- **`jev_ask` returned invalid output on every call, in every real host.** The
+  host validates a tool's return value against the schema that tool declares, on
+  the ordinary dispatch path, and rejects an undeclared key. `JevService` stamps
+  `egress` onto every result, `renderResult` forwards it, and `ask.ts` returns
+  `renderResult(...)` verbatim — while `ask.ts`'s output schema declared neither
+  `truncated` nor `egress`. `rank.ts` and `check.ts` declared both. So every call
+  came back as `tool "jev_ask" returned invalid output: "value.egress" is not a
+  declared property (additionalProperties: false)`.
+
+  **This was already broken in the published 0.3.1.** The schema and the core's
+  stamping are byte-identical at `fc8f016`; only the tool that returns the core's
+  rendered payload directly was affected, which is why `jev_rank` and `jev_check`
+  kept working. A thousand lines of tests never saw it because they drive
+  `definition.execute(...)` — one level below the validator the registry runs on
+  every top-level call. `test/tools.test.ts` now asserts each tool's payload
+  against its own declared schema.
+
+- **The question map's redaction leaked secrets nested inside a question.** The
+  fix that stopped `credential_exposure` being replaced by `"[redacted]"` disabled
+  the key rules for the entire question subtree, so a secret named by its *key
+  inside* a question stopped being redacted at all: `noul({ password: '…' })`
+  reached the provider verbatim and `redactions` was `0`. Now only the map's
+  **top-level ids** are exempt — they key the answers and are protocol
+  identifiers — while each question's **value** is redacted with the full rules.
+
+- **The shape guard did not fire for every reshape.** A redactor returning a
+  number or a boolean produced no error at all, because `Object.entries(7)` is
+  `[]`; `null` produced a `TypeError` rather than `EgressShapeError`. The guard
+  now requires a non-null, non-array object whose id set is exactly the declared
+  one.
+
+- **`recent()`'s freeze was shallow, so the record could be rewritten.**
+  `recent()[0].redactionRules.push('FORGED')` succeeded and changed what
+  `stats().lastCall` reported: the record object was frozen, its array was not,
+  and it was the array the service kept. This package describes the call history
+  as the honest record of what happened, and a record a caller can edit is not
+  that.
+
+- **An open breaker still charged the call budget.** `budget.reserve()` ran before
+  `breaker.assert()`, so a provider that had been failing burned the budget on
+  calls that were never made — measured at three of three consumed with zero
+  transmissions. The breaker is consulted first.
+
+- **A cache failure could be recorded as a provider failure**, turning a storage
+  bug into an unhealthy endpoint and incrementing `failures` for a call whose
+  provider answered correctly. **A cache hit also dropped `warning`**, so a
+  synthetic answer came back from the cache looking like a real one.
+
+- **The safety and context gates dropped the egress facts**, the same defect class
+  fixed in the MCP and DSH adapters earlier in this release: they rebuild a
+  `JevResult` field by field, and the rebuilt value lost `truncated` and `egress`.
+
+- **The published CLI answered `--version` with the wrong version.**
+  `jevcore-cli@0.4.0` reported `0.3.1`, because the constant was kept in step with
+  `package.json` by hand and the hand slipped during the bump. It is read from the
+  manifest at run time now, so there is no second copy to forget.
+
+- **The GitHub Action's output heredocs were not delimiter-safe.** A stdout line
+  reading `JEV_RESULT_EOF` closed the heredoc early and every line after it was
+  parsed by the runner as a further `$GITHUB_OUTPUT` command — an output whose
+  name came from the document. The delimiters are generated per run. Separately, a
+  newline in the `command` input forged a second `::error::` annotation line;
+  newlines are stripped from any value before it reaches a workflow command.
+
+- **`scripts/check-workflow-shell.mjs` both missed violations and invented them.**
+  It did not see `run: |2-`, a plain scalar whose value continues on the next
+  line, or `run` written inside a flow mapping — and it reported backticks inside
+  quoted-heredoc bodies and single-quoted strings, where bash expands nothing at
+  all. A guard that is wrong in both directions teaches people to ignore it.
+
+### Changed
+
+- **The release path records why `0.4.0` is not a version to install.**
+  `jevcore-cli@0.4.0` is live and cannot be installed: its name was new, a first
+  publish of a package name cannot be staged, and it pinned `jevcore@0.4.0`
+  exactly — a version that never left staging. `latest` moves to 0.4.1, which
+  resolves.
+
 ## 0.4.0 — 2026-09-21
 
 Four surfaces over one decision core now, and most of this release is about the

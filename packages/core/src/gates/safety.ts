@@ -34,11 +34,11 @@ import {
   SEVERITY_LEVELS,
   type SeverityLevel,
 } from '../config.js'
-import type { EgressFeature } from '../egress.js'
+import { egressFactsOf, type EgressFeature } from '../egress.js'
 import { noul, score } from '../primitives.js'
 import { DEFAULT_POLICY, applyPolicy, type Verdict } from '../policy.js'
 import type { JevService } from '../service.js'
-import { JevProviderError, type JevQuestion } from '../types.js'
+import { JevProviderError, type JevEgressFacts, type JevQuestion } from '../types.js'
 
 export const SAFETY_FEATURE: EgressFeature = 'gate:safety'
 
@@ -184,6 +184,25 @@ export interface GateDecision {
    * call is harmless".
    */
   readonly severity?: SeverityLevel
+  /**
+   * True when the state this decision was made from was capped before it left.
+   *
+   * Carried because the decision is built from a `JevResult` and used to be built
+   * without these two fields: a call judged on a `[truncated]` envelope produced
+   * the same `ask` as a call judged on the whole state, so nothing downstream
+   * could tell the human that Jev had seen a fragment. Omitted — not `false` —
+   * when nothing was capped, so a decision from an ordinary call keeps the shape
+   * it had before this field existed.
+   */
+  readonly truncated?: boolean
+  /**
+   * What egress did to the payload: caps applied, redactions made.
+   *
+   * Present only when a decision was made from a service-prepared result. An
+   * `allow` for a tool this gate does not cover, and the refusal paths for an
+   * egress denial or an unreachable provider, have no measurement to describe.
+   */
+  readonly egress?: JevEgressFacts
 }
 
 export interface SafetyGateOptions {
@@ -444,6 +463,9 @@ export const createSafetyGate = (options: SafetyGateOptions) => {
     const severity = severityLevelOf(
       applyPolicy(result.answers[SEVERITY_QUESTION_ID], LADDER_INDICES, policy),
     )
-    return decide(verdicts, severity)
+    // Stamped onto whatever `decide` returns, on every outcome rather than only
+    // the blocking ones: an `allow` produced from a state that was capped or
+    // redacted is exactly the decision a reader is most likely to over-trust.
+    return { ...decide(verdicts, severity), ...egressFactsOf(result) }
   }
 }

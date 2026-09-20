@@ -21,11 +21,11 @@
  *    keeping an uninformative one, and the model can still ask again.
  */
 
-import type { EgressFeature } from '../egress.js'
+import { egressFactsOf, type EgressFeature } from '../egress.js'
 import { noul } from '../primitives.js'
 import { DEFAULT_POLICY, applyPolicy } from '../policy.js'
 import type { JevService } from '../service.js'
-import { JevProviderError, type JevQuestion } from '../types.js'
+import { JevProviderError, type JevEgressFacts, type JevQuestion } from '../types.js'
 
 export const CONTEXT_FEATURE: EgressFeature = 'gate:context'
 
@@ -73,6 +73,25 @@ export interface ContextGateDecision {
   readonly block: boolean
   readonly feedback?: string
   readonly reason?: string
+  /**
+   * True when the text this decision was made from was capped before it left.
+   *
+   * Carried because the decision is built from a `JevResult` and used to be built
+   * without these two fields: a result judged on a `[truncated]` envelope reached
+   * the same verdict as one judged whole, and the caller had no way to see that
+   * the judge had read a fragment. Omitted — not `false` — when nothing was
+   * capped.
+   */
+  readonly truncated?: boolean
+  /**
+   * What egress did to the payload: caps applied, redactions made.
+   *
+   * Present only when a judgement actually happened. The three early returns —
+   * below `minChars`, egress disabled, provider unreachable — have no
+   * measurement to describe, and an absent field says so rather than implying a
+   * clean one.
+   */
+  readonly egress?: JevEgressFacts
 }
 
 /** Flatten a result's content blocks into the text the gate judges. */
@@ -154,6 +173,11 @@ export const createContextGate = (options: ContextGateOptions) => {
       : undefined
     const adds = applyPolicy(result.answers.adds_information, ['true', 'false'], policy)
 
+    // Stamped here rather than on the blocking path alone: `block: false` with a
+    // capped state is the reading a caller is least likely to question, and the
+    // one where "the judge saw a fragment" matters most.
+    const facts = egressFactsOf(result)
+
     // Only a confident "not relevant" blocks. Everything else keeps the result.
     if (relevance?.kind === 'decided' && relevance.answer === 'false') {
       return {
@@ -162,6 +186,7 @@ export const createContextGate = (options: ContextGateOptions) => {
           `The result from ${input.toolName} was judged not relevant to the task ` +
           `(relevance ${Math.round((1 - relevance.probability) * 100)}% against). It was withheld ` +
           `to save context. Try a narrower query, or state what you are looking for.`,
+        ...facts,
       }
     }
     if (adds.kind === 'decided' && adds.answer === 'false') {
@@ -170,9 +195,10 @@ export const createContextGate = (options: ContextGateOptions) => {
         feedback:
           `The result from ${input.toolName} only restated information already given. It was ` +
           `withheld to save context. Use what you already have, or ask something new.`,
+        ...facts,
       }
     }
-    return { block: false }
+    return { block: false, ...facts }
   }
 }
 

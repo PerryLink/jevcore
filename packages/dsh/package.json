@@ -1,6 +1,6 @@
 {
   "name": "jevcore-dsh",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "TypeSafe Jev as a first-class Cordis service and three model-visible tools for DeepSeek Harness — offline by default, egress disclosed, never default-on.",
   "keywords": [
     "dsh-plugin",

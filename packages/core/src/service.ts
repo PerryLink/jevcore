@@ -21,10 +21,10 @@ import type { JevEgressFacts, JevProvider, JevQuestion, JevResult, JsonValue } f
 /**
  * One recorded call, for the status report. Contains no payload content.
  *
- * Frozen when stored, so this is an immutable value rather than an
- * immutable-looking one: the same object is handed to `recent()`,
- * `stats().lastCall`, and the `onRecord` observer, and a mutable record would let
- * any one of those readers rewrite what the others are shown.
+ * Frozen when stored — the record and the one array it carries — so this is an
+ * immutable value rather than an immutable-looking one: the same object is handed
+ * to `recent()`, `stats().lastCall`, and the `onRecord` observer, and a mutable
+ * record would let any one of those readers rewrite what the others are shown.
  */
 export interface JevCallRecord {
   /**
@@ -43,7 +43,13 @@ export interface JevCallRecord {
   readonly at: number
   readonly latencyMs: number
   readonly ok: boolean
-  /** Redaction rules that fired, if any. */
+  /**
+   * Redaction rules that fired, if any.
+   *
+   * A frozen *copy* of the measured payload's array, never the array itself: the
+   * egress contract holds the original, and a record that shared it would be
+   * writable through either one.
+   */
   readonly redactionRules: readonly string[]
   readonly redactions: number
   readonly stateChars: number
@@ -193,6 +199,19 @@ export interface JevAskInput {
 }
 
 /**
+ * A result as this service stores and returns it: the provider's own result plus
+ * the synthetic marker a route may attach to it.
+ *
+ * `warning` is not declared on {@link JevResult}, and this alias is why the
+ * cache-hit path can carry it without reaching for `any`. Nothing here is
+ * inferred from the provider's name: `renderResult` derives the offline mock's
+ * warning from `provider === 'mock'`, while a route that marks its own answers
+ * synthetic sets the field directly — and a hit that dropped it would hand back a
+ * synthetic answer wearing a real one's shape.
+ */
+type ResultWithWarning = JevResult & { readonly warning?: string }
+
+/**
  * Attach what egress did to the payload, without disturbing what the provider
  * answered.
  *
@@ -297,22 +316,32 @@ export class JevService {
       const hit = cache.lookup(cache.keyOf(measured, this.options.model))
       if (hit !== undefined) {
         // The cache is typed in plain JSON so it stays independent of this
-        // module; the value stored here is always a `JevResult`. The key covers
+        // module; the value stored here is always a result. The key covers
         // the measurement — both character counts, `truncated`, and the redacted
         // payload — so a hit is by construction a request identical to the one
         // that produced the value.
-        const stored = hit as unknown as JevResult
-        // Rebuilt rather than spread, because two of the stored fields cannot be
+        const stored = hit as unknown as ResultWithWarning
+        // Rebuilt rather than spread, because three of the stored fields cannot be
         // carried over honestly: `latencyMs` measured the call that filled the
-        // cache rather than this one, and `usage` reports tokens this call did not
-        // spend. Leaving either in place would let a caller total up work that
-        // never happened. The egress facts are re-stamped below from *this*
-        // measurement, which the key says is the same one.
-        const reused: JevResult = {
+        // cache rather than this one, `usage` reports tokens this call did not
+        // spend, and the stored `truncated`/`egress` describe the measurement that
+        // filled the cache rather than this identical one — the egress facts are
+        // re-stamped below from *this* measurement, which the key says is the same
+        // one. Leaving any of them in place would let a caller total up work that
+        // never happened.
+        //
+        // `warning` is deliberately NOT one of them. It says the answers
+        // themselves are synthetic, so dropping it would hand back a cached
+        // synthetic answer looking exactly like a real judgment — the one
+        // distinction this project does not blur.
+        const reused: ResultWithWarning = {
           provider: stored.provider,
           model: stored.model,
           answers: stored.answers,
           latencyMs: 0,
+          // Checked rather than trusted: the value came out of a JSON store, so
+          // the declared type is not evidence of what is in there.
+          ...(typeof stored.warning === 'string' ? { warning: stored.warning } : {}),
         }
         this.calls += 1
         // `transmitted` is deliberately NOT incremented: it counts what left the
@@ -337,8 +366,19 @@ export class JevService {
     // not provider failures, and recording them as such would make an ordinary
     // spending stop look like an unhealthy endpoint. An egress denial already gets
     // exactly this treatment, one step earlier.
-    this.options.budget?.reserve()
+    //
+    // The breaker is asserted BEFORE the budget, and the order is the point.
+    // `reserve()` charges a call immediately, and nothing releases a charge for a
+    // call that was never made. With the reverse order an open breaker refused
+    // before anything was transmitted while still consuming the ceiling —
+    // measured at `callsUsed` 1 → 2 → 3 with `transmitted` at 0 — so a budget of
+    // three calls was spent by three refusals and the caller was told its calls
+    // had been made. A call that was never made must not cost one.
+    //
+    // The visible change is which refusal a caller sees when both apply. Nothing
+    // was transmitted either way, which is what both layers are protecting.
     this.options.breaker?.assert()
+    this.options.budget?.reserve()
 
     const startedAt = Date.now()
     this.transmitted += 1
@@ -367,12 +407,6 @@ export class JevService {
       // ceiling quietly stops bounding anything.
       this.options.budget?.recordCost(costUsd)
       this.options.breaker?.recordSuccess()
-      if (cache !== undefined && cacheable) {
-        cache.store(
-          cache.keyOf(measured, this.options.model),
-          withEgressFacts(result, measured) as unknown as JsonValue,
-        )
-      }
       // Accounting is settled before the record is announced, so an `onRecord`
       // observer that reads `stats()` sees the call it is being told about
       // included rather than one behind. The record is still stored before the
@@ -387,6 +421,37 @@ export class JevService {
         stateChars: measured.stateChars,
         truncated: measured.truncated,
       })
+      // The cache is written last, after the accounting is settled.
+      //
+      // It used to be written inside the `try` above, so a `store` that threw
+      // landed in the `catch` below: `failures` moved, `breaker.recordFailure`
+      // ran, and the answer itself was thrown away with the exception. A call
+      // whose provider answered correctly was recorded as a provider failure —
+      // which is also what makes the `catch`'s own "only a provider failure can
+      // reach here" true again, a sentence that was false while the store sat
+      // inside it. `recordFailure` ignores anything that is not a
+      // `JevProviderError`, so a plain storage `Error` did not itself open the
+      // breaker; one that arrived wrapped in a provider-shaped error would have,
+      // and in every case the call was counted as a failure it was not.
+      //
+      // A failure here is swallowed, and the price is worth stating plainly: the
+      // answer is still returned, the counters and the breaker are untouched, and
+      // nothing is logged. What is lost is the reuse itself — the next identical
+      // request transmits and is billed again — and the only trace of it is a
+      // cache whose hit rate never rises. Reporting it instead would mean either
+      // failing a call that succeeded or inventing a counter this service does not
+      // have; `failures` counts Jev calls, not cache writes. A cache that can fail
+      // is expected to do its own reporting.
+      if (cache !== undefined && cacheable) {
+        try {
+          cache.store(
+            cache.keyOf(measured, this.options.model),
+            withEgressFacts(result, measured) as unknown as JsonValue,
+          )
+        } catch {
+          // Deliberately dropped. See above for what is lost by dropping it.
+        }
+      }
       return withEgressFacts(result, measured)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -500,13 +565,16 @@ export class JevService {
    * `at` cannot order the history: it is a start timestamp, and records are
    * appended on completion.
    *
-   * Returns a frozen **copy**, and every record in it is frozen as well. This
-   * getter used to hand back the service's own array, which made the history
-   * writable from outside: a caller could `push`, `shift`, or `reverse` it and
-   * change what every other reader — including `stats().lastCall` — was shown.
-   * The copy is what makes the returned array safe to sort in place, and the
-   * freezes are what make its elements safe to hand out at all, since `readonly`
-   * is a compile-time claim that any plain-JavaScript consumer ignores.
+   * Returns a frozen **copy**, and every record in it is frozen as well,
+   * including the one array each record carries. This getter used to hand back
+   * the service's own array, which made the history writable from outside: a
+   * caller could `push`, `shift`, or `reverse` it and change what every other
+   * reader — including `stats().lastCall` — was shown. The copy is what makes the
+   * returned array safe to sort in place, and the freezes are what make its
+   * elements safe to hand out at all, since `readonly` is a compile-time claim
+   * that any plain-JavaScript consumer ignores. Freezing the record alone was not
+   * enough: the record was immutable and its `redactionRules` array was not, so
+   * the history was still writable, one level down.
    */
   recent(): readonly JevCallRecord[] {
     return Object.freeze([...this.history])
@@ -518,9 +586,24 @@ export class JevService {
    * Frozen rather than only `readonly`-typed because the same object is handed to
    * `recent()`, `stats().lastCall`, and the `onRecord` observer; without the
    * freeze, one of those readers could rewrite the history the others see.
+   *
+   * The freeze is shallow, so every array-valued field it carries has to be
+   * frozen here as well — and copied first. `redactionRules` arrives from
+   * `MeasuredPayload.redactionRules`, which the egress contract also hands back
+   * to whoever called `measure`; freezing that array in place would reach out of
+   * this class and freeze an array this service does not own. Storing it
+   * uncopied is the other half of the same bug, and that half shipped: the record
+   * was frozen, the array was not, and a caller could `push('FORGED-RULE')` onto
+   * `recent()[0].redactionRules` — after which `stats().lastCall` showed the
+   * forged rule. This service's whole claim is that the record is what actually
+   * happened, and a record any reader can rewrite is not that.
    */
   private record(entry: Omit<JevCallRecord, 'seq'>): void {
-    const record: JevCallRecord = Object.freeze({ ...entry, seq: this.nextSeq })
+    const record: JevCallRecord = Object.freeze({
+      ...entry,
+      redactionRules: Object.freeze([...entry.redactionRules]),
+      seq: this.nextSeq,
+    })
     this.nextSeq += 1
     this.history.push(record)
     if (this.history.length > this.historyLimit) this.history.shift()

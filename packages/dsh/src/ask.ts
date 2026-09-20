@@ -15,7 +15,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { EgressFeature } from 'jevcore'
 import { assertValidBatch, choice, noul, score } from 'jevcore'
 import type { JevService } from 'jevcore'
-import type { EntryType, JevQuestion, JsonValue, NoulCriteria } from 'jevcore'
+import type { EntryType, JevQuestion, JevResult, JsonValue, NoulCriteria } from 'jevcore'
 import { asRendered, renderResult, summarize } from 'jevcore'
 
 const FEATURE: EgressFeature = 'tool:jev_ask'
@@ -143,8 +143,55 @@ const OUTPUT_SCHEMA = {
     answers: { type: 'json' as const, required: true as const },
     usage: { type: 'json' as const },
     warning: { type: 'string' as const },
+    // Declared because `execute` returns them, and because the registry
+    // **validates this schema over the returned value on every call**: an
+    // undeclared key is not ignored, it fails the call. `renderResult` stamps
+    // `egress` on every result the service prepared and `truncated` on the ones
+    // that lost state to the size cap, so leaving these two out made every
+    // `jev_ask` call fail with `"value.egress" is not a declared property
+    // (additionalProperties: false)`. The one tool whose payload really is a
+    // `RenderedResult` was the one tool whose schema did not describe one.
+    // `rank.ts` and `check.ts` declare both; the copies in `execute` are the
+    // other half of the same fix.
+    truncated: { type: 'boolean' as const },
+    egress: { type: 'json' as const },
   },
   additionalProperties: false,
+}
+
+/**
+ * The rendered result, as the value `OUTPUT_SCHEMA` above describes.
+ *
+ * Rebuilt field by field rather than returned straight from `renderResult`, so
+ * the payload and the schema can be read side by side and neither can grow a
+ * field the other does not know about — the drift that let every `jev_ask` call
+ * fail while the tool's own tests passed. `truncated` and `egress` are forwarded
+ * for the reason the core's `RenderedResult` gives: they change how the answers
+ * have to be read.
+ *
+ * The two copies are not cosmetic. The core's `JevEgressFacts` is an interface
+ * (no implicit index signature) whose array members are `readonly`, which the
+ * schema's inferred `JsonValue` refuses; `rank.ts` and `check.ts` copy the same
+ * two arrays for the same reason.
+ */
+const renderResultPayload = (result: JevResult, questionIds: readonly string[]) => {
+  const rendered = renderResult(result, questionIds)
+  return {
+    provider: rendered.provider,
+    model: rendered.model,
+    latencyMs: rendered.latencyMs,
+    answers: rendered.answers,
+    ...(rendered.usage === undefined ? {} : { usage: rendered.usage }),
+    ...(rendered.warning === undefined ? {} : { warning: rendered.warning }),
+    ...(rendered.truncated === true ? { truncated: true } : {}),
+    ...(rendered.egress === undefined ? {} : {
+      egress: {
+        ...rendered.egress,
+        redactedFields: [...rendered.egress.redactedFields],
+        redactionRules: [...rendered.egress.redactionRules],
+      },
+    }),
+  }
 }
 
 export const jevAskTool = (service: JevService) =>
@@ -223,6 +270,7 @@ export const jevAskTool = (service: JevService) =>
         questions,
         ...(exec.signal === undefined ? {} : { signal: exec.signal }),
       })
-      return renderResult(result, Object.keys(questions))
+      return renderResultPayload(result, Object.keys(questions))
     },
   })
+

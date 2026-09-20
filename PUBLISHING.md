@@ -1,13 +1,23 @@
 # Publishing checklist
 
-Status as of the 0.4.0 release:
+Status as of the 0.4.1 release:
 
-- **0.3.1 is published to npm and is the current `latest`** for `jevcore`,
-  `jevcore-dsh` and `jevcore-mcp`; `jevcore-cli` is new in 0.4.0 and its name was
-  unclaimed on the registry when that version was prepared. Each release is
-  verified by installing from the public registry into an empty directory rather
-  than by trusting the publish output — the section below explains why that
-  distinction is not pedantry;
+- **0.3.1 is the current `latest`** for `jevcore`, `jevcore-dsh` and
+  `jevcore-mcp`. It is also **known broken for `jev_ask`**: that tool returns the
+  core's rendered payload, which carries an `egress` key its declared output
+  schema does not allow, and the host rejects an undeclared key on every
+  top-level call. `jev_rank` and `jev_check` are unaffected. 0.4.1 fixes it, and
+  it is the reason 0.4.1 exists at all.
+- **0.4.0 was staged and pulled, not released.** Three packages sat in staging
+  waiting for approval; `jevcore-cli@0.4.0` could not be staged, because a first
+  publish of a new package name has nothing to stage — it went straight to the
+  registry, pinned `jevcore@0.4.0` exactly, and therefore could not be installed
+  at all (`ETARGET`). Prefer rejecting the staged 0.4.0s and, if the name matters,
+  unpublishing `jevcore-cli@0.4.0` in favour of 0.4.1.
+- **Every release is verified by installing it from the public registry** into an
+  empty directory, rather than by trusting the publish output — the section below
+  explains why that distinction is not pedantry. That check is what caught
+  `jevcore-cli@0.4.0` being uninstallable;
 - the repository is public at <https://github.com/PerryLink/jevcore>, with CI
   green, and a mirror is pushed to Gitee at
   <https://gitee.com/perrylink/jevcore>;

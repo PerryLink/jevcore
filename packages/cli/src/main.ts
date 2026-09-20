@@ -22,6 +22,7 @@
  * into a verdict — and a verdict is what a CI job branches on.
  */
 
+import { createRequire } from 'node:module'
 import {
   EgressDeniedError,
   EgressTooLargeError,
@@ -39,8 +40,33 @@ import { toJson } from './format.js'
 import { EXIT, type CliEnv, type CommandContext, type CommandRun } from './types.js'
 import { PROGRAM, UsageError, helpFor } from './usage.js'
 
-/** The version this build reports. Kept in step with `package.json` by hand. */
-export const VERSION = '0.3.1'
+/**
+ * The version this build reports, read from the package's own manifest.
+ *
+ * It used to be a literal kept in step by hand, and the hand slipped: the
+ * published `jevcore-cli@0.4.0` answered `--version` with `0.3.1`, because the
+ * constant was written while the workspace was at 0.3.1 and the bump touched only
+ * `package.json`. That is the same defect this project keeps finding elsewhere —
+ * a value that describes one thing and is maintained as another — so the fix is
+ * to remove the second copy rather than to promise to update it.
+ *
+ * `createRequire` rather than a JSON import: the build target does not enable
+ * `resolveJsonModule`, and the path from `lib/main.js` to `package.json` is the
+ * same one level up as it is from `src/main.ts`, so a test and a published
+ * install resolve the same file.
+ */
+export const VERSION: string = (() => {
+  try {
+    const require = createRequire(import.meta.url)
+    const manifest = require('../package.json') as { version?: unknown }
+    return typeof manifest.version === 'string' ? manifest.version : '0.0.0-unknown'
+  } catch {
+    // A missing or unreadable manifest must not stop the binary from running: a
+    // version string is diagnostic, and refusing to start would turn a packaging
+    // mistake into a total failure.
+    return '0.0.0-unknown'
+  }
+})()
 
 /** Every command, mapped to its implementation. */
 const RUNNERS: Readonly<Record<string, CommandRun>> = {

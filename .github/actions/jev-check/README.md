@@ -64,6 +64,11 @@ Those are three outcomes for `check`, not two, on purpose. "The evidence does no
 this" and "the evidence refutes this" are different findings, and collapsing them is how a
 missing citation gets reported as a refutation.
 
+One caveat on exit `1`: it is shared. The CLI documents it as `contradicted` for `check`, and
+it is also the code a provider or input failure returns — so `fail-on: contradicted` can label
+a missing credential a contradiction. When that distinction matters, use `fail-on: never` and
+read `result-json`, which separates `ok`, `errorCode` and `data`.
+
 ## Inputs
 
 | input | default | notes |

@@ -50,10 +50,14 @@ inputs:
   fail-on:
     description: >-
       When the step should fail the job. One of: `never` (default — report only),
-      `contradicted` (check only: fail when the evidence contradicts the claim),
-      `deny-or-ask` (gate only: fail on anything that is not an allow),
-      `any-nonzero` (fail on any non-zero CLI exit, including the "could not
-      decide" outcomes — usually a mistake, and available for completeness).
+      `contradicted` (check only: fail on exit 1), `deny-or-ask` (gate only: fail
+      on anything that is not an allow), `any-nonzero` (fail on any non-zero CLI
+      exit, including the "could not decide" outcomes — usually a mistake, and
+      available for completeness). Note that for `check`, exit 1 is not
+      unambiguous: the CLI documents it as "contradicted" and also returns it for
+      a provider or input failure, so `contradicted` can label a missing
+      credential a contradiction. Use `never` and inspect `result-json` when that
+      distinction matters.
     required: false
     default: never
   api-key:
@@ -130,9 +134,13 @@ runs:
         # key resolver is that a secret does not reach a log line.
         TYPESAFE_API_KEY: ${{ inputs.api-key }}
       run: |
-        # No `-e`: a non-zero exit from the CLI is the result being reported, not
-        # an error in this script. `-u` still catches a typo'd variable, and
-        # `pipefail` makes the CLI's status survive the `tee` below.
+        # `-e` is deliberately NOT enabled here, and is turned off a second time
+        # around the CLI invocation below. A non-zero exit from the CLI is the
+        # result this step reports, not an error in this script, and `errexit`
+        # would abort before the exit code could be read — which is the whole
+        # point of the step. It is re-enabled straight afterwards so a genuine
+        # mistake in the bookkeeping still fails loudly instead of silently
+        # producing an empty output. `-u` catches a typo'd variable.
         set -uo pipefail
 
         args=()
@@ -193,11 +201,22 @@ runs:
         # ...and the document to stdout, where the next step reads it.
         cat "$out_file"
 
+        # The heredoc delimiter is generated per run rather than fixed. A fixed
+        # one is forgeable: any stdout line that happens to read `JEV_RESULT_EOF`
+        # closes the heredoc early, and the rest of the document is then parsed by
+        # the runner as further `$GITHUB_OUTPUT` commands — an output named by
+        # whatever the CLI printed. An attacker who can influence the document
+        # could name an output. The random suffix removes the guessable name.
+        # `$RANDOM` is bash's, 15 bits twice, which is ample for a name that only
+        # has to be unguessable within one step.
+        result_delim="JEV_RESULT_${RANDOM}${RANDOM}_EOF"
+        summary_delim="JEV_SUMMARY_${RANDOM}${RANDOM}_EOF"
+
         {
           echo "exit-code=${code}"
-          echo 'result-json<<JEV_RESULT_EOF'
+          echo "result-json<<${result_delim}"
           cat "$out_file"
-          echo 'JEV_RESULT_EOF'
+          echo "${result_delim}"
         } >> "$GITHUB_OUTPUT"
 
         # The human line: the last non-empty line the CLI wrote to stderr, which is
@@ -208,13 +227,22 @@ runs:
         if [ -z "$summary" ]; then
           summary="jev ${JEV_COMMAND} exited ${code}"
         fi
+        # Newlines are stripped before this value goes anywhere near a workflow
+        # command. A workflow command is line-oriented: a `command` input
+        # containing a newline and then `::error::…` used to emit a second,
+        # attacker-controlled annotation line. The value is quoted for the shell
+        # already; this is about the runner's line protocol, not the shell's.
+        summary="${summary//$'\r'/ }"
+        summary="${summary//$'\n'/ }"
         {
-          echo 'summary<<JEV_SUMMARY_EOF'
+          echo "summary<<${summary_delim}"
           echo "$summary"
-          echo 'JEV_SUMMARY_EOF'
+          echo "${summary_delim}"
         } >> "$GITHUB_OUTPUT"
 
-        echo "::notice::jev ${JEV_COMMAND} exited ${code}: ${summary}"
+        notice_command="${JEV_COMMAND//$'\r'/ }"
+        notice_command="${notice_command//$'\n'/ }"
+        echo "::notice::jev ${notice_command} exited ${code}: ${summary}"
         rm -f "$out_file" "$err_file"
 
         # The policy the caller asked for, applied here and nowhere else.
@@ -223,8 +251,13 @@ runs:
             exit 0
             ;;
           contradicted)
+            # NOTE: exit 1 is not unambiguous for `check`. The CLI documents it as
+            # "contradicted", and it is also the code a provider or input failure
+            # returns, so this branch can label a missing credential a
+            # contradiction. `fail-on: never` plus a look at `result-json` is the
+            # only way to be sure, and the input description says so.
             if [ "$code" -eq 1 ]; then
-              echo "::error::the evidence contradicts the claim"
+              echo "::error::the evidence contradicts the claim (or the CLI failed; exit 1 covers both)"
               exit 1
             fi
             exit 0

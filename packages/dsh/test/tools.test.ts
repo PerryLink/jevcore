@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { validateJsonSchemaValue, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import {
   DEFAULT_CHECK_THRESHOLDS,
   EGRESS_FEATURES,
@@ -677,6 +678,86 @@ describe('presentationMeta (the projection the registry runs)', () => {
   it('projects jev_check', async () => {
     const { summary } = await present(jevCheckTool(service()), { claim: 'c', evidence: 'e' })
     expect(summary).toMatch(/^[a-z]+ - jev_check$/)
+  })
+})
+
+describe('output schema (the validation the registry runs)', () => {
+  /**
+   * What the registry does with one result, one layer above `present`: it
+   * validates the value against `output.schema` and **throws** on a violation.
+   *
+   * Every other test in this file calls `execute` directly, which is one layer
+   * *below* that validator - and that is exactly why the suite passed while
+   * `jev_ask` failed every call in a real host. `ToolRuntime` runs the host's
+   * `validateJsonSchemaValue` over the returned value on every dispatch, and a
+   * non-empty result becomes `tool "jev_ask" returned invalid output:
+   * "value.egress" is not a declared property (additionalProperties: false)` -
+   * the model receives nothing at all.
+   *
+   * `validateJsonSchemaValue` is the host's own exported validator rather than a
+   * second copy of the rule, so this asserts the enforcement itself. The key
+   * subset is asserted beside it because it names the offending key on one line.
+   */
+  const check = async (tool: ToolDefinition, args: unknown) => {
+    const value = (await run(tool, args)) as JsonValue
+    const keys = Object.keys(value as Record<string, unknown>)
+    const declared = Object.keys(tool.output.schema.properties ?? {})
+    return {
+      keys,
+      declared,
+      undeclared: keys.filter((key) => !declared.includes(key)),
+      violations: validateJsonSchemaValue(tool.output.schema, value, 'value'),
+    }
+  }
+
+  const askArgs = { state: 'x', questions: { q: { type: 'noul', instructions: 'ok?' } } }
+
+  it('declares every key jev_ask returns when no cap was hit', async () => {
+    const { keys, undeclared, violations } = await check(jevAskTool(service()), askArgs)
+    // `egress` is stamped on every result the service prepared, so this one
+    // missing key was enough to fail every `jev_ask` call.
+    expect(keys).toContain('egress')
+    expect(undeclared).toEqual([])
+    expect(violations).toEqual([])
+  })
+
+  it('declares `truncated` too, on the call that actually sets it', async () => {
+    // The other key the schema was missing, and the one that appears only when
+    // the state was capped: 17,000 characters against the 16,000-character cap.
+    const { keys, undeclared, violations } = await check(jevAskTool(service()), {
+      state: 'x'.repeat(17_000),
+      questions: askArgs.questions,
+    })
+    expect(keys).toContain('truncated')
+    expect(undeclared).toEqual([])
+    expect(violations).toEqual([])
+  })
+
+  it('declares every key jev_rank and jev_check return', async () => {
+    // The same validator over the two tools that *were* given these keys when
+    // `ask.ts` was not. Three tools, one contract - and the reason a regression
+    // in either sibling fails here rather than in a host.
+    const siblings: [ToolDefinition, unknown][] = [
+      [jevRankTool(service()), { query: 'q', candidates: ['a', 'b'] }],
+      [jevCheckTool(service()), { claim: 'c', evidence: 'e' }],
+    ]
+    for (const [tool, args] of siblings) {
+      const { undeclared, violations } = await check(tool, args)
+      expect(undeclared).toEqual([])
+      expect(violations).toEqual([])
+    }
+  })
+
+  it('reports an undeclared key instead of ignoring it, so the checks above can fail', async () => {
+    // Proof the guard is not vacuous. This is the assertion that would have
+    // caught the defect: an extra key is a violation, not a field the validator
+    // shrugs at, which is what makes the three tests above a contract rather
+    // than a restatement of today's payload.
+    const tool = jevAskTool(service())
+    const value = { ...((await run(tool, askArgs)) as Record<string, unknown>), drift: 1 }
+    expect(validateJsonSchemaValue(tool.output.schema, value, 'value')).toEqual([
+      '"value.drift" is not a declared property (additionalProperties: false)',
+    ])
   })
 })
 

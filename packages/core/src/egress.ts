@@ -17,7 +17,13 @@
  * {@link measure}. The tests assert that.
  */
 
-import type { JevQuestion, JsonValue } from './types.js'
+import type {
+  JevEgressFacts,
+  JevQuestion,
+  JevResult,
+  JsonValue,
+  RedactionSummary,
+} from './types.js'
 
 /** Stable feature identifiers. These appear in the startup report and metrics. */
 export const EGRESS_FEATURES = [
@@ -105,6 +111,13 @@ export interface EgressLine {
 export interface MeasuredPayload {
   readonly feature: EgressFeature
   readonly state: JsonValue
+  /**
+   * The redacted question map, keyed by the ids the caller declared.
+   *
+   * Only the ids are protocol identifiers — the answer map is keyed by them — so
+   * only they are exempt from redaction. Everything *inside* a question is
+   * content and is redacted with the full ruleset, key rules included.
+   */
   readonly questions: Readonly<Record<string, JevQuestion>>
   /** Serialized size of `state`, after redaction and capping. */
   readonly stateChars: number
@@ -206,18 +219,32 @@ export class EgressTooLargeError extends Error {
 /**
  * Redaction changed the shape of the question map, which it must never do.
  *
- * Only a key rule replaces a value wholesale; value rules rewrite strings. So a
- * question that comes back as anything other than an object means a key rule
- * matched a question id, and question ids are protocol identifiers rather than
- * field names — the answer map is keyed by them.
+ * The map is redacted one question at a time and re-keyed under the ids it
+ * arrived with, so nothing on the ordinary path can raise this: a value rule
+ * rewrites strings inside a question, a key rule replaces the value under a
+ * secret-named key, and neither touches an id. It is a runtime check rather than
+ * a comment because the failure it guards is both silent and severe, and the
+ * implementation this replaced produced it twice.
  *
- * This is a runtime check rather than a comment because the failure it catches is
- * both silent and severe. One of this package's own hazard ids is
- * `credential_exposure`, which `/credential/i` matches. With the key rules on,
- * that question was replaced by the string `"[redacted]"` before transmission: a
- * malformed request on the live route, a `TypeError` from the offline mock, and
- * in both cases an error the safety gate turns into a conservative `ask`. A gate
- * that had stopped judging anything looked exactly like a gate being careful.
+ * The first time, redaction ran over the whole map with the key rules on. One of
+ * this package's own hazard ids is `credential_exposure`, which `/credential/i`
+ * matches, so that question was replaced by the string `"[redacted]"` before
+ * transmission: a malformed request on the live route, a `TypeError` from the
+ * offline mock, and in both cases an error the safety gate turns into a
+ * conservative `ask`. A gate that had stopped judging anything looked exactly
+ * like a gate being careful.
+ *
+ * The second time, the key rules were withheld from the whole question subtree to
+ * keep those ids intact — which left a secret named by its key *inside* a
+ * question unredacted. That is why the fix is structural, in {@link
+ * EgressContract.measure}: the ids are re-keyed rather than redacted, so no rule
+ * needs to be withheld from any part of the payload, and this check is what makes
+ * a regression loud rather than silent.
+ *
+ * What it does **not** cover: a value nested past redaction's own `maxDepth` is
+ * replaced by that module's depth marker, which is documented behaviour of
+ * `redact` rather than a reshape this contract can see. The question is still an
+ * object; an instruction nested that deeply arrives shorter than it was written.
  */
 export class EgressShapeError extends Error {
   override readonly name = 'EgressShapeError'
@@ -225,15 +252,81 @@ export class EgressShapeError extends Error {
   constructor(
     readonly feature: EgressFeature,
     readonly field: string,
+    /**
+     * The ids that came back wrong, or — when the map itself was not an object —
+     * nothing, because there were no ids to name.
+     */
     readonly ids: readonly string[],
   ) {
     super(
-      `redaction reshaped "${field}" for "${feature}": ${ids.join(', ')} came back as something ` +
-        `other than a question. Question ids key the answers, so they have to survive redaction ` +
-        `intact; a key rule matched one and replaced the whole question.`,
+      `redaction reshaped "${field}" for "${feature}": ` +
+        (ids.length === 0
+          ? 'the question map did not come back as a non-null, non-array object'
+          : `${ids.join(', ')} did not come back as one question object per declared id`) +
+        `. Question ids key the answers, so they have to survive redaction intact, and the ` +
+        `contract re-keys every redacted question under the id it arrived with for exactly that ` +
+        `reason. A reshaped map is a malformed request on the live route and a type error on the ` +
+        `offline mock, and the safety gate turns both into the same \`ask\` a careful gate ` +
+        `produces — so the failure would otherwise be invisible.`,
     )
   }
 }
+
+/**
+ * Redaction, as this contract uses it: the shape of the function it is handed.
+ *
+ * The optional `keyRules` parameter is part of `redact`'s own signature and is
+ * passed through for compatibility with the implementation this replaced.
+ * `measure` calls this with no options at all, because no part of the payload
+ * needs a rule withheld from it any more — see {@link EgressContract.measure}.
+ */
+export type EgressRedactor = (
+  value: JsonValue,
+  options?: { readonly keyRules?: readonly RegExp[] },
+) => {
+  readonly value: JsonValue
+  readonly summary: RedactionSummary
+}
+
+/**
+ * Whether a value can carry question ids: an object, not `null`, not an array.
+ *
+ * An array is rejected deliberately. `Object.entries` walks one happily, so an
+ * array-shaped map used to pass every check and arrive at the provider as a JSON
+ * array where an object belongs.
+ */
+const isQuestionMap = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/**
+ * The egress facts to stamp onto anything built from a result, or nothing.
+ *
+ * `truncated` is written only when it happened and `egress` only when the result
+ * carries one, so a result from a provider called directly keeps exactly the
+ * shape it had before these fields existed.
+ *
+ * The two arrays are copied rather than shared. They arrive on a result the
+ * service has already returned to someone else, and a consumer that pushed to one
+ * in place would otherwise be editing the record of what was sent.
+ *
+ * Shared by both gates, which rebuild a `JevResult` into a decision and used to
+ * drop these fields entirely: a call judged on a `[truncated]` envelope then read
+ * exactly like a call judged on the whole state.
+ */
+export const egressFactsOf = (
+  result: JevResult,
+): { readonly truncated?: boolean; readonly egress?: JevEgressFacts } => ({
+  ...(result.truncated === true ? { truncated: true } : {}),
+  ...(result.egress === undefined
+    ? {}
+    : {
+        egress: {
+          ...result.egress,
+          redactedFields: [...result.egress.redactedFields],
+          redactionRules: [...result.egress.redactionRules],
+        },
+      }),
+})
 
 export class EgressContract {
   /**
@@ -302,21 +395,10 @@ export class EgressContract {
     /**
      * Redaction, injected so this module stays free of policy.
      *
-     * The options parameter exists for exactly one decision made below: the
-     * question map is redacted with the value rules only.
+     * See {@link EgressRedactor}: the contract now calls it once per question,
+     * with no options at all.
      */
-    readonly redact: (
-      value: JsonValue,
-      options?: { readonly keyRules?: readonly RegExp[] },
-    ) => {
-      readonly value: JsonValue
-      readonly summary: {
-        readonly redactions: number
-        readonly rules: readonly string[]
-        readonly fields: readonly string[]
-        readonly values: number
-      }
-    }
+    readonly redact: EgressRedactor
   }): MeasuredPayload {
     this.assert(input.feature)
     // The effective caps, so a configured `maxStateChars` actually bounds what
@@ -335,43 +417,95 @@ export class EgressContract {
     // claim is that what leaves is the redacted content, and a question is content.
     const { value: safeState, summary } = input.redact(input.state)
 
-    // `state` gets both passes. The question map gets the value rules only, and
-    // that distinction is a defect fix, not a preference.
+    // The question map gets the full ruleset too — key rules included — and is
+    // re-keyed under the ids it arrived with. Both halves of that are defect
+    // fixes, and they were fixes in opposite directions.
     //
-    // A key rule replaces a value whose *field name* looks secret-bearing. A
-    // question id is not a field name in that sense: it is a protocol identifier,
-    // and the answer map is keyed by it. With the key rules on, this package's own
-    // `credential_exposure` hazard matched `/credential/i` and its whole question
-    // was replaced by the string `"[redacted]"` before transmission — 160
-    // characters of a declared 1,774-character payload, gone. Verified by
-    // instrumenting a recording provider: the id arrived, the question did not.
+    // **Every part of a question is content.** Withholding the key rules from the
+    // whole question subtree to keep the ids intact meant a secret named by its
+    // key *inside* a question was no longer redacted at all:
+    // `noul({ context: 'deploy notes', password: '…' })` reached the provider
+    // verbatim and `measured.redactions` counted nothing, while the same string
+    // under the same name in `state` was replaced. `dsh/src/ask.ts` passes
+    // caller-shaped `instructions`, `criteria` and `boundary` straight through, so
+    // that is a live path and not a hypothetical one.
     //
-    // Both consequences were invisible. The live route is sent
-    // `"credential_exposure":"[redacted]"` where a question object belongs. The
-    // offline route — the default, and what every test ran against — throws
-    // `TypeError: Cannot convert undefined or null to object` from the mock. The
-    // safety gate catches provider errors and routes them through `onUndecided`,
-    // whose default is `ask`, so a gate that had stopped judging anything produced
-    // exactly the decision a careful gate produces. Nothing failed. Nothing was
-    // asked either.
+    // **Only the ids are protocol identifiers.** The answer map is keyed by them,
+    // and a key rule that matches an id destroys the map: one of this package's
+    // own hazard ids is `credential_exposure`, which `/credential/i` matches, so
+    // redacting the map as a whole replaced that question with the string
+    // `"[redacted]"` before transmission — 160 characters of a declared
+    // 1,774-character payload, gone. Both consequences were invisible. The live
+    // route is sent a string where a question object belongs; the offline route —
+    // the default, and what every test ran against — throws `TypeError: Cannot
+    // convert undefined or null to object`. The safety gate catches provider
+    // errors and routes them through `onUndecided`, whose default is `ask`, so a
+    // gate that had stopped judging anything produced exactly the decision a
+    // careful gate produces.
     //
-    // Value rules still run, so a credential written *into* a question is still
-    // caught. What is removed is the ability to destroy the question map's shape.
-    const { value: safeQuestions, summary: questionSummary } = input.redact(
-      input.questions as unknown as JsonValue,
-      { keyRules: [] },
-    )
+    // Re-keying is what lets both properties hold at once: the id is taken from
+    // the input rather than from the redacted output, so no rule has to be
+    // withheld from anything.
+    if (!isQuestionMap(input.questions)) {
+      // Before `Object.entries`, which would otherwise throw a `TypeError` for
+      // `null` and quietly return `[]` for `7`. A caller has to be able to tell
+      // "your map is not a map" from "something inside this module broke".
+      throw new EgressShapeError(input.feature, 'questions', [])
+    }
+    const declaredIds = Object.keys(input.questions)
+    const safeQuestions: Record<string, JevQuestion> = {}
+    const malformedIds: string[] = []
+    const questionRules = new Set<string>()
+    const questionFields = new Set<string>()
+    let questionRedactions = 0
+    let questionValues = 0
+    for (const [id, question] of Object.entries(input.questions)) {
+      const { value, summary: one } = input.redact(question as unknown as JsonValue)
+      // A question is an object, and stays one: a value rule rewrites strings
+      // *inside* it and a key rule replaces the value under a secret-named key,
+      // so a question can only come back as something else if the redactor
+      // rewrote the payload rather than its content.
+      if (!isQuestionMap(value)) malformedIds.push(id)
+      safeQuestions[id] = value as unknown as JevQuestion
+      questionRedactions += one.redactions
+      questionValues += one.values
+      for (const rule of one.rules) questionRules.add(rule)
+      for (const field of one.fields) questionFields.add(field)
+    }
 
-    // The invariant the call above depends on, checked rather than assumed. With
-    // no key rules nothing can replace a question wholesale, because only a key
-    // rule substitutes an object for a value. If that ever stops being true, this
-    // must fail loudly here instead of quietly turning every gate decision into an
-    // `ask`. `Object.entries` on a non-object flags its members too, so a wholesale
-    // replacement of the map itself is caught by the same test.
-    const reshaped = Object.entries(safeQuestions as Record<string, unknown>)
-      .filter(([, value]) => typeof value !== 'object' || value === null)
-      .map(([id]) => id)
-    if (reshaped.length > 0) throw new EgressShapeError(input.feature, 'questions', reshaped)
+    // The invariant the loop above depends on, checked rather than assumed: the
+    // redacted map is a non-null object — not an array — carrying exactly the
+    // declared ids, same count and same names. It holds by construction, because
+    // the ids are re-keyed from the input; it is checked because the
+    // implementation this replaced took the map from the redactor instead, where
+    // `Object.entries(7)` is `[]` rather than an error and `measure` returned a
+    // payload whose `questions` was the number 7, and where `null` failed as a
+    // `TypeError` no caller could branch on. A regression here fails open in the
+    // worst way — see {@link EgressShapeError} — so it has to fail here instead.
+    const producedIds = isQuestionMap(safeQuestions) ? Object.keys(safeQuestions) : []
+    const missingIds = declaredIds.filter((id) => !producedIds.includes(id))
+    const addedIds = producedIds.filter((id) => !declaredIds.includes(id))
+    if (
+      !isQuestionMap(safeQuestions) ||
+      malformedIds.length > 0 ||
+      missingIds.length > 0 ||
+      addedIds.length > 0
+    ) {
+      throw new EgressShapeError(input.feature, 'questions', [
+        ...new Set([...malformedIds, ...missingIds, ...addedIds]),
+      ])
+    }
+
+    // Per-question summaries aggregated into one, so the caller-facing totals
+    // still describe everything removed. Redacting question by question is an
+    // implementation detail; dropping a count because of it would not be.
+    const questionSummary: RedactionSummary = {
+      redactions: questionRedactions,
+      rules: [...questionRules].sort(),
+      fields: [...questionFields].sort(),
+      values: questionValues,
+    }
+
     const stateText = JSON.stringify(safeState) ?? 'null'
     const questionsText = JSON.stringify(safeQuestions) ?? '{}'
 
