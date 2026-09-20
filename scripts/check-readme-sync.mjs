@@ -21,6 +21,9 @@
 //     repo has already been bitten once by a shell command that looked fine and
 //     was wrong;
 //   - the set of URLs, so no link is dropped or rewritten in translation;
+//   - every inline code span, as a multiset. Identifiers live in prose too, and
+//     inside a fence they were already covered — `` `state` `` in a sentence was
+//     not, so rewriting it as prose passed every other check in this file;
 //   - the install command, because it is the one line a reader acts on;
 //   - every configuration key in the Configuration table, so a documented option
 //     cannot go missing from four of the five pages;
@@ -117,6 +120,54 @@ const firstDivergence = (expected, actual) => {
   return 'identical'
 }
 
+/**
+ * Inline code spans: the identifiers, values and file names a translation must
+ * carry through unchanged, sitting in prose where the fenced-block comparison
+ * above cannot see them. Without this, rewriting `` `state` `` as prose passed
+ * every check in the file.
+ *
+ * Fenced blocks are removed first — their contents are already compared verbatim
+ * and would otherwise be counted twice — and the match is dot-all because a span
+ * may cross a line break: `` `pnpm --filter jevcore run` `` followed by a newline
+ * and `` `probe:live` `` is ONE span in the source, and a line-bounded regex
+ * mis-pairs it into two, inventing spans out of the prose in between. That
+ * mis-pairing is not hypothetical; it is what this check's first draft did.
+ */
+const inlineSpans = (text) => {
+  const prose = text.replace(/^```[^\n]*\n[\s\S]*?^```/gmu, '')
+  return [...prose.matchAll(/(?<!`)`([^`]+)`(?!`)/gsu)].map((match) =>
+    match[1].replace(/\s+/gu, ' ').trim(),
+  )
+}
+
+/** Counts of each item, so a comparison can say what is missing rather than just that something is. */
+const multiset = (items) => {
+  const counts = new Map()
+  for (const item of items) counts.set(item, (counts.get(item) ?? 0) + 1)
+  return counts
+}
+
+/**
+ * What the two multisets disagree about.
+ *
+ * Compared as counts, not as a sequence: word order genuinely differs between
+ * languages, and a faithful translation may legitimately reverse two spans. What
+ * may not change is which spans appear and how many times.
+ */
+const multisetDifferences = (expected, actual) => {
+  const before = multiset(expected)
+  const after = multiset(actual)
+  const problems = []
+  for (const [span, count] of before) {
+    const found = after.get(span) ?? 0
+    if (found !== count) problems.push(`${count} x ${JSON.stringify(span)} -> ${found}`)
+  }
+  for (const [span, count] of after) {
+    if (!before.has(span)) problems.push(`${count} x ${JSON.stringify(span)} appears only here`)
+  }
+  return problems
+}
+
 /** Every fenced block, verbatim, in document order. */
 const fencedBlocks = (text) => [...text.matchAll(/^```[^\n]*\n([\s\S]*?)^```/gmu)].map((m) => m[1])
 
@@ -164,10 +215,14 @@ for (const set of SETS) {
   const expectedUrls = urls(source)
   const expectedKeys = configKeys(source)
   const expectedShape = shape(source)
+  const expectedSpans = inlineSpans(source)
 
   if (expectedSections === 0) note(`${set.label} declares no '## ' sections; the gate would be vacuous`)
   if (expectedBlocks.length === 0) {
     note(`${set.label} declares no fenced code blocks; the gate would be vacuous`)
+  }
+  if (expectedSpans.length === 0) {
+    note(`${set.label} declares no inline code spans; the gate would be vacuous`)
   }
   if (hasConfiguration(source) && expectedKeys.length === 0) {
     note(`${set.label} has a Configuration section but no keys; the gate would be vacuous`)
@@ -210,6 +265,14 @@ for (const set of SETS) {
       if (!has.has(url)) note(`${relative}: missing the link ${url}`)
     }
 
+    const spanProblems = multisetDifferences(expectedSpans, inlineSpans(text))
+    for (const problem of spanProblems) {
+      note(
+        `${relative}: inline code span ${problem}. Identifiers, file names and values in ` +
+          'backticks are not prose — translate around them, not through them.',
+      )
+    }
+
     const actualShape = shape(text)
     if (actualShape.length !== expectedShape.length) {
       note(
@@ -237,7 +300,8 @@ for (const set of SETS) {
 
   summaries.push(
     `${set.label}: ${expectedSections} sections, ${expectedShape.length} structural blocks, ` +
-      `${expectedBlocks.length} code blocks, ${expectedUrls.size} links, ${expectedKeys.length} config keys`,
+      `${expectedBlocks.length} code blocks, ${expectedSpans.length} inline spans, ` +
+      `${expectedUrls.size} links, ${expectedKeys.length} config keys`,
   )
 }
 

@@ -24,9 +24,9 @@ jobs:
         # the two versions actually in use rather than one that is on its way out.
         node: ['22', '24']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
 
@@ -54,8 +54,8 @@ jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
       - run: corepack enable
@@ -75,10 +75,17 @@ jobs:
             const { execSync } = require('node:child_process');
 
             const required = {
-              'packages/core': ['lib/index.js', 'lib/index.d.ts', 'README.md', 'LICENSE', 'NOTICE', 'scripts/probe-openrouter-live.mjs'],
-              'packages/dsh': ['lib/index.js', 'lib/index.d.ts', 'cordis.patch.yml', 'skills/typesafe-ai-dsh/SKILL.md', 'README.md', 'LICENSE', 'NOTICE'],
-              'packages/mcp': ['lib/index.js', 'lib/bin.js', 'lib/index.d.ts', 'README.md', 'LICENSE', 'NOTICE', 'scripts/mcp-smoke.mjs', 'scripts/mcp-smoke-live.mjs'],
+              'packages/core': ['lib/index.js', 'lib/index.d.ts', 'src/index.ts', 'README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md', 'CHANGELOG.md', 'LICENSE', 'NOTICE', 'scripts/probe-openrouter-live.mjs'],
+              'packages/dsh': ['lib/index.js', 'lib/index.d.ts', 'src/index.ts', 'cordis.patch.yml', 'skills/typesafe-ai-dsh/SKILL.md', 'README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md', 'CHANGELOG.md', 'LICENSE', 'NOTICE'],
+              'packages/mcp': ['lib/index.js', 'lib/bin.js', 'lib/index.d.ts', 'src/index.ts', 'README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md', 'CHANGELOG.md', 'LICENSE', 'NOTICE', 'scripts/mcp-smoke.mjs', 'scripts/mcp-smoke-live.mjs'],
             };
+
+            // The five READMEs and CHANGELOG.md are in this list because they
+            // were NOT in the tarballs until 0.2.2. They were listed in `files`
+            // from the start while the package directories held none, so npm
+            // dropped them silently and the guard above, which only asked for
+            // README.md, never noticed. What a gate does not name, it does not
+            // protect.
 
             // NOTE: this script contains no backtick characters at all, not even
             // in comments. It runs as node -e "..." under bash, and bash
@@ -168,7 +175,17 @@ jobs:
           cd /tmp/cleanroom
           ls -1 *.tgz
 
-          npm install --no-audit --no-fund ./jevcore-0.1.0.tgz ./jevcore-mcp-0.1.0.tgz
+          # Resolve the tarballs by shape, never by a literal version. This step
+          # used to name './jevcore-0.1.0.tgz', which kept working for exactly as
+          # long as the version stayed 0.1.0 and then failed with ENOENT on every
+          # push from 0.1.1 onward -- while `ls -1 *.tgz` on the line above was
+          # printing the real, differently-named files. `jevcore-[0-9]*`
+          # deliberately does not match `jevcore-mcp-*`.
+          CORE_TGZ="$(ls -1 ./jevcore-[0-9]*.tgz)"
+          MCP_TGZ="$(ls -1 ./jevcore-mcp-*.tgz)"
+          echo "installing $CORE_TGZ and $MCP_TGZ"
+
+          npm install --no-audit --no-fund "$CORE_TGZ" "$MCP_TGZ"
           node -e "
             const core = await import('jevcore');
             const mcp = await import('jevcore-mcp');

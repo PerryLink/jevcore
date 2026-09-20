@@ -31,7 +31,7 @@ npx -y jevcore-mcp
 
 ## 配置
 
-| 变量（`Variable`） | 作用 |
+| 变量 | 作用 |
 |---|---|
 | `TYPESAFE_API_KEY` | 存在时选择 TypeSafe 路由 |
 | `OPENROUTER_API_KEY` | 存在且没有 TypeSafe key 时选择 OpenRouter 路由 |
@@ -99,7 +99,7 @@ pnpm --filter jevcore-mcp run smoke:live   # real answers, needs OPENROUTER_API_
 
 live 的那次运行通过 OpenRouter 针对真实的 System One 模型驱动了同一层
 表面：三个工具都作了答，一批三个原语在带完整图例的三级评分标准上返回了
-`1.08` 的 `score`，`jev_rank` 把一份凭据 runbook 排在计费指南之上，
+`score`，值为 `1.08`，`jev_rank` 把一份凭据 runbook 排在计费指南之上，
 `jev_check` 返回 `contradicted`，
 并且启动时的外发报告在 stderr 上点名了 OpenRouter endpoint，
 同时没有扰乱协议通道。

@@ -41,7 +41,7 @@ Este projeto é a mesma ideia com esses modos de falha eliminados por projeto:
 | Toda transmissão nomeada antes de acontecer | Uma linha de log na inicialização por recurso: `off` ou `SENDS <feature> { fields }` |
 | Gates desativados não registram nada | Verificado por teste, não por política — um gate desativado não adiciona nenhum listener de evento |
 | O modelo não pode ampliar suas próprias restrições | Nenhuma ferramenta expõe a configuração dos gates |
-| Um juiz que não consegue responder nunca significa "allow" | Indefinido resolve por configuração explícita, com padrão `ask` |
+| Um juiz que não consegue responder nunca significa "allow" | Um resultado indefinido resolve por configuração explícita, com padrão `ask` |
 
 ---
 
@@ -197,7 +197,7 @@ Duas coisas a saber sobre a rota OpenRouter:
 - **Ela devolve um custo**, o que a própria rota da TypeSafe não faz, então `usage.costUsd` é
   preenchido aqui e ausente lá.
 
-O id do modelo precisa ser de um System One: `jev-*` puro, ou `typesafe/jev-*`. Qualquer outro id seria roteado para um modelo
+O id do modelo precisa ser um id de System One: `jev-*` puro, ou `typesafe/jev-*`. Qualquer outro id seria roteado para um modelo
 de chat, que responde com prosa que este plugin não consegue interpretar como decisão, então ele
 é recusado antes da chamada, e não mal interpretado depois dela.
 

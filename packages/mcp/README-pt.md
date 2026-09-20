@@ -40,7 +40,7 @@ bundle apenas de configuração cujo patch insere o cliente MCP do harness:
 | `TYPESAFE_BASE_URL` / `OPENROUTER_BASE_URL` | Raiz da API para a rota selecionada |
 
 Duas rotas alcançam os mesmos modelos. A TypeSafe os serve diretamente; a OpenRouter os
-hospeda atrás de sua própria rota Decisions, que é a forma de entrar quando uma chave TypeSafe é
+hospeda sob sua própria rota Decisions, que é a forma de entrar quando uma chave TypeSafe é
 inviável. Elas diferem em quais servidores veem o seu estado, então o relatório de inicialização
 nomeia o endpoint em vez de deixá-lo implícito no nome do provedor. Na
 rota OpenRouter, o id do modelo precisa começar com `typesafe/`; qualquer outra coisa responde

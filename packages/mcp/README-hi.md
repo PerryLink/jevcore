@@ -96,8 +96,8 @@ pnpm --filter jevcore-mcp run smoke:live   # real answers, needs OPENROUTER_API_
 और एक invalid batch के error path को चलाता है।
 
 Live run वही सतह OpenRouter के माध्यम से असली System One models के सामने चलाता है:
-तीनों tools ने जवाब दिया, एक three-primitive batch ने तीन-स्तरीय rubric पर अपनी legend सहित `1.08` का
-`score` लौटाया, `jev_rank` ने एक credential runbook को एक billing guide से ऊपर रखा,
+तीनों tools ने जवाब दिया, एक three-primitive batch ने तीन-स्तरीय rubric पर अपनी legend सहित `score` का
+`1.08` लौटाया, `jev_rank` ने एक credential runbook को एक billing guide से ऊपर रखा,
 `jev_check` ने `contradicted` लौटाया, और
 startup egress report ने protocol channel को बिना बिगाड़े stderr पर OpenRouter endpoint का नाम बताया।
 

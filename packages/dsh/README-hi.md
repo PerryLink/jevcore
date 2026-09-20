@@ -265,7 +265,7 @@ const result = await jev.ask({
 
 `result.answers` में probabilities और confidence होती हैं। उनके साथ क्या करना है यह आपके code का
 काम है — एक स्पष्ट confidence floor वाला काम का उदाहरण `src/policy.ts` में देखें, जहाँ एक अनिश्चित
-उत्तर `allow` उत्पन्न करने के बजाय `ask` उत्पन्न करता है।
+उत्तर `ask` के बजाय `allow` उत्पन्न करता है।
 
 ### Model से
 
