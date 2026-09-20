@@ -76,7 +76,27 @@ export interface ContextGateDecision {
 }
 
 /** Flatten a result's content blocks into the text the gate judges. */
-export const resultText = (content: readonly { type?: string; text?: string }[] | undefined): string => {
+/**
+ * One content block, as this module is willing to see it.
+ *
+ * Deliberately loose: a real `ContentBlock` may carry an image, an attachment or
+ * an arbitrary payload, and this function has to be total over any of them. A
+ * narrower annotation would reject a genuine block for having an extra field,
+ * which is a typing failure rather than a runtime one — the caller would have to
+ * cast to satisfy it. Only `type` and `text` are ever read.
+ */
+export type ResultBlock = { readonly type?: unknown; readonly text?: unknown } & {
+  readonly [key: string]: unknown
+}
+
+/**
+ * Flatten a result's content to the text a gate may judge.
+ *
+ * Everything that is not a text block contributes nothing, so a base64 blob in
+ * an image block never reaches the state Jev receives — where it would be billed
+ * as input and would leak the image.
+ */
+export const resultText = (content: readonly ResultBlock[] | undefined): string => {
   if (content === undefined) return ''
   return content
     .map((block) => (block.type === 'text' && typeof block.text === 'string' ? block.text : ''))
@@ -93,7 +113,7 @@ export const createContextGate = (options: ContextGateOptions) => {
 
   return async (input: {
     readonly toolName: string
-    readonly content: readonly { type?: string; text?: string }[] | undefined
+    readonly content: readonly ResultBlock[] | undefined
     readonly signal?: AbortSignal
   }): Promise<ContextGateDecision> => {
     const text = resultText(input.content)

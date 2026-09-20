@@ -137,6 +137,7 @@ export {
   CONTEXT_FEATURE,
   createContextGate,
   resultText,
+  type ResultBlock,
   type ContextGateDecision,
   type ContextGateOptions,
 } from './gates/context.js'
