@@ -88,6 +88,26 @@ If you have a TypeSafe key instead, set `TYPESAFE_API_KEY` and select
 `provider: live`; that route has the same primitives but has never been exercised
 here, so treat the first run as a validation rather than a formality.
 
+### Before filing the drafted issues or the skill proposal
+
+Two artifacts are drafted for submission but live **outside** this repository, so
+no test guards them:
+
+- `typesafe-dsh-skill-proposal.md` — an issue for `typesafe-ai/skills`, containing
+  a verbatim copy of the bundled `SKILL.md`;
+- `typesafe-sdk-issue-drafts.md` — four issue bodies for the TypeSafe SDK that
+  assert runtime behaviour of `@typesafe-ai/sdk`.
+
+```sh
+node tools/verify-submission-artifacts.mjs          # both checks; non-zero on drift
+node tools/verify-submission-artifacts.mjs --sync   # refresh the skill copy first
+```
+
+The first check exists because the copy *did* go stale once: the proposal claimed
+it could not drift from the shipped skill, and it had. The second re-runs every
+reproduction in the SDK drafts, so a claim that a newer SDK invalidates is caught
+here rather than in a maintainer's reply. See [tools/README.md](./tools/README.md).
+
 ```sh
 # Confirm nothing in the artifacts reaches the network on the default path.
 node packages/mcp/lib/bin.js 2>&1 | head -1
