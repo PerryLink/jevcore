@@ -38,7 +38,8 @@
     "clean": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "smoke": "node scripts/mcp-smoke.mjs"
   },
   "dependencies": {
     "@dsh-jev/core": "workspace:*",

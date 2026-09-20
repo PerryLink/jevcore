@@ -41,6 +41,13 @@ jobs:
           TYPESAFE_API_KEY: ''
         run: pnpm run check
 
+      - name: Drive the MCP server over a real stdio transport
+        # The unit tests cover the tools; this covers the wire protocol —
+        # handshake, discovery, calls, and the error path.
+        env:
+          TYPESAFE_API_KEY: ''
+        run: pnpm --filter @dsh-jev/mcp run smoke
+
   package:
     runs-on: ubuntu-latest
     steps:

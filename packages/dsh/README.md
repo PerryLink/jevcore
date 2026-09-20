@@ -259,8 +259,10 @@ Honest accounting of what has and has not been verified.
   in-process on a fresh `Context`, and the module loads cleanly from the profile's own resolution
   path, but the long-running server that has it configured is still holding an earlier module
   instance in a registry cache and must be restarted to pick up the current build.
-- The MCP server has never been driven by a real MCP host. Its tools, runtime selection, and egress
-  enforcement are tested directly; the transport handshake is not.
+- The MCP server has been driven end to end by a real MCP client over stdio
+  (pnpm --filter @dsh-jev/mcp run smoke): handshake, tool discovery, three successful calls, and an
+  error result for an invalid batch. It has not yet been driven by a third-party host other than that
+  client, and the live provider inside it has only ever run against a stub.
 - Gate behaviour on live traffic. The gates are tested against synthetic answers and real hook
   payload shapes, but no real tool call has been gated end to end.
 - The context gate cannot recover context already spent. It withholds a result from reaching the

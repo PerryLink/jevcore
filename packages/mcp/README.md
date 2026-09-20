@@ -78,10 +78,16 @@ unacceptable, do not set a key.
 
 ## Status
 
-Tools, provider selection, and egress enforcement are covered by tests. **The
-transport handshake has never been driven by a real MCP host** — expect to
-validate that on first use, and the live provider has only ever run against an
-injected stub.
+Tools, provider selection, and egress enforcement are covered by tests, and the
+transport has been driven end to end by a real MCP client over stdio:
+
+`sh
+pnpm --filter @dsh-jev/mcp run smoke
+`
+
+That exercises the handshake, tool discovery, three successful calls, and the
+error path for an invalid batch. **The live provider has still only ever run
+against an injected stub** — no real TypeSafe API call has been made.
 
 ## License
 
