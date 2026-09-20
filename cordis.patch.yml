@@ -1,0 +1,19 @@
+- insert:
+    - id: jev
+      name: 'dsh-jev'
+      config:
+        # Offline by default. With `provider: mock` this plugin makes no network
+        # call at all; every answer is synthetic. See the "Egress contract"
+        # section of the README for exactly what each provider sends.
+        provider: mock
+
+        # Judging tool calls, and reading tool results, both send content to a
+        # third party. Both stay off until you turn them on. `enabled` accepts
+        # the literal true/false, so `safety: false` also works as shorthand.
+        gates:
+          safety:
+            enabled: false
+            # What to do when Jev cannot decide: ask the human, allow, or deny.
+            onUndecided: ask
+          context:
+            enabled: false

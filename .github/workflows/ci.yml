@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Typecheck, test, and build
+        # Deliberately no TYPESAFE_API_KEY. Every test in this repository must
+        # pass without a credential and without network access; the offline
+        # path is the default contract, so CI holds it to that.
+        env:
+          TYPESAFE_API_KEY: ''
+        run: pnpm run check
+
+      - name: Assert no credential is required
+        env:
+          TYPESAFE_API_KEY: ''
+        run: pnpm test
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: corepack enable
+      - run: pnpm install --no-frozen-lockfile
+      - name: Build
+        run: pnpm run build
+      - name: Verify the published file set
+        # `files` in package.json must actually cover what the plugin needs to
+        # load: the build output plus the patch file.
+        run: |
+          npm pack --dry-run --json > /tmp/pack.json
+          node -e "
+            const files = require('/tmp/pack.json')[0].files.map((f) => f.path);
+            const required = ['lib/index.js', 'cordis.patch.yml', 'README.md', 'LICENSE'];
+            const missing = required.filter((r) => !files.includes(r));
+            if (missing.length > 0) {
+              console.error('missing from the published package:', missing.join(', '));
+              process.exit(1);
+            }
+            console.log('package contains', files.length, 'files, including every required one');
+          "
