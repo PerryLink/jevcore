@@ -49,7 +49,44 @@ pnpm install
 pnpm run check          # typecheck + test + build across all three packages
 ```
 
-Expected: 349 tests pass (257 core, 63 dsh, 29 mcp), with no credential set.
+Expected: 360 tests pass (266 core, 65 dsh, 29 mcp), with no credential set.
+
+```sh
+# Parse what this project builds against the vendors' real schemas. Offline.
+pnpm --filter @dsh-jev/core run check:schemas
+
+# Drive the MCP server over a real stdio transport, on the mock. Offline.
+pnpm --filter @dsh-jev/mcp run smoke
+```
+
+Both are credential-free by design and run in CI. The schema check is the one
+that found `score.criteria` being sent as a keyed map when both vendors require
+an ordered array — a defect every stubbed test had passed over, because a stub
+accepts whatever it is handed. Do not skip it because the suite is green.
+
+### Optional: verify the live route before shipping
+
+Neither of these runs in CI. Both cost a fraction of a cent and need an
+OpenRouter key whose account permits the `typesafe` provider — System One models
+are served by TypeSafe alone, so an account restricted to other providers gets
+`HTTP 404` with "No allowed providers are available" and no amount of retrying
+changes that. Enable it under **Allowed providers** at
+<https://openrouter.ai/settings/privacy>.
+
+```sh
+export OPENROUTER_API_KEY=...                       # never commit this
+pnpm --filter @dsh-jev/core run probe:live          # provider level
+pnpm --filter @dsh-jev/mcp run smoke:live           # whole MCP surface
+```
+
+A passing run prints the real model (`typesafe/jev-1.13-<date>`), token usage and
+cost, a `noul` probability, a `choice` selection, and a `score` with its legend
+and per-level probabilities. **Delete the key from whatever shell or CI variable
+you put it in afterwards.**
+
+If you have a TypeSafe key instead, set `TYPESAFE_API_KEY` and select
+`provider: live`; that route has the same primitives but has never been exercised
+here, so treat the first run as a validation rather than a formality.
 
 ```sh
 # Confirm nothing in the artifacts reaches the network on the default path.

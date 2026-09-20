@@ -74,7 +74,7 @@ The server prints its contract to **stderr** on startup:
 
 ```
 [dsh-jev] provider=mock  endpoint=none  egress=OFF  (no network calls will be made; every answer is synthetic)
-[dsh-jev]   armed  tool:jev_ask  (runs against the offline mock; would transmit if provider became "live")
+[dsh-jev]   armed  tool:jev_ask  (runs against the offline mock; would transmit if the provider became "live" or "openrouter")
 ```
 
 Stderr, never stdout: on a stdio transport stdout is the protocol channel and a

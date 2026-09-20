@@ -262,7 +262,7 @@ export class EgressContract {
         if (line.enabled) {
           lines.push(
             `[dsh-jev]   armed  ${line.feature}  ` +
-              `(runs against the offline mock; would transmit if provider became "live")`,
+              `(runs against the offline mock; would transmit if the provider became "live" or "openrouter")`,
           )
         }
       }
