@@ -1,9 +1,34 @@
 # Publishing checklist
 
-Everything here is a command you run. Nothing in this file has been executed —
-**nothing has been published**, and no GitHub remote exists yet.
+Status as of writing:
+
+- the repository exists and `main` is pushed — <https://github.com/PerryLink/jevkit>;
+- **nothing has been published to npm**, because the npm token available in this
+  workspace is dead (see the next section);
+- the publish workflow is in place, so once a working token is stored as a
+  repository secret, releasing is one tag push.
 
 Run every step from the repository root.
+
+## The npm token is currently invalid — fix this first
+
+`npm whoami` returns `E401` for the token recorded in the workspace's token file,
+which matches that file's own note that it has been dead since 2026-08-23. No
+publishing can happen until it is replaced.
+
+To unblock publishing:
+
+1. Create an npm **automation** token with publish rights for `jevkit`,
+   `jevkit-dsh` and `jevkit-mcp` (npm → Access Tokens → Generate New Token →
+   Automation; automation tokens bypass 2FA, which CI needs).
+2. Add it to the repository: **Settings → Secrets and variables → Actions → New
+   repository secret**, named `NPM_TOKEN`.
+3. Push a version tag (section 6). The `Publish` workflow does the rest, with
+   provenance.
+
+The dead token was never written to this repository or any of its files, and
+neither should its replacement: the workflow reads `NPM_TOKEN` from repository
+secrets only.
 
 ## 0. Package names — decided
 
@@ -128,21 +153,20 @@ here rather than in a maintainer's reply. See [tools/README.md](./tools/README.m
 ```sh
 # Confirm nothing in the artifacts reaches the network on the default path.
 node packages/mcp/lib/bin.js 2>&1 | head -1
-# expect: [dsh-jev] provider=mock  endpoint=none  egress=OFF  (no network calls will be made; ...)
+# expect: [jevkit] provider=mock  endpoint=none  egress=OFF  (no network calls will be made; ...)
 ```
 
-## 2. Set the repository URL
+## 2. Repository URL — already set
 
-All three manifests carry a placeholder `repository` field pointing at
-`https://github.com/dsh-jev/dsh-jev`. Replace it with the real URL before
-publishing: a wrong one sends bug reports, and npm's provenance link, to a
-repository that is not yours.
+All three manifests point at <https://github.com/PerryLink/jevkit>, which is
+where the repository now lives. Nothing to do unless it moves; if it does, the
+`repository`, `bugs` and `homepage` fields in all three manifests must move with
+it, because npm's provenance link and every bug report follow those fields.
 
 ```sh
-grep -rl 'github.com/dsh-jev/dsh-jev' packages/*/package.json
+grep -rl 'github.com/PerryLink/jevkit' packages/*/package.json   # expect three files
+pnpm install                                                     # let the lockfile record it
 ```
-
-Change the URL in each file, then `pnpm install` so the lockfile records it.
 
 ## 3. Version and log
 
@@ -165,23 +189,43 @@ no source maps, test files, or `node_modules` content leaked in. The DSH tarball
 must also contain `cordis.patch.yml` — without it the plugin installs and does
 nothing.
 
-## 5. Publish
+## 5. Publish — a tag push, not a laptop
 
-Order matters: the two adapters depend on `jevkit`.
+The `Publish` workflow (`.github/workflows/publish.yml`) triggers on a `v*` tag.
+It verifies that every manifest agrees with the tag, re-runs the full check and
+the vendor schema cross-check, then publishes the three packages **in dependency
+order** with provenance. Order matters: both adapters depend on `jevkit`.
 
 ```sh
+git tag -a v0.1.0 -m "0.1.0"
+git push origin main --follow-tags
+gh run watch                    # follow the Publish run
+```
+
+Requires the `NPM_TOKEN` repository secret described at the top of this file. If
+that secret is missing the run fails rather than skipping — deliberately, because
+a tag that "passes" while publishing nothing is easy to mistake for a release.
+
+You can rehearse without publishing: **Actions → Publish → Run workflow** with
+`dry-run` left checked. It packs and verifies, and stops.
+
+Publishing by hand is possible but second best, because it has no provenance
+attestation:
+
+```sh
+# Only if you have a working token locally. `pnpm`, never `npm`, so the
+# `workspace:*` dependency is rewritten to a real version.
 pnpm --filter jevkit publish --access public
 pnpm --filter jevkit-dsh publish --access public
 pnpm --filter jevkit-mcp publish --access public
 ```
 
-Prefer publishing from CI with provenance over a laptop:
-
-```sh
-npm publish --provenance --access public
-```
+Note that pnpm publishes what is on disk in `lib/`, so run `pnpm run build`
+first — the workflow does this as part of `pnpm run check`.
 
 ## 6. Tag and push
+
+That is the same command as section 5; the tag *is* the release trigger.
 
 ```sh
 git tag -a v0.1.0 -m "0.1.0"
