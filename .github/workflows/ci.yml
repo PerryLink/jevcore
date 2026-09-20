@@ -19,7 +19,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['20', '22']
+        # 20 was dropped: GitHub Actions warned it is deprecated on runners, and
+        # `engines` still declares >=20 so the floor is unchanged -- this tests
+        # the two versions actually in use rather than one that is on its way out.
+        node: ['22', '24']
     steps:
       - uses: actions/checkout@v4
 
@@ -85,13 +88,20 @@ jobs:
               'packages/mcp': ['lib/index.js', 'lib/bin.js', 'lib/index.d.ts', 'README.md', 'LICENSE', 'NOTICE', 'scripts/mcp-smoke.mjs', 'scripts/mcp-smoke-live.mjs'],
             };
 
+            // NOTE: this script contains no backtick characters at all, not even
+            // in comments. It runs as node -e "..." under bash, and bash
+            // performs command substitution on backticks BEFORE node sees the
+            // program -- a comment is not exempt. The result was a syntax error
+            // reported far from its cause: node refused to parse the workspace
+            // package.json, because a stray backtick pair had been replaced by
+            // an empty string. Use single quotes and concatenation only.
+
             let failed = false;
 
-            // `pnpm pack --dry-run --json` prints a JSON *object*, not the
-            // single-element array `npm pack --json` prints, wrapped in a
-            // '$ pnpm pack' banner and a progress footer. Indexing [0] on it is
-            // what broke this step: the manifest was never read, so the check
-            // reported "Cannot read properties of undefined".
+            // pnpm pack --dry-run --json prints a JSON object, not the
+            // single-element array that npm pack --json prints. Indexing [0] on
+            // it is what broke this step first: the manifest was never read, and
+            // the step reported "Cannot read properties of undefined".
             //
             // Walk the braces to isolate the object, then accept either shape so
             // the step does not silently depend on which packer ran.
@@ -105,11 +115,11 @@ jobs:
                 const ch = raw[i];
                 if (inString) {
                   if (escaped) escaped = false;
-                  else if (ch === '\\') escaped = true;
-                  else if (ch === '"') inString = false;
+                  else if (ch === '\\\\') escaped = true;
+                  else if (ch === '\"') inString = false;
                   continue;
                 }
-                if (ch === '"') inString = true;
+                if (ch === '\"') inString = true;
                 else if (ch === '{') depth += 1;
                 else if (ch === '}') {
                   depth -= 1;
@@ -131,16 +141,16 @@ jobs:
               const out = execSync('pnpm pack --dry-run --json', { cwd: dir, encoding: 'utf8' });
               const files = readManifest(out);
               if (files === undefined) {
-                console.error(\`\${dir}: could not read the file list from pnpm pack --json\`);
+                console.error(dir + ': could not read the file list from pnpm pack --json');
                 failed = true;
                 continue;
               }
               const missing = wanted.filter((w) => !files.includes(w));
               if (missing.length) {
-                console.error(\`\${dir}: missing from the published package -> \${missing.join(', ')}\`);
+                console.error(dir + ': missing from the published package -> ' + missing.join(', '));
                 failed = true;
               } else {
-                console.log(\`\${dir}: \${files.length} files, all required present\`);
+                console.log(dir + ': ' + files.length + ' files, all required present');
               }
             }
             if (failed) process.exit(1);
