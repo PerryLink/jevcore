@@ -1,5 +1,7 @@
 # jevcore
 
+[![DSH Market](https://raw.githubusercontent.com/2BingLing/dsh-market/master/assets/readme/badge-listed-zh.svg)](https://dsh.market/)
+
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 以及任何其他 MCP 宿主打造的 TypeSafe [Jev](https://typesafe.ai)。
 

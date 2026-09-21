@@ -1,5 +1,7 @@
 # jevcore
 
+[![DSH Market](https://raw.githubusercontent.com/2BingLing/dsh-market/master/assets/readme/badge-listed-en.svg)](https://dsh.market/)
+
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) और किसी भी अन्य MCP host के लिए
 TypeSafe [Jev](https://typesafe.ai)।
 
