@@ -4,6 +4,12 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.2 — 2026-10-05
+
+### Fixed
+
+- `jevcore-dsh` now declares the DSH 0.2 host line. `engines.dsh` and the `@deepseek-ai/dsh-tools` peer still carried the three-clause range ending at `<0.2.0`, and under the plugin loader's `semver.satisfies(runtime, range, { includePrerelease: true })` that bound rejects every 0.2 host — including the `0.2.1-alpha.1` line the family's other packages already pin and declare. Both fields gain `|| >=0.1.7-0 <0.2.0 || >=0.2.0-0 <0.3.0-0 || >=0.2.1-0 <0.3.0-0`; the `-0` sentinel on the upper bound keeps a future 0.3 prerelease out until this package is re-verified against that line, rather than letting `0.3.0-rc.*` through the way a bare `<0.3.0` would. Nothing was narrowed and no previously supported host line is dropped. The dev/test pin stays at `0.1.6-alpha.2`: a range is what the manifest accepts, not what has been tested.
+
 ## 0.4.1 — 2026-09-21
 
 0.4.0 was staged and never released, except for the CLI. This is what an
