@@ -1,6 +1,9 @@
 # jevcore
 
+[![dshfind](https://dshfind.com/api/badge/PerryLink/jevcore?metric=downloads)](https://dshfind.com/plugins/PerryLink/jevcore?ref=badge)
 [![DSH Market](https://raw.githubusercontent.com/2BingLing/dsh-market/master/assets/readme/badge-listed-en.svg)](https://dsh.market/)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PerryLink/jevcore/badge)](https://api.securityscorecards.dev/projects/github.com/PerryLink/jevcore)
+[![jevcore MCP server](https://glama.ai/mcp/servers/PerryLink/jevcore/badges/score.svg)](https://glama.ai/mcp/servers/PerryLink/jevcore)
 
 TypeSafe [Jev](https://typesafe.ai) para [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 y cualquier otro host MCP.
@@ -12,6 +15,13 @@ le da a un agente exactamente esa superficie, y nada más.
 **Sin conexión por defecto. Salida divulgada. Nada activado por defecto.**
 
 ---
+
+<!-- star-cta -->
+## ⭐ Si te ha servido
+
+Este plugin forma parte de una [familia de más de 40 plugins](https://github.com/PerryLink) para DeepSeek Harness, todos Apache-2.0. Si lo usas, **una estrella** no desbloquea nada, pero ayuda a que la siguiente persona lo encuentre.
+
+*English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
 
 ## Tres paquetes, una capa de decisión
 

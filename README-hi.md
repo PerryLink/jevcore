@@ -1,6 +1,9 @@
 # jevcore
 
+[![dshfind](https://dshfind.com/api/badge/PerryLink/jevcore?metric=downloads)](https://dshfind.com/plugins/PerryLink/jevcore?ref=badge)
 [![DSH Market](https://raw.githubusercontent.com/2BingLing/dsh-market/master/assets/readme/badge-listed-en.svg)](https://dsh.market/)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PerryLink/jevcore/badge)](https://api.securityscorecards.dev/projects/github.com/PerryLink/jevcore)
+[![jevcore MCP server](https://glama.ai/mcp/servers/PerryLink/jevcore/badges/score.svg)](https://glama.ai/mcp/servers/PerryLink/jevcore)
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) और किसी भी अन्य MCP host के लिए
 TypeSafe [Jev](https://typesafe.ai)।
@@ -12,6 +15,13 @@ calibrated probabilities लौटाता है। यह prose नहीं 
 **डिफ़ॉल्ट रूप से offline। egress का खुलासा। कुछ भी डिफ़ॉल्ट रूप से चालू नहीं।**
 
 ---
+
+<!-- star-cta -->
+## ⭐ अगर इससे मदद मिली
+
+यह plugin DeepSeek Harness के लिए [40+ plugins के परिवार](https://github.com/PerryLink) का हिस्सा है, सभी Apache-2.0। अगर आप इसे इस्तेमाल करते हैं, तो **एक star** कुछ भी unlock नहीं करता, पर अगले व्यक्ति को इसे खोजने में मदद करता है।
+
+*English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
 
 ## तीन packages, एक decision layer
 
