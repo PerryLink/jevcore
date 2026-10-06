@@ -16,6 +16,8 @@ le da a un agente exactamente esa superficie, y nada más.
 
 ---
 
+**📖 Base de conocimiento del ecosistema** — datos medidos, no marketing: [guía de desarrollo · datos de selección · criterios de mantenimiento](https://perrylink.github.io/dsh-plugin-guide/).
+
 <!-- star-cta -->
 ## ⭐ Si te ha servido
 

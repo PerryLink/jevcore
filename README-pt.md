@@ -16,6 +16,8 @@ categoria. Este projeto dá a um agente exatamente essa superfície, e nada mais
 
 ---
 
+**📖 Base de conhecimento do ecossistema** — dados medidos, não marketing: [guia de desenvolvimento · dados de seleção · critérios de manutenção](https://perrylink.github.io/dsh-plugin-guide/).
+
 <!-- star-cta -->
 ## ⭐ Se isso te ajudou
 
