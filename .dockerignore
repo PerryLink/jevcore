@@ -1,0 +1,12 @@
+# Keep the build context small and reproducible. Everything here is regenerated
+# inside the build stage, or is not needed to build and run the MCP server.
+.git
+.github
+node_modules
+**/node_modules
+**/lib
+coverage
+*.log
+*.tsbuildinfo
+docs
+tools
