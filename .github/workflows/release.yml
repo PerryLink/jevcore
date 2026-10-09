@@ -336,3 +336,20 @@ jobs:
             echo "::warning::the MCP Registry publish of $name@$version failed. npm is published; the registry entry is not. Re-run the failed jobs of this workflow to retry it -- every step here is idempotent, and an already-published version is skipped rather than re-published."
             exit 1
           fi
+
+      - name: Create GitHub Release
+        # This step was missing until 2026-10-09, and its absence was invisible:
+        # the four tags had no Releases at all, so the release-notes page - an
+        # indexed surface, and the `releaseSeries` a directory such as Glama reads
+        # to judge maintenance - simply did not exist for this repository. Every
+        # sibling plugin repository creates one; this one never had the step.
+        #
+        # Gated on the same event as the publish above, for the same reason:
+        # a manual run rehearses everything and stops before creating anything
+        # public, and a release that FAILS does not reach here at all (run #7, the
+        # v0.4.2 tag, failed at the publish step and correctly produced no
+        # Release). So a Release appears exactly when a version actually shipped.
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
