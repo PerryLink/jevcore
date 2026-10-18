@@ -21,9 +21,9 @@ calibrated probabilities लौटाता है। यह prose नहीं 
 <!-- star-cta -->
 ## ⭐ अगर इससे मदद मिली
 
-यह plugin DeepSeek Harness के लिए [40+ plugins के परिवार](https://github.com/PerryLink) का हिस्सा है, सभी Apache-2.0। अगर आप इसे इस्तेमाल करते हैं, तो **एक star** कुछ भी unlock नहीं करता, पर अगले व्यक्ति को इसे खोजने में मदद करता है।
+यह plugin DeepSeek Harness के लिए [95 plugins के परिवार](https://github.com/PerryLink) का हिस्सा है, सभी Apache-2.0। अगर आप इसे इस्तेमाल करते हैं, तो **एक star** कुछ भी unlock नहीं करता, पर अगले व्यक्ति को इसे खोजने में मदद करता है।
 
-*English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
+*English:* part of a 95 plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
 
 ## तीन packages, एक decision layer
 

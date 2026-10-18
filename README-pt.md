@@ -23,7 +23,7 @@ categoria. Este projeto dá a um agente exatamente essa superfície, e nada mais
 
 Este plugin faz parte de uma [família de mais de 40 plugins](https://github.com/PerryLink) para o DeepSeek Harness, todos Apache-2.0. Se você usa, **uma estrela** não desbloqueia nada, mas ajuda a próxima pessoa a encontrá-lo.
 
-*English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
+*English:* part of a 95 plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
 
 ## Três pacotes, uma camada de decisão
 
