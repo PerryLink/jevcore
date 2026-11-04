@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a bug in jevcore
+title: 'bug: '
+labels: [bug]
+body:
+  - type: input
+    id: package-version
+    attributes:
+      label: Package version
+      description: The installed jevcore version (`npm ls jevcore`, or the git commit when installed from source).
+    validations:
+      required: true
+  - type: input
+    id: harness-version
+    attributes:
+      label: Harness runtime version
+      description: The DeepSeek Harness runtime it runs on (e.g. `@deepseek-ai/dsh` version, or `dsh --version` output).
+      placeholder: '0.2.1-rc.2'
+    validations:
+      required: true
+  - type: input
+    id: os-node
+    attributes:
+      label: OS / Node version
+      description: Operating system and Node.js version.
+      placeholder: 'Windows 11 / Node 22.19.0'
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps that trigger the bug — include the document/rule config and the exact tool call.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      description: Redact credentials, personal data, and sealed evidence bytes.
+      render: text
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
