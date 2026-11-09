@@ -551,3 +551,5 @@ This project is part of the DeepSeek Harness plugin family from [PerryLink](http
 
 TypeSafe, Jev, and System One are trademarks of TypeSafe AI. This project is an independent
 integration and is not affiliated with or endorsed by TypeSafe AI.
+
+<p align="center"><sub>工具链：<a href="https://github.com/PerryLink/dsh-plugin-guide">dsh-plugin-guide</a> · <a href="https://github.com/PerryLink/dsh-standards">dsh-standards</a> · <a href="https://github.com/PerryLink/dsh-plugin-start">dsh-plugin-start</a></sub></p>
