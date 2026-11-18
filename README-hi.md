@@ -20,6 +20,8 @@ calibrated probabilities लौटाता है। यह prose नहीं 
 
 **📖 इकोसिस्टम नॉलेज बेस** — मापे गए आँकड़े, मार्केटिंग नहीं: [डेवलपमेंट गाइड · चयन डेटा · रखरखाव मानदंड](https://perrylink.github.io/dsh-plugin-guide/)।
 
+**परिवार मानक**: [dsh-standards](https://github.com/PerryLink/dsh-standards) · [dsh-plugin-start](https://github.com/PerryLink/dsh-plugin-start)
+
 <!-- star-cta -->
 ## ⭐ अगर इससे मदद मिली
 

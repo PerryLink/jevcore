@@ -20,6 +20,8 @@ le da a un agente exactamente esa superficie, y nada más.
 
 **📖 Base de conocimiento del ecosistema** — datos medidos, no marketing: [guía de desarrollo · datos de selección · criterios de mantenimiento](https://perrylink.github.io/dsh-plugin-guide/).
 
+**Estándares de la familia**: [dsh-standards](https://github.com/PerryLink/dsh-standards) · [dsh-plugin-start](https://github.com/PerryLink/dsh-plugin-start)
+
 <!-- star-cta -->
 ## ⭐ Si te ha servido
 

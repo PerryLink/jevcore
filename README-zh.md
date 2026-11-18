@@ -20,6 +20,8 @@ Jev 不是聊天模型。它回答带类型的问题 —— `noul`（是/否）�
 
 **📖 生态实测知识库**（实测数据，不是营销）：[插件开发指南 · 选型实测数据 · 维护取舍判据](https://perrylink.github.io/dsh-plugin-guide/)。
 
+**家族标准**: [dsh-standards](https://github.com/PerryLink/dsh-standards) · [dsh-plugin-start](https://github.com/PerryLink/dsh-plugin-start)
+
 <!-- star-cta -->
 ## ⭐ 如果它帮到了你
 
