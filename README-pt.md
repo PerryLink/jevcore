@@ -31,7 +31,7 @@ categoria. Este projeto dá a um agente exatamente essa superfície, e nada mais
 
 **📖 Base de conhecimento do ecossistema** — dados medidos, não marketing: [guia de desenvolvimento · dados de seleção · critérios de manutenção](https://perrylink.github.io/dsh-plugin-guide/).
 
-**Padrões da família**: [dsh-standards](https://github.com/PerryLink/dsh-standards) · [dsh-plugin-start](https://github.com/PerryLink/dsh-plugin-start)
+**Padrões da família**: [dsh-standards](https://github.com/PerryLink/dsh-standards) · [dsh-plugin-start](https://github.com/PerryLink/dsh-plugin-start) · [dsh-plugin-guide](https://github.com/PerryLink/dsh-plugin-guide)
 
 <!-- star-cta -->
 ## ⭐ Se isso te ajudou
