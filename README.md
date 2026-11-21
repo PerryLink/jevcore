@@ -37,7 +37,7 @@ gives an agent exactly that surface, and nothing more.
 *English:* part of a 99 plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
 
 
-## Three packages, one decision layer
+## Four packages, one decision layer
 
 | Package | What it is | Use it when |
 |---|---|---|
@@ -458,7 +458,7 @@ No test requires a credential or a network connection, and CI enforces that by r
 
 ![jevcore test suite: a real pnpm test run — core 610, CLI 95, DSH 122 and MCP 58 tests pass across four packages](docs/assets/jevcore-demo.gif)
 
-*Animated: the real `pnpm test` run in this checkout on 2026-11-21 — four packages, 885 tests, no network and no credential. The Status section above records the suite as it stood when that section was written; this replay is the current output.*
+*Animated: the real `pnpm test` run in this checkout on 2026-11-21 — four packages, 885 tests, no network and no credential.*
 
 ## PerryLink DSH Plugin Family
 

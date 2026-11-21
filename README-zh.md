@@ -40,7 +40,7 @@ Jev 不是聊天模型。它回答带类型的问题 —— `noul`（是/否）�
 
 *English:* part of a 99 plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
 
-## 三个包，一个决策层
+## 四个包，一个决策层
 
 | 包 | 它是什么 | 何时使用它 |
 |---|---|---|
@@ -458,7 +458,7 @@ pnpm test           # tests only
 
 ![jevcore 测试套件：真实运行 pnpm test——四个包分别通过 core 610、CLI 95、DSH 122、MCP 58 个用例](docs/assets/jevcore-demo.gif)
 
-*动图是 2026-11-21 在本检出中真实运行的 `pnpm test`：四个包、885 个用例，不联网、不需要凭据。上面「现状」一节记录的是当时写下的数字；这段回放是当前的输出。*
+*动图是 2026-11-21 在本检出中真实运行的 `pnpm test`：四个包、885 个用例，不联网、不需要凭据。*
 
 ## PerryLink DSH Plugin Family
 

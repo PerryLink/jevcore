@@ -40,7 +40,7 @@ calibrated probabilities लौटाता है। यह prose नहीं 
 
 *English:* part of a 99 plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
 
-## तीन packages, एक decision layer
+## चार packages, एक decision layer
 
 | Package | यह क्या है | इसे कब इस्तेमाल करें |
 |---|---|---|
@@ -452,7 +452,7 @@ pnpm test           # tests only
 
 ![jevcore टेस्ट सूट: pnpm test का असली रन — चार packages में core 610, CLI 95, DSH 122 और MCP 58 टेस्ट पास](docs/assets/jevcore-demo.gif)
 
-*एनिमेटेड: 2026-11-21 को इस चेकआउट में `pnpm test` का असली रन — चार packages, 885 टेस्ट, नेटवर्क नहीं और कोई credential नहीं। ऊपर Status अनुभाग उस समय की सूट दर्ज करता है; यह रीप्ले मौजूदा आउटपुट है।*
+*एनिमेटेड: 2026-11-21 को इस चेकआउट में `pnpm test` का असली रन — चार packages, 885 टेस्ट, नेटवर्क नहीं और कोई credential नहीं।*
 
 ## PerryLink DSH Plugin Family
 

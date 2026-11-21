@@ -40,7 +40,7 @@ Este plugin faz parte de uma [família de mais de 40 plugins](https://github.com
 
 *English:* part of a 99 plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
 
-## Três pacotes, uma camada de decisão
+## Quatro pacotes, uma camada de decisão
 
 | Pacote | O que é | Use quando |
 |---|---|---|
@@ -467,7 +467,7 @@ Nenhum teste exige uma credencial ou uma conexão de rede, e a CI reforça isso 
 
 ![suíte de testes do jevcore: uma execução real de pnpm test — 610 no core, 95 na CLI, 122 no DSH e 58 no MCP, todos aprovados em quatro pacotes](docs/assets/jevcore-demo.gif)
 
-*Animado: a execução real de `pnpm test` neste checkout em 2026-11-21 — quatro pacotes, 885 testes, sem rede e sem credencial. A seção Status acima registra a suíte como estava quando foi escrita; esta reprodução é a saída atual.*
+*Animado: a execução real de `pnpm test` neste checkout em 2026-11-21 — quatro pacotes, 885 testes, sem rede e sem credencial.*
 
 ## PerryLink DSH Plugin Family
 
