@@ -1,3 +1,12 @@
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/jevcore-hero-en-dark.webp">
+  <img src="docs/assets/jevcore-hero-en-light.webp" width="100%" alt="jevcore: TypeSafe Jev para o DeepSeek Harness e qualquer host MCP — perguntas tipadas noul, choice e score respondidas com probabilidades calibradas; provider=mock e egress=OFF por padrão, então nenhuma chamada de rede é feita, e à direita está o relatório de saída por recurso (tool:jev_ask, gate:safety, gate:context)">
+</picture>
+
+</div>
+
 # jevcore
 
 [![dshfind](https://dshfind.com/api/badge/PerryLink/jevcore?metric=downloads)](https://dshfind.com/plugins/PerryLink/jevcore?ref=badge)
@@ -15,6 +24,8 @@ devolve probabilidades calibradas. Ele não escreve texto livre, e pedir isso a 
 categoria. Este projeto dá a um agente exatamente essa superfície, e nada mais.
 
 **Offline por padrão. Saída de dados divulgada. Nada ativado por padrão.**
+
+[English](README.md) · [简体中文](README-zh.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
 ---
 
@@ -43,6 +54,13 @@ provedores, o contrato de saída, a política, os portões — vive no core, de 
 possa divergir das garantias que os outros oferecem.
 Um requisito de runtime difere entre os três: `jevcore-dsh` acompanha o harness e
 precisa de Node `^22.19.0 || >=24.0.0`, enquanto `jevcore` e `jevcore-mcp` precisam de `>=20`.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/jevcore-flow-v5-dark.svg">
+  <img src="docs/assets/jevcore-flow-v5-light.svg" width="100%" alt="estrutura do jevcore: uma chamada de ferramenta, um gate ou uma chamada de serviço vira uma pergunta tipada dentro do core independente de framework; o provider responde com probabilidades calibradas atrás de um único contrato de saída, e a policy as converte em allow, ask ou deny enquanto os dois gates opt-in ficam desligados por padrão">
+</picture>
+
+*Estrutura: perguntar → decidir → aplicar; as três ferramentas e os dois gates passam pelo mesmo core tipado, a resposta são probabilidades e não prosa, e cada recurso imprime a sua saída antes de acontecer. Os rótulos do diagrama são os nomes reais de ferramentas, providers, configuração e vereditos, então a mesma imagem serve aos cinco idiomas.*
 
 ---
 
@@ -446,6 +464,10 @@ pnpm test           # tests only
 
 Nenhum teste exige uma credencial ou uma conexão de rede, e a CI reforça isso executando com
 `TYPESAFE_API_KEY` limpa.
+
+![suíte de testes do jevcore: uma execução real de pnpm test — 610 no core, 95 na CLI, 122 no DSH e 58 no MCP, todos aprovados em quatro pacotes](docs/assets/jevcore-demo.gif)
+
+*Animado: a execução real de `pnpm test` neste checkout em 2026-11-21 — quatro pacotes, 885 testes, sem rede e sem credencial. A seção Status acima registra a suíte como estava quando foi escrita; esta reprodução é a saída atual.*
 
 ## PerryLink DSH Plugin Family
 

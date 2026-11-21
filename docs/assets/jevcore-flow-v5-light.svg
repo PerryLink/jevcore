@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="660" viewBox="0 0 1100 660" role="img" aria-label="jevcore structure diagram">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#f9f6fd"/><stop offset="1" stop-color="#e4eaf8"/></linearGradient>
+<filter id="soft" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="7" stdDeviation="9" flood-color="#16122c" flood-opacity="0.10"/></filter>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.4" markerHeight="6.4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#4B67B4"/></marker>
+</defs>
+<rect width="1100" height="660" fill="url(#bg)"/>
+<text x="44" y="58" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="28" font-weight="700">jevcore</text>
+<text x="44" y="88" fill="#4d5261" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="15">call → typed question → provider (mock | live | openrouter) → calibrated answer → policy</text>
+<rect x="901.28125" y="36" width="154.71875" height="26" rx="13.0" fill="#f5f2fb"/>
+<text x="913.28125" y="53.08" fill="#4B67B4" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="12" font-weight="700">egress OFF by default</text>
+<rect x="44" y="120" width="214" height="250" rx="18" fill="#ffffff" stroke="#e6e2ef" stroke-width="1.5" filter="url(#soft)"/>
+<text x="62" y="146" fill="#8f94a4" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="12" font-weight="700">01</text>
+<text x="62" y="172" fill="#141419" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="16.5" font-weight="700">Ask</text>
+<text x="62" y="196" fill="#4d5261" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="11.5">one typed question</text>
+<rect x="62" y="209" width="178" height="26" rx="8" fill="#f5f2fb"/>
+<text x="72" y="227" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">noul: yes / no</text>
+<rect x="62" y="241" width="178" height="26" rx="8" fill="#f5f2fb"/>
+<text x="72" y="259" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">choice: criteria</text>
+<rect x="62" y="273" width="178" height="26" rx="8" fill="#f5f2fb"/>
+<text x="72" y="291" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">score: rubric</text>
+<line x1="260" y1="245.0" x2="276" y2="245.0" stroke="#4B67B4" stroke-width="1.8" marker-end="url(#arr)"/>
+<rect x="278" y="120" width="214" height="250" rx="18" fill="#ffffff" stroke="#e6e2ef" stroke-width="1.5" filter="url(#soft)"/>
+<text x="296" y="146" fill="#8f94a4" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="12" font-weight="700">02</text>
+<text x="296" y="172" fill="#141419" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="16.5" font-weight="700">Decide</text>
+<text x="296" y="196" fill="#4d5261" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="11.5">provider → answer</text>
+<rect x="296" y="209" width="178" height="26" rx="8" fill="#f5f2fb"/>
+<text x="306" y="227" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">mock: offline hash</text>
+<rect x="296" y="241" width="178" height="26" rx="8" fill="#f5f2fb"/>
+<text x="306" y="259" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">live: TypeSafe</text>
+<rect x="296" y="273" width="178" height="26" rx="8" fill="#f5f2fb"/>
+<text x="306" y="291" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">openrouter: costUsd</text>
+<line x1="494" y1="245.0" x2="510" y2="245.0" stroke="#4B67B4" stroke-width="1.8" marker-end="url(#arr)"/>
+<rect x="512" y="120" width="214" height="250" rx="18" fill="#ffffff" stroke="#e6e2ef" stroke-width="1.5" filter="url(#soft)"/>
+<text x="530" y="146" fill="#8f94a4" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="12" font-weight="700">03</text>
+<text x="530" y="172" fill="#141419" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="16.5" font-weight="700">Enforce</text>
+<text x="530" y="196" fill="#4d5261" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="11.5">policy + gates</text>
+<rect x="530" y="209" width="178" height="26" rx="8" fill="#f5f2fb"/>
+<text x="540" y="227" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">minConfidence 0.7</text>
+<rect x="530" y="241" width="178" height="26" rx="8" fill="#f5f2fb"/>
+<text x="540" y="259" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">onUndecided: ask</text>
+<rect x="530" y="273" width="178" height="26" rx="8" fill="#f5f2fb"/>
+<text x="540" y="291" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">band 0.51 ≠ yes</text>
+<rect x="752" y="120" width="304" height="148" rx="18" fill="#ffffff" stroke="#e6e2ef" stroke-width="1.5" filter="url(#soft)"/>
+<text x="772" y="148" fill="#4B67B4" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="14.5" font-weight="700">result.answers</text>
+<rect x="995.53125" y="130" width="46.84375" height="18" rx="9.0" fill="#f5f2fb"/>
+<text x="1004.53125" y="142.57" fill="#4B67B4" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="10.5">typed</text>
+<text x="772" y="176" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">probability · confidence</text>
+<text x="772" y="198" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">provider · model · usage</text>
+<text x="772" y="220" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">mock → synthetic + warning</text>
+<rect x="752" y="288" width="304" height="122" rx="18" fill="#ffffff" stroke="#e6e2ef" stroke-width="1.5" filter="url(#soft)"/>
+<text x="772" y="316" fill="#4d5261" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="14.5" font-weight="700">jev_check</text>
+<rect x="974.890625" y="298" width="66.078125" height="18" rx="9.0" fill="#f5f2fb"/>
+<text x="983.890625" y="310.57" fill="#4d5261" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="10.5">6 verdicts</text>
+<text x="772" y="344" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">supported · contradicted</text>
+<text x="772" y="366" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">conflicted · insufficient</text>
+<text x="772" y="388" fill="#141419" font-family="'Consolas','SFMono-Regular','Menlo',ui-monospace,monospace" font-size="11.5">undecided · unknown</text>
+<rect x="752" y="430" width="304" height="82" rx="18" fill="#ffffff" stroke="#4B67B4" stroke-width="1.6" filter="url(#soft)"/>
+<text x="772" y="458" fill="#141419" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="13.5" font-weight="700">gates</text>
+<text x="772" y="482" fill="#4d5261" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="11.5">safety / context: opt-in</text>
+<text x="772" y="502" fill="#8f94a4" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="10.5">the model cannot configure them</text>
+<path d="M730 245.0 H742" fill="none" stroke="#4B67B4" stroke-width="1.6" stroke-linecap="round"/>
+<path d="M742 210 V471" fill="none" stroke="#4B67B4" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="742" y1="194" x2="750" y2="194" stroke="#4B67B4" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="742" y1="349" x2="750" y2="349" stroke="#4B67B4" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="742" y1="471" x2="750" y2="471" stroke="#4B67B4" stroke-width="1.6" marker-end="url(#arr)"/>
+<line x1="44" y1="420" x2="714" y2="420" stroke="#dcd8ea" stroke-width="1"/>
+<text x="44" y="444" fill="#8f94a4" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="11">Every feature defaults to off; the load report prints off or SENDS per feature with its field caps.</text>
+<text x="44" y="464" fill="#8f94a4" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="11">The live route is opt-in twice — provider: live and a resolved credential — and redaction is best-effort, not a permission.</text>
+<line x1="44" y1="564" x2="1056" y2="564" stroke="#dcd8ea" stroke-width="1"/>
+<text x="44" y="588" fill="#4d5261" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="11.5">config: provider · apiKeyRef · openRouterApiKeyRef · model · minConfidence · minProbability · gates.safety · gates.context</text>
+<text x="44" y="610" fill="#8f94a4" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Source Han Sans SC',sans-serif" font-size="11.5">boundary: offline mock default · no socket unless asked · typed answers only · no prose</text>
+</svg>

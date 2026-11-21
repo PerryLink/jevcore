@@ -1,3 +1,12 @@
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/jevcore-hero-zh-dark.webp">
+  <img src="docs/assets/jevcore-hero-zh-light.webp" width="100%" alt="jevcore：给 DeepSeek Harness 和任何 MCP 宿主用的 TypeSafe Jev——noul、choice、score 三种带类型的问题返回校准概率；默认 provider=mock、egress=OFF，不发生任何网络调用；右侧是逐功能的外发报告（tool:jev_ask、gate:safety、gate:context）">
+</picture>
+
+</div>
+
 # jevcore
 
 [![dshfind](https://dshfind.com/api/badge/PerryLink/jevcore?metric=downloads)](https://dshfind.com/plugins/PerryLink/jevcore?ref=badge)
@@ -15,6 +24,8 @@ Jev 不是聊天模型。它回答带类型的问题 —— `noul`（是/否）�
 给一个 agent 的恰好是这一层接口，不多一分。
 
 **默认离线。外发行为被披露。没有任何东西默认开启。**
+
+[English](README.md) · [简体中文](README-zh.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
 ---
 
@@ -43,6 +54,13 @@ Jev 不是聊天模型。它回答带类型的问题 —— `noul`（是/否）�
 其他适配器所给出的保证。
 三者的运行时要求并不相同：`jevcore-dsh` 跟随 harness，需要
 Node `^22.19.0 || >=24.0.0`，而 `jevcore` 与 `jevcore-mcp` 需要 `>=20`。
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/jevcore-flow-v5-dark.svg">
+  <img src="docs/assets/jevcore-flow-v5-light.svg" width="100%" alt="jevcore 结构图：一次工具调用、一次 gate 或一次普通服务调用，在框架无关的 core 里变成带类型的问题；provider 在同一份外发契约后面返回校准概率；policy 把概率转成 allow / ask / deny，两个 gate 默认关闭、需显式开启">
+</picture>
+
+*结构：提问 → 判定 → 执行；三个工具与两个 gate 走同一个带类型的 core，答案只有概率、没有散文，每个功能在发生之前先把自己的外发打出来。图内只出现真实的工具名、provider 名、配置名与判定名，五语共用同一张结构图。*
 
 ---
 
@@ -437,6 +455,10 @@ pnpm test           # tests only
 
 没有任何测试需要凭据或网络连接，CI 通过在被清除了
 `TYPESAFE_API_KEY` 的情况下运行来强制这一点。
+
+![jevcore 测试套件：真实运行 pnpm test——四个包分别通过 core 610、CLI 95、DSH 122、MCP 58 个用例](docs/assets/jevcore-demo.gif)
+
+*动图是 2026-11-21 在本检出中真实运行的 `pnpm test`：四个包、885 个用例，不联网、不需要凭据。上面「现状」一节记录的是当时写下的数字；这段回放是当前的输出。*
 
 ## PerryLink DSH Plugin Family
 
