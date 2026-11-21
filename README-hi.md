@@ -361,7 +361,7 @@ compose नहीं करती, उसे फिर भी service और त
 क्या verified हुआ है और क्या नहीं, इसका ईमानदार हिसाब।
 
 **Verified**
-- तीन packages में 410 tests pass होते हैं (314 core, 66 DSH, 30 MCP), बिना network access और बिना
+- चार packages में 885 tests pass होते हैं (610 core, 122 DSH, 58 MCP, 95 CLI), बिना network access और बिना
   `TYPESAFE_API_KEY`। CI उस variable को clear करता है और फिर भी suite के pass होने की अपेक्षा करता है।
 - **OpenRouter route असली API के विरुद्ध verified है।** `pnpm --filter jevcore run
   probe:live` provider को चलाता है और `pnpm --filter jevcore-mcp run smoke:live` पूरे MCP

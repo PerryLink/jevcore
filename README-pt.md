@@ -375,7 +375,7 @@ que pudesse ser confundido com um julgamento real seria pior do que nenhum mock.
 Prestação de contas honesta do que foi e do que não foi verificado.
 
 **Verificado**
-- 410 testes passam nos três pacotes (314 core, 66 DSH, 30 MCP), sem acesso à rede e sem
+- 885 testes passam nos quatro pacotes (610 core, 122 DSH, 58 MCP, 95 CLI), sem acesso à rede e sem
   `TYPESAFE_API_KEY`. A CI limpa a variável e espera que a suíte passe mesmo assim.
 - **A rota OpenRouter é verificada contra a API real.** `pnpm --filter jevcore run
   probe:live` aciona o provedor e `pnpm --filter jevcore-mcp run smoke:live` aciona toda a superfície

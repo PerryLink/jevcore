@@ -367,7 +367,7 @@ skill 被跳过的警告。
 对已核实与未核实内容的诚实交代。
 
 **已核实**
-- 三个包共 410 个测试通过（core 314、DSH 66、MCP 30），没有网络访问，也没有
+- 四个包共 885 个测试通过（core 610、DSH 122、MCP 58、CLI 95），没有网络访问，也没有
   `TYPESAFE_API_KEY`。CI 会清除该变量，并期望测试套件照样通过。
 - **OpenRouter 路由已针对真实 API 核实。** `pnpm --filter jevcore run
   probe:live` 驱动 provider，`pnpm --filter jevcore-mcp run smoke:live` 驱动整个 MCP

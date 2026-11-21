@@ -367,7 +367,7 @@ that could be mistaken for a real judgment would be worse than no mock at all.
 Honest accounting of what has and has not been verified.
 
 **Verified**
-- 410 tests pass across three packages (314 core, 66 DSH, 30 MCP), with no network access and no
+- 885 tests pass across four packages (610 core, 122 DSH, 58 MCP, 95 CLI), with no network access and no
   `TYPESAFE_API_KEY`. CI clears the variable and expects the suite to pass anyway.
 - **The OpenRouter route is verified against the real API.** `pnpm --filter jevcore run
   probe:live` drives the provider and `pnpm --filter jevcore-mcp run smoke:live` drives the whole MCP
